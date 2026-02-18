@@ -1,0 +1,211 @@
+@import "tailwindcss";
+
+/*
+ * Discord-like theme system using CSS custom properties.
+ * All color tokens use HSL values for easy manipulation.
+ */
+
+:root {
+  /* Default: Dark theme (Discord-like) */
+  --color-bg-primary: 223 7% 20%;       /* Main content background */
+  --color-bg-secondary: 220 7% 17%;     /* Sidebar background */
+  --color-bg-tertiary: 225 6% 13%;      /* Server list / deepest background */
+  --color-bg-modifier-hover: 220 7% 24%;
+  --color-bg-modifier-active: 220 7% 26%;
+  --color-bg-floating: 220 8% 15%;      /* Dropdowns, modals */
+
+  --color-text-primary: 210 10% 93%;    /* Main text */
+  --color-text-secondary: 215 8% 67%;   /* Muted text */
+  --color-text-muted: 216 6% 47%;       /* Very muted text */
+  --color-text-link: 213 100% 64%;      /* Links */
+
+  --color-interactive-normal: 215 8% 67%;
+  --color-interactive-hover: 210 10% 93%;
+  --color-interactive-active: 0 0% 100%;
+
+  --color-brand: 235 86% 65%;           /* Discord blurple */
+  --color-brand-hover: 235 51% 52%;
+
+  --color-status-online: 139 48% 43%;
+  --color-status-away: 38 96% 54%;
+  --color-status-offline: 214 8% 46%;
+
+  --color-danger: 359 83% 59%;
+  --color-danger-hover: 359 57% 48%;
+
+  --color-input-bg: 225 6% 13%;
+  --color-input-border: 228 6% 32%;
+
+  --color-scrollbar-thin: 220 7% 24%;
+  --color-scrollbar-auto: 220 7% 17%;
+
+  --color-channel-icon: 216 6% 47%;
+
+  --color-spoiler-bg: 220 7% 24%;
+  --color-spoiler-hidden: 220 7% 17%;
+
+  /* Sizing */
+  --sidebar-width: 240px;
+  --header-height: 48px;
+  --input-height: 68px;
+}
+
+/* Light theme */
+[data-theme="light"] {
+  --color-bg-primary: 0 0% 100%;
+  --color-bg-secondary: 220 13% 95%;
+  --color-bg-tertiary: 220 14% 90%;
+  --color-bg-modifier-hover: 220 10% 92%;
+  --color-bg-modifier-active: 220 10% 88%;
+  --color-bg-floating: 0 0% 100%;
+
+  --color-text-primary: 223 7% 20%;
+  --color-text-secondary: 216 6% 47%;
+  --color-text-muted: 215 8% 67%;
+  --color-text-link: 213 100% 50%;
+
+  --color-interactive-normal: 216 6% 47%;
+  --color-interactive-hover: 223 7% 20%;
+  --color-interactive-active: 0 0% 0%;
+
+  --color-input-bg: 220 13% 95%;
+  --color-input-border: 220 10% 82%;
+
+  --color-scrollbar-thin: 220 10% 82%;
+  --color-scrollbar-auto: 220 13% 95%;
+
+  --color-spoiler-bg: 220 10% 82%;
+  --color-spoiler-hidden: 220 10% 88%;
+}
+
+/* Midnight theme */
+[data-theme="midnight"] {
+  --color-bg-primary: 230 15% 12%;
+  --color-bg-secondary: 230 15% 9%;
+  --color-bg-tertiary: 230 15% 6%;
+  --color-bg-modifier-hover: 230 12% 16%;
+  --color-bg-modifier-active: 230 12% 18%;
+  --color-bg-floating: 230 15% 10%;
+
+  --color-text-primary: 220 20% 93%;
+  --color-text-secondary: 220 15% 60%;
+  --color-text-muted: 220 10% 42%;
+  --color-text-link: 220 100% 70%;
+
+  --color-interactive-normal: 220 15% 60%;
+  --color-interactive-hover: 220 20% 93%;
+  --color-interactive-active: 0 0% 100%;
+
+  --color-input-bg: 230 15% 8%;
+  --color-input-border: 230 12% 22%;
+
+  --color-scrollbar-thin: 230 12% 16%;
+  --color-scrollbar-auto: 230 15% 9%;
+
+  --color-spoiler-bg: 230 12% 16%;
+  --color-spoiler-hidden: 230 15% 9%;
+}
+
+/* Base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background-color: hsl(var(--color-bg-primary));
+  color: hsl(var(--color-text-primary));
+  font-size: 16px;
+  line-height: 1.375;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--color-scrollbar-thin));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--color-scrollbar-auto));
+}
+
+/* Utility classes for theme colors */
+@utility bg-primary {
+  background-color: hsl(var(--color-bg-primary));
+}
+@utility bg-secondary {
+  background-color: hsl(var(--color-bg-secondary));
+}
+@utility bg-tertiary {
+  background-color: hsl(var(--color-bg-tertiary));
+}
+@utility bg-floating {
+  background-color: hsl(var(--color-bg-floating));
+}
+@utility bg-hover {
+  background-color: hsl(var(--color-bg-modifier-hover));
+}
+@utility bg-active {
+  background-color: hsl(var(--color-bg-modifier-active));
+}
+
+@utility text-primary {
+  color: hsl(var(--color-text-primary));
+}
+@utility text-secondary {
+  color: hsl(var(--color-text-secondary));
+}
+@utility text-muted {
+  color: hsl(var(--color-text-muted));
+}
+@utility text-link {
+  color: hsl(var(--color-text-link));
+}
+@utility text-interactive {
+  color: hsl(var(--color-interactive-normal));
+}
+@utility text-interactive-hover {
+  color: hsl(var(--color-interactive-hover));
+}
+
+@utility text-brand {
+  color: hsl(var(--color-brand));
+}
+@utility bg-brand {
+  background-color: hsl(var(--color-brand));
+}
+@utility bg-brand-hover {
+  background-color: hsl(var(--color-brand-hover));
+}
+
+@utility text-danger {
+  color: hsl(var(--color-danger));
+}
+@utility bg-danger {
+  background-color: hsl(var(--color-danger));
+}
+
+@utility bg-input {
+  background-color: hsl(var(--color-input-bg));
+}
+@utility border-input {
+  border-color: hsl(var(--color-input-border));
+}

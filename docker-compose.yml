@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_TENOR_API_KEY: ${VITE_TENOR_API_KEY}
+        VITE_BUNNY_CDN_URL: ${VITE_BUNNY_CDN_URL}
+    ports:
+      - "80:80"
+    restart: unless-stopped

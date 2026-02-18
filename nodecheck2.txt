@@ -1,0 +1,16 @@
+where.exe : INFO: Could not find files for the given pattern(s).
+At line:1 char:1
++ where.exe node 2>&1 | Out-File -Encoding ascii D:\Projects\chat-syste ...
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO: Could not...ven pattern(s). 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+where.exe : INFO: Could not find files for the given pattern(s).
+At line:1 char:88
++ ... ii D:\Projects\chat-system\nodecheck2.txt; where.exe npm 2>&1 | Out-F ...
++                                                ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (INFO: Could not...ven pattern(s). 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
