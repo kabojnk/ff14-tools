@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#5865F2"/>
+  <!-- Chat bubble -->
+  <path d="M128 160 C128 138 146 120 168 120 L344 120 C366 120 384 138 384 160 L384 280 C384 302 366 320 344 320 L220 320 L168 372 L168 320 C146 320 128 302 128 280 Z" fill="white" opacity="0.95"/>
+  <!-- Three lines suggesting text/channels -->
+  <line x1="176" y1="188" x2="336" y2="188" stroke="#5865F2" stroke-width="20" stroke-linecap="round"/>
+  <line x1="176" y1="228" x2="300" y2="228" stroke="#5865F2" stroke-width="20" stroke-linecap="round"/>
+  <line x1="176" y1="268" x2="260" y2="268" stroke="#5865F2" stroke-width="20" stroke-linecap="round"/>
+</svg>

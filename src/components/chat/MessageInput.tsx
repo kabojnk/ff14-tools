@@ -16,8 +16,7 @@ interface MessageInputProps {
 
 export function MessageInput({ channel }: MessageInputProps) {
   const { user } = useAuthStore()
-  const { sendMessage } = useMessageStore()
-  const { activeSession, getOrCreateSession, changeSheets } = useChannelStore()
+  const { getOrCreateSession, changeSheets } = useChannelStore()
   const { setEepMode } = useUiStore()
   const { sendTyping } = useTyping(channel.id)
   const [content, setContent] = useState('')

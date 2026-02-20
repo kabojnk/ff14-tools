@@ -15,7 +15,7 @@ interface MessageItemProps {
   onBroadcastDelete: (messageId: string) => void
 }
 
-export function MessageItem({ message, author, showHeader, channelId, onBroadcastEdit, onBroadcastDelete }: MessageItemProps) {
+export function MessageItem({ message, author, showHeader, channelId, onBroadcastDelete }: MessageItemProps) {
   const { user } = useAuthStore()
   const { editMessage, deleteMessage } = useMessageStore()
   const [isEditing, setIsEditing] = useState(false)
