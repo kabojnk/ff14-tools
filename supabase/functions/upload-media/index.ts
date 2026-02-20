@@ -1,8 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const BUNNY_API_KEY = Deno.env.get('BUNNY_API_KEY')!
 const BUNNY_STORAGE_ZONE = Deno.env.get('BUNNY_STORAGE_ZONE')!
+const BUNNY_STORAGE_HOST = Deno.env.get('BUNNY_STORAGE_HOST') || 'storage.bunnycdn.com'
 const BUNNY_CDN_URL = Deno.env.get('BUNNY_CDN_URL')!
 
 const ALLOWED_TYPES = [
@@ -31,23 +31,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
   }
 
-  // Verify JWT
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  }
-
-  const supabaseClient = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: authHeader } } }
-  )
-
-  const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
-  }
-
   try {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
@@ -73,20 +56,30 @@ serve(async (req) => {
     // Upload to bunny.net Storage Zone
     const arrayBuffer = await file.arrayBuffer()
 
-    const uploadResponse = await fetch(
-      `https://storage.bunnycdn.com/${BUNNY_STORAGE_ZONE}/${storagePath}`,
-      {
+    const bunnyUrl = `https://${BUNNY_STORAGE_HOST}/${BUNNY_STORAGE_ZONE}/${storagePath}`
+    console.log(`Uploading to Bunny: ${bunnyUrl}`)
+
+    const abort = new AbortController()
+    const timeout = setTimeout(() => abort.abort(), 30_000)
+
+    let uploadResponse: Response
+    try {
+      uploadResponse = await fetch(bunnyUrl, {
         method: 'PUT',
         headers: {
           'AccessKey': BUNNY_API_KEY,
           'Content-Type': 'application/octet-stream',
         },
         body: arrayBuffer,
-      }
-    )
+        signal: abort.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (!uploadResponse.ok) {
       const errorText = await uploadResponse.text()
+      console.error(`Bunny upload failed ${uploadResponse.status}: ${errorText}`)
       return new Response(
         JSON.stringify({ error: `Upload failed: ${errorText}` }),
         { status: 500 }
@@ -112,8 +105,10 @@ serve(async (req) => {
       }
     )
   } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error'
+    console.error('upload-media error:', message)
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: message }),
       { status: 500 }
     )
   }

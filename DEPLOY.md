@@ -66,7 +66,6 @@ Create the `.env` file on the droplet:
 cat > /opt/chat-system/.env << 'EOF'
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_TENOR_API_KEY=your-tenor-api-key
 VITE_BUNNY_CDN_URL=https://your-pullzone.b-cdn.net
 EOF
 ```
@@ -86,7 +85,6 @@ Build the Docker image locally:
 docker build \
   --build-arg VITE_SUPABASE_URL=https://your-project.supabase.co \
   --build-arg VITE_SUPABASE_ANON_KEY=your-anon-key \
-  --build-arg VITE_TENOR_API_KEY=your-tenor-api-key \
   --build-arg VITE_BUNNY_CDN_URL=https://your-pullzone.b-cdn.net \
   -f docker/Dockerfile \
   -t chat-system:latest \

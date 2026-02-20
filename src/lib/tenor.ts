@@ -16,7 +16,7 @@ export async function searchGifs(query: string, limit: number = 20): Promise<Ten
   const params = new URLSearchParams({ q: query, limit: String(limit) })
 
   const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tenor-search?${params}`,
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gif-search?${params}`,
     {
       headers: {
         Authorization: `Bearer ${session.access_token}`,

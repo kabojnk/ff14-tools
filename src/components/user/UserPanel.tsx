@@ -10,7 +10,7 @@ export function UserPanel() {
 
   return (
     <>
-      <div className="flex items-center gap-2 bg-tertiary px-2 py-1.5">
+      <div className="flex items-center gap-2.5 bg-tertiary px-3 py-2.5">
         {/* Avatar + status (clickable for status picker) */}
         <button
           onClick={() => setShowStatus(true)}

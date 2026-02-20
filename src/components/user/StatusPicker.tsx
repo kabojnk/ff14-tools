@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
+import { Portal } from '@/components/ui/Portal'
 
 interface StatusPickerProps {
   onClose: () => void
@@ -40,6 +41,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
   }
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
       <div className="w-full max-w-sm rounded-lg bg-primary p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-3 text-lg font-bold text-primary">Set Status</h3>
@@ -103,5 +105,6 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
         </div>
       </div>
     </div>
+    </Portal>
   )
 }

@@ -15,9 +15,9 @@ export function ChannelList() {
   }
 
   return (
-    <div className="px-2 py-3">
+    <div className="px-3 py-3">
       {/* Category header */}
-      <div className="mb-1 flex items-center justify-between px-1">
+      <div className="mb-1 flex items-center justify-between px-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
           Text Channels
         </span>
@@ -40,7 +40,7 @@ export function ChannelList() {
             key={channel.id}
             onClick={() => handleSelectChannel(channel.id)}
             className={`
-              group flex w-full items-center gap-1.5 rounded-[4px] px-2 py-1.5 text-left transition-colors
+              group flex w-full items-center gap-1.5 rounded-[4px] px-2.5 py-1.5 text-left transition-colors
               ${activeChannelId === channel.id
                 ? 'bg-active text-interactive-active'
                 : 'text-interactive hover:bg-hover hover:text-interactive-hover'

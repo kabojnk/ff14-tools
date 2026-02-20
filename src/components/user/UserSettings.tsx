@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
 import { AvatarUpload } from '@/components/user/AvatarUpload'
+import { Portal } from '@/components/ui/Portal'
 import type { ThemePreset } from '@/types'
 
 interface UserSettingsProps {
@@ -40,6 +41,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
   ]
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-50 flex items-stretch bg-tertiary">
       {/* Sidebar */}
       <div className="flex w-56 flex-shrink-0 flex-col items-end bg-secondary pr-2 pt-16">
@@ -162,5 +164,6 @@ export function UserSettings({ onClose }: UserSettingsProps) {
         </div>
       </div>
     </div>
+    </Portal>
   )
 }

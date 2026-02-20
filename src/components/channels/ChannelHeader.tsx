@@ -24,7 +24,7 @@ export function ChannelHeader({ channel }: ChannelHeaderProps) {
   }
 
   return (
-    <div className="relative flex h-[var(--header-height)] flex-shrink-0 items-center gap-2 border-b border-[hsl(var(--color-bg-tertiary))] px-4 shadow-sm">
+    <div className="relative flex h-[var(--header-height)] flex-shrink-0 items-center gap-2 border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm">
       {/* Mobile menu button */}
       <button
         onClick={toggleSidebar}

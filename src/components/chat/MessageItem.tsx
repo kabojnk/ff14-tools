@@ -84,7 +84,7 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
 
   return (
     <div
-      className={`group relative flex gap-4 px-4 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''}`}
+      className={`group relative flex gap-4 px-5 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >

@@ -7,7 +7,7 @@ Complete instructions for setting up and running the chat system locally and in 
 - Node.js 20+
 - A [Supabase](https://supabase.com) account (free tier works)
 - A [bunny.net](https://bunny.net) account with a Storage Zone and Pull Zone
-- A [Tenor API key](https://developers.google.com/tenor/guides/quickstart) (free)
+- A [Klipy API key](https://partner.klipy.com) (free — sign up, add a platform, and copy your key)
 - (For deployment) A DigitalOcean account and Docker installed
 
 ---
@@ -17,7 +17,7 @@ Complete instructions for setting up and running the chat system locally and in 
 ### Create a project
 
 1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Note your **Project URL** and **anon public key** from Settings > API
+2. Note your **Project URL** and **Publishable key** from Settings > API (previously called the "anon public key" — same thing, just renamed)
 
 ### Run database migrations
 
@@ -43,8 +43,9 @@ These create all tables, RLS policies, indexes, triggers, RPC functions, and see
 
 ### Enable Realtime
 
-1. Go to Database > Replication
-2. Enable Realtime for the `messages`, `reactions`, and `profiles` tables
+1. Go to **Database > Publications**
+2. Click on **supabase_realtime**
+3. Toggle on `messages`, `reactions`, and `profiles`
 
 ### Deploy Edge Functions
 
@@ -60,16 +61,17 @@ Link your project and deploy:
 supabase login
 supabase link --project-ref YOUR_PROJECT_REF
 supabase functions deploy upload-media
-supabase functions deploy tenor-search
+supabase functions deploy gif-search
 ```
 
 Set the required secrets for the Edge Functions:
 
 ```bash
-supabase secrets set BUNNY_API_KEY=your-bunny-api-key
+supabase secrets set BUNNY_API_KEY=your-storage-zone-password
 supabase secrets set BUNNY_STORAGE_ZONE=your-storage-zone-name
+supabase secrets set BUNNY_STORAGE_HOST=your-region-hostname  # e.g. storage.bunnycdn.com, uk.storage.bunnycdn.com, de.storage.bunnycdn.com
 supabase secrets set BUNNY_CDN_URL=https://your-pullzone.b-cdn.net
-supabase secrets set TENOR_API_KEY=your-tenor-api-key
+supabase secrets set KLIPY_API_KEY=your-klipy-api-key
 ```
 
 ---
@@ -80,8 +82,9 @@ supabase secrets set TENOR_API_KEY=your-tenor-api-key
 2. Create a **Storage Zone** (e.g., `chat-media`)
 3. Create a **Pull Zone** linked to that Storage Zone
 4. Note your:
-   - **Storage API Key** (Storage Zone > FTP & API Access > Password)
+   - **Storage Zone Password** (Storage Zone > FTP & API Access > **Password** — this is NOT your account API key, it's specific to the storage zone)
    - **Storage Zone name** (the name you chose)
+   - **FTP Hostname** (Storage Zone > FTP & API Access > **FTP Hostname** — region-specific, e.g. `storage.bunnycdn.com`, `uk.storage.bunnycdn.com`, `de.storage.bunnycdn.com`)
    - **Pull Zone URL** (e.g., `https://chat-media.b-cdn.net`)
 
 ---
@@ -107,7 +110,6 @@ Edit `.env`:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_TENOR_API_KEY=your-tenor-api-key
 VITE_BUNNY_CDN_URL=https://your-pullzone.b-cdn.net
 ```
 

@@ -27,6 +27,7 @@ export function MessageInput({ channel }: MessageInputProps) {
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const gifButtonRef = useRef<HTMLButtonElement>(null)
 
   const handleSend = useCallback(async () => {
     const trimmed = content.trim()
@@ -47,6 +48,7 @@ export function MessageInput({ channel }: MessageInputProps) {
       }
     }
 
+    const attachmentsToSend = pendingAttachments
     setContent('')
     setPendingAttachments([])
 
@@ -59,7 +61,7 @@ export function MessageInput({ channel }: MessageInputProps) {
           session_id: activeSession.id,
           author_id: user.id,
           content: trimmed || null,
-          attachments: pendingAttachments,
+          attachments: attachmentsToSend,
           type: 'text',
         })
         .select()
@@ -193,47 +195,48 @@ export function MessageInput({ channel }: MessageInputProps) {
 
   return (
     <div
-      className="relative flex-shrink-0 px-4 pb-6"
+      className="relative flex-shrink-0 px-5 pb-6"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {/* Pending attachments preview */}
-      {pendingAttachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2 rounded-t-lg bg-input p-3">
-          {pendingAttachments.map((att, i) => (
-            <div key={i} className="relative rounded border border-[hsl(var(--color-input-border))] bg-secondary p-2">
-              {(att.type === 'image' || att.type === 'gif') ? (
-                <img src={att.url} alt={att.filename} className="h-24 w-24 rounded object-cover" />
-              ) : (
-                <div className="flex h-24 w-24 items-center justify-center text-xs text-muted">
-                  {att.filename}
+      <div className={`rounded-lg bg-input ${pendingAttachments.length > 0 ? 'pt-3' : ''}`}>
+        {/* Pending attachments preview */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-b border-[hsl(var(--color-input-border))] px-4 pb-3">
+            {pendingAttachments.map((att, i) => (
+              <div key={i} className="relative rounded border border-[hsl(var(--color-input-border))] bg-secondary p-2">
+                {(att.type === 'image' || att.type === 'gif') ? (
+                  <img src={att.url} alt={att.filename} className="h-24 w-24 rounded object-cover" />
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center break-all text-center text-xs text-muted">
+                    {att.filename}
+                  </div>
+                )}
+                <div className="mt-1 flex gap-1">
+                  <button
+                    onClick={() => toggleSpoiler(i)}
+                    className={`rounded px-1 text-[10px] ${att.spoiler ? 'bg-brand text-white' : 'bg-hover text-muted'}`}
+                  >
+                    SPOILER
+                  </button>
+                  <button
+                    onClick={() => removeAttachment(i)}
+                    className="rounded bg-hover px-1 text-[10px] text-danger"
+                  >
+                    ✕
+                  </button>
                 </div>
-              )}
-              <div className="mt-1 flex gap-1">
-                <button
-                  onClick={() => toggleSpoiler(i)}
-                  className={`rounded px-1 text-[10px] ${att.spoiler ? 'bg-brand text-white' : 'bg-hover text-muted'}`}
-                >
-                  SPOILER
-                </button>
-                <button
-                  onClick={() => removeAttachment(i)}
-                  className="rounded bg-hover px-1 text-[10px] text-danger"
-                >
-                  ✕
-                </button>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      <div className="flex items-end gap-2 rounded-lg bg-input px-4 py-1">
+        <div className="flex items-center gap-2 px-4 py-1">
         {/* File upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="mb-2 flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover disabled:opacity-50"
+          className="flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover disabled:opacity-50"
           title="Upload a file"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -265,27 +268,27 @@ export function MessageInput({ channel }: MessageInputProps) {
         />
 
         {/* GIF button */}
-        <div className="relative">
-          <button
-            onClick={() => { setShowGif(!showGif); setShowEmoji(false) }}
-            className="mb-2 flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover"
-            title="Search GIFs"
-          >
-            <span className="text-xs font-bold">GIF</span>
-          </button>
-          {showGif && (
-            <GifPicker
-              onSelect={handleGifSelect}
-              onClose={() => setShowGif(false)}
-            />
-          )}
-        </div>
+        <button
+          ref={gifButtonRef}
+          onClick={() => { setShowGif(!showGif); setShowEmoji(false) }}
+          className="flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover"
+          title="Search GIFs"
+        >
+          <span className="text-xs font-bold">GIF</span>
+        </button>
+        {showGif && (
+          <GifPicker
+            anchorRef={gifButtonRef}
+            onSelect={handleGifSelect}
+            onClose={() => setShowGif(false)}
+          />
+        )}
 
         {/* Emoji button */}
         <div className="relative">
           <button
             onClick={() => { setShowEmoji(!showEmoji); setShowGif(false) }}
-            className="mb-2 flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover"
+            className="flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover"
             title="Pick an emoji"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -301,6 +304,7 @@ export function MessageInput({ channel }: MessageInputProps) {
               onClose={() => setShowEmoji(false)}
             />
           )}
+        </div>
         </div>
       </div>
     </div>

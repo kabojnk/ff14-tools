@@ -6,7 +6,7 @@ export function Sidebar() {
     <aside className="flex h-full flex-col bg-secondary">
       {/* Server header */}
       <button
-        className="flex h-[var(--header-height)] w-full items-center border-b border-[hsl(var(--color-bg-tertiary))] px-4 shadow-sm transition-colors hover:bg-hover"
+        className="flex h-[var(--header-height)] w-full items-center border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm transition-colors hover:bg-hover"
       >
         <h2 className="truncate text-[15px] font-semibold text-primary">Chat</h2>
       </button>
