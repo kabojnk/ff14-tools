@@ -13,9 +13,12 @@ interface PresenceState {
   onlineUsers: Record<string, PresenceUser>
   typingUsers: Record<string, string[]> // channelId -> user_ids
   presenceChannel: RealtimeChannel | null
+  currentUserId: string | null
+  // When the user explicitly picks a status, idle detection won't override it
+  manualStatus: 'online' | 'away' | 'offline' | null
 
   initPresence: (userId: string, status: string, customText: string | null, customEmoji: string | null) => void
-  updatePresence: (status: string, customText: string | null, customEmoji: string | null) => void
+  updatePresence: (status: string, customText: string | null, customEmoji: string | null, manual?: boolean) => void
   cleanupPresence: () => void
 
   startTyping: (channelId: string, userId: string, nickname: string) => void
@@ -26,8 +29,22 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   onlineUsers: {},
   typingUsers: {},
   presenceChannel: null,
+  currentUserId: null,
+  manualStatus: null,
 
   initPresence: (userId, status, customText, customEmoji) => {
+    // If already initialized for this user, just update presence payload — don't re-subscribe
+    const existing = get()
+    if (existing.presenceChannel && existing.currentUserId === userId) {
+      existing.updatePresence(status, customText, customEmoji)
+      return
+    }
+
+    // Clean up any old channel first
+    if (existing.presenceChannel) {
+      supabase.removeChannel(existing.presenceChannel)
+    }
+
     const channel = supabase.channel('presence', {
       config: { presence: { key: userId } },
     })
@@ -54,14 +71,17 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
         }
       })
 
-    set({ presenceChannel: channel })
+    set({ presenceChannel: channel, currentUserId: userId })
   },
 
-  updatePresence: async (status, customText, customEmoji) => {
-    const { presenceChannel } = get()
-    if (presenceChannel) {
+  updatePresence: async (status, customText, customEmoji, manual = false) => {
+    const { presenceChannel, currentUserId } = get()
+    if (manual) {
+      set({ manualStatus: status as 'online' | 'away' | 'offline' })
+    }
+    if (presenceChannel && currentUserId) {
       await presenceChannel.track({
-        user_id: (presenceChannel as unknown as { presenceState: () => Record<string, unknown[]> }).presenceState?.() ? '' : '',
+        user_id: currentUserId,
         status,
         custom_status_text: customText,
         custom_status_emoji: customEmoji,
@@ -74,7 +94,7 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     if (presenceChannel) {
       supabase.removeChannel(presenceChannel)
     }
-    set({ presenceChannel: null, onlineUsers: {} })
+    set({ presenceChannel: null, currentUserId: null, onlineUsers: {}, manualStatus: null })
   },
 
   startTyping: (channelId, userId, nickname) => {

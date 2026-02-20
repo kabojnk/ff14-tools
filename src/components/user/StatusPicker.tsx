@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { usePresenceStore } from '@/stores/presenceStore'
 import { supabase } from '@/lib/supabase'
 import { Portal } from '@/components/ui/Portal'
 
@@ -15,27 +16,39 @@ const STATUS_OPTIONS = [
 
 export function StatusPicker({ onClose }: StatusPickerProps) {
   const { profile, fetchProfile } = useAuthStore()
+  const { updatePresence } = usePresenceStore()
+  // Track selected status in local state so Save always uses the latest chosen value
+  const [selectedStatus, setSelectedStatus] = useState<'online' | 'away' | 'offline'>(
+    profile?.status ?? 'online'
+  )
   const [customText, setCustomText] = useState(profile?.custom_status_text ?? '')
   const [customEmoji, setCustomEmoji] = useState(profile?.custom_status_emoji ?? '')
 
   const handleStatusChange = async (status: 'online' | 'away' | 'offline') => {
     if (!profile) return
+    setSelectedStatus(status)
     await supabase
       .from('profiles')
       .update({ status })
       .eq('id', profile.id)
+    updatePresence(status, profile.custom_status_text, profile.custom_status_emoji, true)
     await fetchProfile()
   }
 
   const handleCustomStatus = async () => {
     if (!profile) return
+    const text = customText.trim() || null
+    const emoji = customEmoji.trim() || null
     await supabase
       .from('profiles')
       .update({
-        custom_status_text: customText.trim() || null,
-        custom_status_emoji: customEmoji.trim() || null,
+        status: selectedStatus,
+        custom_status_text: text,
+        custom_status_emoji: emoji,
       })
       .eq('id', profile.id)
+    // Use local selectedStatus — not stale profile.status from closure
+    updatePresence(selectedStatus, text, emoji, true)
     await fetchProfile()
     onClose()
   }
@@ -53,7 +66,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
               key={opt.value}
               onClick={() => handleStatusChange(opt.value)}
               className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-left text-sm transition-colors hover:bg-hover ${
-                profile?.status === opt.value ? 'bg-active' : ''
+                selectedStatus === opt.value ? 'bg-active' : ''
               }`}
             >
               <div

@@ -13,6 +13,7 @@ interface ChannelState {
   createChannel: (name: string, description?: string) => Promise<{ error: string | null }>
   archiveChannel: (channelId: string) => Promise<void>
   fetchActiveSession: (channelId: string) => Promise<void>
+  getOrCreateSession: (channelId: string) => Promise<Session | null>
   changeSheets: (channelId: string) => Promise<void>
 }
 
@@ -90,6 +91,7 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
   },
 
   fetchActiveSession: async (channelId) => {
+    // Use maybeSingle() so zero rows returns null instead of an error
     const { data } = await supabase
       .from('sessions')
       .select('*')
@@ -97,9 +99,41 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
       .eq('visible', true)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     set({ activeSession: data as Session | null })
+  },
+
+  getOrCreateSession: async (channelId) => {
+    // Return existing session if available
+    const existing = get().activeSession
+    if (existing && existing.channel_id === channelId) return existing
+
+    // Try to fetch one
+    const { data: found } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('channel_id', channelId)
+      .eq('visible', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (found) {
+      set({ activeSession: found as Session })
+      return found as Session
+    }
+
+    // No session exists yet — create the first one
+    const { data: created, error } = await supabase
+      .from('sessions')
+      .insert({ channel_id: channelId, visible: true })
+      .select()
+      .single()
+
+    if (error || !created) return null
+    set({ activeSession: created as Session })
+    return created as Session
   },
 
   changeSheets: async (channelId) => {

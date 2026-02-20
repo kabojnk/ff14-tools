@@ -17,7 +17,7 @@ interface MessageInputProps {
 export function MessageInput({ channel }: MessageInputProps) {
   const { user } = useAuthStore()
   const { sendMessage } = useMessageStore()
-  const { activeSession, changeSheets } = useChannelStore()
+  const { activeSession, getOrCreateSession, changeSheets } = useChannelStore()
   const { setEepMode } = useUiStore()
   const { sendTyping } = useTyping(channel.id)
   const [content, setContent] = useState('')
@@ -31,7 +31,7 @@ export function MessageInput({ channel }: MessageInputProps) {
 
   const handleSend = useCallback(async () => {
     const trimmed = content.trim()
-    if ((!trimmed && pendingAttachments.length === 0) || !user || !activeSession) return
+    if ((!trimmed && pendingAttachments.length === 0) || !user) return
 
     // Handle slash commands
     if (trimmed.startsWith('/') && pendingAttachments.length === 0) {
@@ -48,6 +48,10 @@ export function MessageInput({ channel }: MessageInputProps) {
       }
     }
 
+    // Get existing session or create one if channel has none yet
+    const session = await getOrCreateSession(channel.id)
+    if (!session) return
+
     const attachmentsToSend = pendingAttachments
     setContent('')
     setPendingAttachments([])
@@ -58,7 +62,7 @@ export function MessageInput({ channel }: MessageInputProps) {
         .from('messages')
         .insert({
           channel_id: channel.id,
-          session_id: activeSession.id,
+          session_id: session.id,
           author_id: user.id,
           content: trimmed || null,
           attachments: attachmentsToSend,
@@ -78,7 +82,7 @@ export function MessageInput({ channel }: MessageInputProps) {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, pendingAttachments, user, activeSession, channel.id, changeSheets, setEepMode])
+  }, [content, pendingAttachments, user, channel.id, getOrCreateSession, changeSheets, setEepMode])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -123,7 +127,10 @@ export function MessageInput({ channel }: MessageInputProps) {
   }
 
   const handleGifSelect = async (gif: TenorGif) => {
-    if (!user || !activeSession) return
+    if (!user) return
+
+    const session = await getOrCreateSession(channel.id)
+    if (!session) return
 
     // Send GIF as a message immediately
     const { data, error } = await import('@/lib/supabase').then(({ supabase }) =>
@@ -131,7 +138,7 @@ export function MessageInput({ channel }: MessageInputProps) {
         .from('messages')
         .insert({
           channel_id: channel.id,
-          session_id: activeSession.id,
+          session_id: session.id,
           author_id: user.id,
           content: null,
           attachments: [{
