@@ -46,6 +46,7 @@
 
   /* Sizing */
   --sidebar-width: 240px;
+  --member-list-width: 240px;
   --header-height: 48px;
   --input-height: 68px;
 }

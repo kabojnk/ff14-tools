@@ -6,9 +6,10 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { ChannelHeader } from '@/components/channels/ChannelHeader'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
+import { MemberList } from '@/components/user/MemberList'
 
 export function AppShell() {
-  const { setEepMode, sidebarOpen, setSidebarOpen } = useUiStore()
+  const { setEepMode, sidebarOpen, setSidebarOpen, memberListOpen } = useUiStore()
   const { fetchChannels, activeChannelId, channels } = useChannelStore()
 
   // Initialize presence tracking (online/away/offline)
@@ -57,6 +58,13 @@ export function AppShell() {
           </div>
         )}
       </main>
+
+      {/* Member list */}
+      {memberListOpen && (
+        <div className="hidden border-l border-[hsl(var(--color-bg-tertiary))] md:block">
+          <MemberList />
+        </div>
+      )}
 
       {/* Eep! keyboard shortcut listener */}
       <EepShortcutListener onActivate={() => setEepMode(true)} />
