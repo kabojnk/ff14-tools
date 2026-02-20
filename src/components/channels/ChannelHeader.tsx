@@ -5,9 +5,10 @@ import type { Channel } from '@/types'
 
 interface ChannelHeaderProps {
   channel: Channel
+  mobileBack?: () => void // when provided, shows a back arrow instead of hamburger
 }
 
-export function ChannelHeader({ channel }: ChannelHeaderProps) {
+export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
   const { archiveChannel, changeSheets } = useChannelStore()
   const { toggleSidebar, toggleMemberList, memberListOpen } = useUiStore()
   const [showMenu, setShowMenu] = useState(false)
@@ -25,16 +26,23 @@ export function ChannelHeader({ channel }: ChannelHeaderProps) {
 
   return (
     <div className="relative flex h-[var(--header-height)] flex-shrink-0 items-center gap-2 border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm">
-      {/* Mobile menu button */}
+      {/* Mobile nav button — back arrow when mobileBack provided, otherwise hamburger */}
       <button
-        onClick={toggleSidebar}
+        onClick={mobileBack ?? toggleSidebar}
         className="mr-1 rounded p-1 text-interactive hover:text-interactive-hover md:hidden"
+        aria-label={mobileBack ? 'Back to channels' : 'Toggle sidebar'}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+        {mobileBack ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        ) : (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        )}
       </button>
 
       {/* Channel name */}
@@ -56,10 +64,10 @@ export function ChannelHeader({ channel }: ChannelHeaderProps) {
 
       <div className="flex-1" />
 
-      {/* Member list toggle */}
+      {/* Member list toggle — desktop only (mobile uses the Members tab) */}
       <button
         onClick={toggleMemberList}
-        className={`rounded p-1.5 transition-colors hover:bg-hover ${memberListOpen ? 'text-interactive-hover' : 'text-interactive'}`}
+        className={`hidden rounded p-1.5 transition-colors hover:bg-hover md:block ${memberListOpen ? 'text-interactive-hover' : 'text-interactive'}`}
         title={memberListOpen ? 'Hide member list' : 'Show member list'}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

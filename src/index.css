@@ -121,6 +121,14 @@
     overflow: hidden;
   }
 
+  /* Mobile viewport: use dvh so the layout fills the actual visible area
+     even when the browser chrome (address bar) is shown/hidden */
+  @supports (height: 100dvh) {
+    html, body, #root {
+      height: 100dvh;
+    }
+  }
+
   body {
     font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
     background-color: hsl(var(--color-bg-primary));
@@ -148,6 +156,11 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background-color: hsl(var(--color-scrollbar-auto));
+}
+
+/* Safe-area padding for iPhone notch / home indicator */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Utility classes for theme colors */
