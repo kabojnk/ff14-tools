@@ -27,7 +27,7 @@ export const useUiStore = create<UiState>((set) => ({
   setEepMode: (active) => {
     sessionStorage.setItem('eepMode', String(active))
     set({ eepMode: active })
-    document.title = active ? 'FF14 Random Content Picker' : 'Internal Tools Portal'
+    document.title = active ? 'FF14 Random Content Picker' : 'XIV Tools'
   },
 
   loadEepPassphrase: async () => {

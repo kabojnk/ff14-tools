@@ -13,8 +13,8 @@ export default defineConfig({
       // Include all assets that should be precached
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png'],
       manifest: {
-        name: 'Internal Tools Portal',
-        short_name: 'Tools',
+        name: 'XIV Tools',
+        short_name: 'XIV',
         description: 'FF14 team chat and tools',
         theme_color: '#5865F2',
         background_color: '#1e1f22',
