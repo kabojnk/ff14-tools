@@ -1,11 +1,14 @@
 import { useState, useCallback } from 'react'
 import { useUiStore } from '@/stores/uiStore'
 import { getRandomDuties, getDifficultyColor, type FF14Duty } from '@/lib/ff14data'
+import { PinPad } from '@/components/pin/PinPad'
 
 export function EepMode() {
-  const { setEepMode, eepPassphrase } = useUiStore()
+  const { setEepMode, eepPassphrase, pinCode, pinLocked, unlockPin } = useUiStore()
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
+  const [showPinPad, setShowPinPad] = useState(false)
+  const [pinError, setPinError] = useState(false)
 
   const rollContent = useCallback(() => {
     const count = Math.floor(Math.random() * 3) + 3 // 3-5 duties
@@ -18,9 +21,22 @@ export function EepMode() {
       setEepMode(false)
       return
     }
-    // Wrong passphrase — treat as a custom raid search
     setCustomRaid('')
   }
+
+  const handlePinComplete = (pin: string) => {
+    if (pin === pinCode) {
+      setPinError(false)
+      if (pinLocked) unlockPin()
+      setShowPinPad(false)
+      setEepMode(false)
+    } else {
+      setPinError(true)
+      setTimeout(() => setPinError(false), 700)
+    }
+  }
+
+  const overlayVisible = pinLocked || showPinPad
 
   return (
     <div className="flex h-full flex-col" style={{ background: '#1a1a2e', color: '#e0e0e0' }}>
@@ -37,17 +53,13 @@ export function EepMode() {
             Can&apos;t decide what to run? Let fate choose!
           </p>
         </div>
-        <div
-          className="text-xs"
-          style={{ color: '#606080' }}
-        >
+        <div className="text-xs" style={{ color: '#606080' }}>
           v2.1.4
         </div>
       </header>
 
       {/* Main content */}
       <main className="flex flex-1 flex-col items-center justify-start overflow-y-auto p-8">
-        {/* Roll button */}
         <button
           onClick={rollContent}
           className="mb-8 rounded-lg px-8 py-3 text-lg font-bold text-white transition-all hover:scale-105 active:scale-95"
@@ -59,7 +71,6 @@ export function EepMode() {
           Roll Random Content
         </button>
 
-        {/* Results */}
         {duties.length > 0 && (
           <div className="w-full max-w-2xl">
             <h2 className="mb-4 text-center text-lg font-semibold" style={{ color: '#a0a0b0' }}>
@@ -70,10 +81,7 @@ export function EepMode() {
                 <div
                   key={i}
                   className="flex items-center justify-between rounded-lg p-4"
-                  style={{
-                    background: '#16213e',
-                    border: '1px solid #0f3460',
-                  }}
+                  style={{ background: '#16213e', border: '1px solid #0f3460' }}
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -103,49 +111,69 @@ export function EepMode() {
 
         {duties.length === 0 && (
           <div className="text-center" style={{ color: '#606080' }}>
-            <p className="text-4xl mb-4">🎲</p>
+            <p className="mb-4 text-4xl">🎲</p>
             <p>Click the button above to generate a random content agenda</p>
           </div>
         )}
       </main>
 
-      {/* Custom raid input (secret passphrase entry) */}
+      {/* Footer */}
       <footer
         className="px-6 py-4"
         style={{ background: '#16213e', borderTop: '1px solid #0f3460' }}
       >
-        <form onSubmit={handleCustomSubmit} className="flex gap-3">
-          <div className="flex-1">
-            <label
-              htmlFor="custom-raid"
-              className="mb-1 block text-xs font-medium"
-              style={{ color: '#808090' }}
-            >
-              Or enter in a custom raid
-            </label>
-            <input
-              id="custom-raid"
-              type="text"
-              value={customRaid}
-              onChange={(e) => setCustomRaid(e.target.value)}
-              placeholder="e.g. The Binding Coil Turn 5"
-              className="w-full rounded px-3 py-2 text-sm outline-none"
-              style={{
-                background: '#1a1a2e',
-                border: '1px solid #0f3460',
-                color: '#e0e0e0',
-              }}
+        <div className="flex items-end gap-3">
+          {/* PIN unlock button — only shown if a PIN is configured */}
+          {pinCode && (
+            <button
+              onClick={() => setShowPinPad(true)}
+              className="mb-0.5 h-9 w-9 flex-shrink-0 rounded-full"
+              style={{ background: '#60a5fa' }}
+              aria-label="Unlock"
             />
-          </div>
-          <button
-            type="submit"
-            className="self-end rounded px-4 py-2 text-sm font-medium text-white"
-            style={{ background: '#0f3460' }}
-          >
-            Add
-          </button>
-        </form>
+          )}
+
+          <form onSubmit={handleCustomSubmit} className="flex flex-1 gap-3">
+            <div className="flex-1">
+              <label
+                htmlFor="custom-raid"
+                className="mb-1 block text-xs font-medium"
+                style={{ color: '#808090' }}
+              >
+                Or enter in a custom raid
+              </label>
+              <input
+                id="custom-raid"
+                type="text"
+                value={customRaid}
+                onChange={(e) => setCustomRaid(e.target.value)}
+                placeholder="e.g. The Binding Coil Turn 5"
+                className="w-full rounded px-3 py-2 text-sm outline-none"
+                style={{ background: '#1a1a2e', border: '1px solid #0f3460', color: '#e0e0e0' }}
+              />
+            </div>
+            <button
+              type="submit"
+              className="self-end rounded px-4 py-2 text-sm font-medium text-white"
+              style={{ background: '#0f3460' }}
+            >
+              Add
+            </button>
+          </form>
+        </div>
       </footer>
+
+      {/* PIN overlay */}
+      {overlayVisible && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <PinPad
+            title="Enter PIN"
+            error={pinError}
+            onComplete={handlePinComplete}
+            onCancel={pinLocked ? undefined : () => setShowPinPad(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

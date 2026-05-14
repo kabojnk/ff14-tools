@@ -4,6 +4,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { supabase } from '@/lib/supabase'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { ReactionPicker, ReactionDisplay } from '@/components/chat/ReactionPicker'
+import { MediaViewer } from '@/components/chat/MediaViewer'
 import type { Message, Profile, Reaction } from '@/types'
 
 interface MessageItemProps {
@@ -302,50 +303,82 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
 // Inline media embed for attachments
 function MediaEmbed({ attachment }: { attachment: Message['attachments'][number] }) {
   const [spoilerRevealed, setSpoilerRevealed] = useState(!attachment.spoiler)
+  const [viewerOpen, setViewerOpen] = useState(false)
 
   if (attachment.type === 'image' || attachment.type === 'gif') {
     return (
-      <div
-        className="relative inline-block max-w-md cursor-pointer overflow-hidden rounded"
-        onClick={() => !spoilerRevealed && setSpoilerRevealed(true)}
-      >
-        <img
-          src={attachment.url}
-          alt={attachment.filename}
-          className={`max-h-[300px] rounded object-contain ${!spoilerRevealed ? 'blur-xl' : ''}`}
-          loading="lazy"
-        />
-        {!spoilerRevealed && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
-              SPOILER
-            </span>
-          </div>
+      <>
+        <div
+          className="relative inline-block max-w-md cursor-pointer overflow-hidden rounded"
+          onClick={() => spoilerRevealed ? setViewerOpen(true) : setSpoilerRevealed(true)}
+        >
+          <img
+            src={attachment.url}
+            alt={attachment.filename}
+            className={`max-h-[300px] rounded object-contain ${!spoilerRevealed ? 'blur-xl' : ''}`}
+            loading="lazy"
+          />
+          {!spoilerRevealed && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
+                SPOILER
+              </span>
+            </div>
+          )}
+        </div>
+        {viewerOpen && (
+          <MediaViewer
+            url={attachment.url}
+            filename={attachment.filename}
+            type={attachment.type}
+            onClose={() => setViewerOpen(false)}
+          />
         )}
-      </div>
+      </>
     )
   }
 
   if (attachment.type === 'video') {
     return (
-      <div className="relative inline-block max-w-lg overflow-hidden rounded">
-        {!spoilerRevealed ? (
-          <div
-            className="flex h-48 w-80 cursor-pointer items-center justify-center rounded bg-tertiary"
-            onClick={() => setSpoilerRevealed(true)}
-          >
-            <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
-              SPOILER
-            </span>
-          </div>
-        ) : (
-          <video
-            src={attachment.url}
-            controls
-            className="max-h-[300px] rounded"
+      <>
+        <div className="relative inline-block max-w-lg overflow-hidden rounded">
+          {!spoilerRevealed ? (
+            <div
+              className="flex h-48 w-80 cursor-pointer items-center justify-center rounded bg-tertiary"
+              onClick={() => setSpoilerRevealed(true)}
+            >
+              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
+                SPOILER
+              </span>
+            </div>
+          ) : (
+            <div className="group/video relative">
+              <video
+                src={attachment.url}
+                controls
+                className="max-h-[300px] rounded"
+              />
+              <button
+                onClick={() => setViewerOpen(true)}
+                className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover/video:opacity-100"
+                title="Open"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+        {viewerOpen && (
+          <MediaViewer
+            url={attachment.url}
+            filename={attachment.filename}
+            type="video"
+            onClose={() => setViewerOpen(false)}
           />
         )}
-      </div>
+      </>
     )
   }
 

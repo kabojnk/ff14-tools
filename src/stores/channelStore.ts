@@ -15,7 +15,7 @@ interface ChannelState {
   archiveChannel: (channelId: string) => Promise<void>
   fetchActiveSession: (channelId: string) => Promise<void>
   getOrCreateSession: (channelId: string) => Promise<Session | null>
-  changeSheets: (channelId: string) => void
+  dragTheLake: (channelId: string) => void
 }
 
 export const useChannelStore = create<ChannelState>((set, get) => ({
@@ -137,7 +137,7 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     return created as Session
   },
 
-  changeSheets: (channelId) => {
+  dragTheLake: (channelId) => {
     // Immediately hide everything client-side — don't wait for the server
     set({ activeSession: null })
     useMessageStore.getState().clearAllMessages()

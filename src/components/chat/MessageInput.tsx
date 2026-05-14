@@ -16,7 +16,7 @@ interface MessageInputProps {
 
 export function MessageInput({ channel }: MessageInputProps) {
   const { user } = useAuthStore()
-  const { getOrCreateSession, changeSheets } = useChannelStore()
+  const { getOrCreateSession, dragTheLake } = useChannelStore()
   const { setEepMode } = useUiStore()
   const { sendTyping } = useTyping(channel.id)
   const [content, setContent] = useState('')
@@ -35,8 +35,8 @@ export function MessageInput({ channel }: MessageInputProps) {
     // Handle slash commands
     if (trimmed.startsWith('/') && pendingAttachments.length === 0) {
       const command = trimmed.toLowerCase()
-      if (command === '/sheets') {
-        changeSheets(channel.id)
+      if (command === '/drag') {
+        dragTheLake(channel.id)
         setContent('')
         return
       }
@@ -81,7 +81,7 @@ export function MessageInput({ channel }: MessageInputProps) {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, pendingAttachments, user, channel.id, getOrCreateSession, changeSheets, setEepMode])
+  }, [content, pendingAttachments, user, channel.id, getOrCreateSession, dragTheLake, setEepMode])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

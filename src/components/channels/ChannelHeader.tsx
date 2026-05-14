@@ -9,12 +9,12 @@ interface ChannelHeaderProps {
 }
 
 export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
-  const { archiveChannel, changeSheets } = useChannelStore()
+  const { archiveChannel, dragTheLake } = useChannelStore()
   const { toggleSidebar, toggleMemberList, memberListOpen } = useUiStore()
   const [showMenu, setShowMenu] = useState(false)
 
-  const handleChangeSheets = () => {
-    changeSheets(channel.id)
+  const handleDragTheLake = () => {
+    dragTheLake(channel.id)
     setShowMenu(false)
   }
 
@@ -98,7 +98,7 @@ export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
             <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
             <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md bg-floating p-1 shadow-lg">
               <button
-                onClick={handleChangeSheets}
+                onClick={handleDragTheLake}
                 className="flex w-full items-center gap-2 rounded-[3px] px-2 py-1.5 text-left text-sm text-interactive transition-colors hover:bg-brand hover:text-white"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -106,7 +106,7 @@ export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
                   <path d="M3 12h18" />
                   <path d="M3 18h18" />
                 </svg>
-                Change the Sheets
+                Drag the Lake
               </button>
               {channel.name !== 'general' && (
                 <button

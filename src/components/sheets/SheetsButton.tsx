@@ -5,10 +5,10 @@ interface SheetsButtonProps {
 }
 
 export function SheetsButton({ channelId }: SheetsButtonProps) {
-  const { changeSheets } = useChannelStore()
+  const { dragTheLake } = useChannelStore()
 
   const handleClick = () => {
-    changeSheets(channelId)
+    dragTheLake(channelId)
   }
 
   return (

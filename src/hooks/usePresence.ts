@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
+import { useUiStore } from '@/stores/uiStore'
 import type { UserStatus } from '@/types'
 
 export function usePresence() {
@@ -35,8 +36,17 @@ export function usePresence() {
         const live = usePresenceStore.getState().onlineUsers[userId]?.status
         if (live && live !== 'offline') savedStatusRef.current = live
         updatePresence('offline', null, null)
+
+        // Always switch to fake screen so app switcher preview is private.
+        // If a PIN is configured, also require it on return.
+        const { pinCode, lockApp, setEepMode } = useUiStore.getState()
+        if (pinCode) {
+          lockApp()
+        } else {
+          setEepMode(true)
+        }
       } else {
-        // Restore — use fresh profile data for custom text/emoji
+        // Restore presence — eep/lock state stays until user authenticates
         const p = useAuthStore.getState().profile
         updatePresence(
           savedStatusRef.current,

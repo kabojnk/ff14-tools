@@ -9,13 +9,16 @@ import { EepMode } from '@/components/eep/EepMode'
 // Stays mounted for the entire logged-in session, including during Eep mode,
 // so presence and passphrase survive the AppShell ↔ EepMode swap.
 function AuthenticatedApp() {
-  const { eepMode, loadEepPassphrase } = useUiStore()
+  const { eepMode, loadEepPassphrase, loadPin } = useUiStore()
+  const { user } = useAuthStore()
 
   usePresence()
 
   useEffect(() => {
     loadEepPassphrase()
-  }, [loadEepPassphrase])
+    if (user) loadPin(user.id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id])
 
   if (eepMode) return <EepMode />
   return <AppShell />
