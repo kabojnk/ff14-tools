@@ -3,26 +3,9 @@ import { useUiStore } from '@/stores/uiStore'
 import { getRandomDuties, getDifficultyColor, type FF14Duty } from '@/lib/ff14data'
 
 export function EepMode() {
-  const { setEepMode } = useUiStore()
+  const { setEepMode, eepPassphrase } = useUiStore()
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
-  const [passphrase, setPassphrase] = useState<string | null>(null)
-  const [passphraseLoaded, setPassphraseLoaded] = useState(false)
-
-  // Load passphrase from Supabase on mount
-  useState(() => {
-    import('@/lib/supabase').then(({ supabase }) => {
-      supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'eep_passphrase')
-        .single()
-        .then(({ data }) => {
-          if (data) setPassphrase(data.value)
-          setPassphraseLoaded(true)
-        })
-    })
-  })
 
   const rollContent = useCallback(() => {
     const count = Math.floor(Math.random() * 3) + 3 // 3-5 duties
@@ -31,11 +14,11 @@ export function EepMode() {
 
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (passphraseLoaded && passphrase && customRaid === passphrase) {
+    if (eepPassphrase && customRaid === eepPassphrase) {
       setEepMode(false)
       return
     }
-    // Wrong passphrase — just treat it as a search
+    // Wrong passphrase — treat as a custom raid search
     setCustomRaid('')
   }
 

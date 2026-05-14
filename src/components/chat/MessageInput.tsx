@@ -36,7 +36,7 @@ export function MessageInput({ channel }: MessageInputProps) {
     if (trimmed.startsWith('/') && pendingAttachments.length === 0) {
       const command = trimmed.toLowerCase()
       if (command === '/sheets') {
-        await changeSheets(channel.id)
+        changeSheets(channel.id)
         setContent('')
         return
       }

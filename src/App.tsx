@@ -1,19 +1,34 @@
 import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
+import { usePresence } from '@/hooks/usePresence'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { EepMode } from '@/components/eep/EepMode'
 
+// Stays mounted for the entire logged-in session, including during Eep mode,
+// so presence and passphrase survive the AppShell ↔ EepMode swap.
+function AuthenticatedApp() {
+  const { eepMode, loadEepPassphrase } = useUiStore()
+
+  usePresence()
+
+  useEffect(() => {
+    loadEepPassphrase()
+  }, [loadEepPassphrase])
+
+  if (eepMode) return <EepMode />
+  return <AppShell />
+}
+
 export default function App() {
   const { initialized, user, initialize } = useAuthStore()
-  const { eepMode, theme } = useUiStore()
+  const { theme } = useUiStore()
 
   useEffect(() => {
     initialize()
   }, [initialize])
 
-  // Apply theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
@@ -26,13 +41,6 @@ export default function App() {
     )
   }
 
-  if (!user) {
-    return <LoginPage />
-  }
-
-  if (eepMode) {
-    return <EepMode />
-  }
-
-  return <AppShell />
+  if (!user) return <LoginPage />
+  return <AuthenticatedApp />
 }

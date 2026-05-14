@@ -14,6 +14,7 @@ interface MessageState {
   updateMessage: (channelId: string, message: Message) => void
   removeMessage: (channelId: string, messageId: string) => void
   clearMessages: (channelId: string) => void
+  clearAllMessages: () => void
 }
 
 export const useMessageStore = create<MessageState>((set, get) => ({
@@ -127,4 +128,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       messages: { ...state.messages, [channelId]: [] },
     }))
   },
+
+  clearAllMessages: () => set({ messages: {} }),
 }))

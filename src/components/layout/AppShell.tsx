@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useChannelStore } from '@/stores/channelStore'
 import { useUiStore } from '@/stores/uiStore'
-import { usePresence } from '@/hooks/usePresence'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChannelHeader } from '@/components/channels/ChannelHeader'
 import { MessageList } from '@/components/chat/MessageList'
@@ -17,8 +16,6 @@ export function AppShell() {
   const { setEepMode, memberListOpen } = useUiStore()
   const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
   const [mobileView, setMobileView] = useState<MobileView>('channels')
-
-  usePresence()
 
   useEffect(() => {
     fetchChannels()

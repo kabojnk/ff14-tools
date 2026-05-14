@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
+import { useMessageStore } from '@/stores/messageStore'
 import type { Channel, Session } from '@/types'
 
 interface ChannelState {
@@ -14,7 +15,7 @@ interface ChannelState {
   archiveChannel: (channelId: string) => Promise<void>
   fetchActiveSession: (channelId: string) => Promise<void>
   getOrCreateSession: (channelId: string) => Promise<Session | null>
-  changeSheets: (channelId: string) => Promise<void>
+  changeSheets: (channelId: string) => void
 }
 
 export const useChannelStore = create<ChannelState>((set, get) => ({
@@ -136,14 +137,21 @@ export const useChannelStore = create<ChannelState>((set, get) => ({
     return created as Session
   },
 
-  changeSheets: async (channelId) => {
-    const { data, error } = await supabase.rpc('change_sheets', {
-      p_channel_id: channelId,
-    })
+  changeSheets: (channelId) => {
+    // Immediately hide everything client-side — don't wait for the server
+    set({ activeSession: null })
+    useMessageStore.getState().clearAllMessages()
 
-    if (!error && data) {
-      // Refresh the active session
-      await get().fetchActiveSession(channelId)
+    // Archive all channels' sessions in the background
+    const { channels } = get()
+    for (const ch of channels) {
+      supabase.rpc('change_sheets', { p_channel_id: ch.id }).then(({ error }) => {
+        // Once the active channel's new session is created, fetch it so
+        // future messages can be associated to the right session_id
+        if (!error && ch.id === channelId) {
+          get().fetchActiveSession(channelId)
+        }
+      })
     }
   },
 }))
