@@ -37,14 +37,9 @@ export function usePresence() {
         if (live && live !== 'offline') savedStatusRef.current = live
         updatePresence('offline', null, null)
 
-        // Always switch to fake screen so app switcher preview is private.
-        // If a PIN is configured, also require it on return.
-        const { pinCode, lockApp, setEepMode } = useUiStore.getState()
-        if (pinCode) {
-          lockApp()
-        } else {
-          setEepMode(true)
-        }
+        // Switch to fake screen so app switcher preview is private.
+        // PIN unlock is voluntary — only triggered by the blue circle button.
+        useUiStore.getState().setEepMode(true)
       } else {
         // Restore presence — eep/lock state stays until user authenticates
         const p = useAuthStore.getState().profile

@@ -277,51 +277,51 @@ export function UserSettings({ onClose }: UserSettingsProps) {
                     <p className="mb-4 text-sm font-medium text-green-400">{pinSuccess}</p>
                   )}
 
-                  {pinStep === 'idle' ? (
-                    <div className="flex gap-3">
-                      {!pinCode ? (
+                  <div className="flex gap-3">
+                    {!pinCode ? (
+                      <button
+                        onClick={() => setPinStep('set-new')}
+                        className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+                      >
+                        Set PIN
+                      </button>
+                    ) : (
+                      <>
                         <button
-                          onClick={() => setPinStep('set-new')}
+                          onClick={() => setPinStep('change-verify')}
                           className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
                         >
-                          Set PIN
+                          Change PIN
                         </button>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => setPinStep('change-verify')}
-                            className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
-                          >
-                            Change PIN
-                          </button>
-                          <button
-                            onClick={() => setPinStep('remove-verify')}
-                            className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
-                          >
-                            Remove PIN
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-start">
-                      <div className="rounded-xl bg-[#1a1a2e] px-12 py-10">
-                        <PinPad
-                          title={pinPadTitle[pinStep]}
-                          subtitle={pinPadSubtitle[pinStep]}
-                          error={pinError}
-                          onComplete={handlePinComplete}
-                          onCancel={resetPinWizard}
-                        />
-                      </div>
-                    </div>
-                  )}
+                        <button
+                          onClick={() => setPinStep('remove-verify')}
+                          className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
+                        >
+                          Remove PIN
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </>
             )}
           </div>
         </div>
       </div>
+
+      {/* PIN entry modal — covers the settings screen on all screen sizes */}
+      {pinStep !== 'idle' && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80">
+          <PinPad
+            key={pinStep}
+            title={pinPadTitle[pinStep]}
+            subtitle={pinPadSubtitle[pinStep]}
+            error={pinError}
+            onComplete={handlePinComplete}
+            onCancel={resetPinWizard}
+          />
+        </div>
+      )}
     </Portal>
   )
 }
