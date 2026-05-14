@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import type { UserStatus } from '@/types'
 
 interface PresenceUser {
   user_id: string
-  status: 'online' | 'away' | 'offline'
+  status: UserStatus
   custom_status_text: string | null
   custom_status_emoji: string | null
 }
@@ -15,10 +16,10 @@ interface PresenceState {
   presenceChannel: RealtimeChannel | null
   currentUserId: string | null
   // When the user explicitly picks a status, idle detection won't override it
-  manualStatus: 'online' | 'away' | 'offline' | null
+  manualStatus: UserStatus | null
 
-  initPresence: (userId: string, status: string, customText: string | null, customEmoji: string | null) => void
-  updatePresence: (status: string, customText: string | null, customEmoji: string | null, manual?: boolean) => void
+  initPresence: (userId: string, status: UserStatus, customText: string | null, customEmoji: string | null) => void
+  updatePresence: (status: UserStatus, customText: string | null, customEmoji: string | null, manual?: boolean) => void
   cleanupPresence: () => void
 
   startTyping: (channelId: string, userId: string, nickname: string) => void
@@ -77,7 +78,7 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
   updatePresence: async (status, customText, customEmoji, manual = false) => {
     const { presenceChannel, currentUserId } = get()
     if (manual) {
-      set({ manualStatus: status as 'online' | 'away' | 'offline' })
+      set({ manualStatus: status })
     }
     if (presenceChannel && currentUserId) {
       await presenceChannel.track({

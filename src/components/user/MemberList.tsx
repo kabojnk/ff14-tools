@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
-import type { Profile } from '@/types'
+import { statusColor } from '@/components/user/StatusPicker'
+import type { Profile, UserStatus } from '@/types'
+
+const ALERT_STATUSES: UserStatus[] = ['under_close_watch', 'found_out', 'you_can_call', 'potential_eep']
 
 export function MemberList() {
   const { onlineUsers } = usePresenceStore()
@@ -31,12 +34,16 @@ export function MemberList() {
     }
   })
 
-  const online = members.filter((m) => m.status === 'online')
-  const away   = members.filter((m) => m.status === 'away')
+  const alerts  = members.filter((m) => ALERT_STATUSES.includes(m.status))
+  const online  = members.filter((m) => m.status === 'online')
+  const away    = members.filter((m) => m.status === 'away')
   const offline = members.filter((m) => m.status === 'offline')
 
   return (
     <aside className="flex w-[var(--member-list-width)] flex-shrink-0 flex-col overflow-y-auto bg-secondary py-4">
+      {alerts.length > 0 && (
+        <MemberSection label="Alert" count={alerts.length} members={alerts} currentUserId={user?.id} />
+      )}
       <MemberSection label="Online" count={online.length} members={online} currentUserId={user?.id} />
       {away.length > 0 && (
         <MemberSection label="Away" count={away.length} members={away} currentUserId={user?.id} />
@@ -48,17 +55,13 @@ export function MemberList() {
 
 interface MemberEntry {
   profile: Profile
-  status: 'online' | 'away' | 'offline'
+  status: UserStatus
   customText: string | null
   customEmoji: string | null
 }
 
 function MemberSection({
-  label,
-  count,
-  members,
-  currentUserId,
-  dim = false,
+  label, count, members, currentUserId, dim = false,
 }: {
   label: string
   count: number
@@ -99,17 +102,12 @@ function MemberRow({
   dim,
 }: {
   profile: Profile
-  status: 'online' | 'away' | 'offline'
+  status: UserStatus
   customText: string | null
   customEmoji: string | null
   isYou: boolean
   dim: boolean
 }) {
-  const statusColor =
-    status === 'online' ? 'hsl(var(--color-status-online))'
-    : status === 'away'  ? 'hsl(var(--color-status-away))'
-    : 'hsl(var(--color-status-offline))'
-
   return (
     <div
       className={`flex items-center gap-2.5 rounded-[4px] px-2 py-1.5 transition-colors hover:bg-hover ${dim ? 'opacity-50' : ''}`}
@@ -130,7 +128,7 @@ function MemberRow({
         )}
         <div
           className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[hsl(var(--color-bg-secondary))]"
-          style={{ backgroundColor: statusColor }}
+          style={{ backgroundColor: statusColor(status) }}
         />
       </div>
 

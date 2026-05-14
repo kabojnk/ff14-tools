@@ -13,12 +13,15 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
   const [results, setResults] = useState<TenorGif[]>([])
   const [loading, setLoading] = useState(false)
   const [pos, setPos] = useState({ bottom: 0, right: 0 })
+  const [isMobile, setIsMobile] = useState(false)
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    const mobile = window.innerWidth < 768
+    setIsMobile(mobile)
     inputRef.current?.focus()
-    if (anchorRef.current) {
+    if (!mobile && anchorRef.current) {
       const rect = anchorRef.current.getBoundingClientRect()
       setPos({
         bottom: window.innerHeight - rect.top + 8,
@@ -27,16 +30,16 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
     }
   }, [anchorRef])
 
-  // Close on outside click
+  // Close on outside click (desktop) or backdrop tap (mobile)
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+      if (!isMobile && anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
         onClose()
       }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [onClose, anchorRef])
+  }, [onClose, anchorRef, isMobile])
 
   const doSearch = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); return }
@@ -57,12 +60,8 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
     searchTimeoutRef.current = setTimeout(() => doSearch(value), 400)
   }
 
-  return createPortal(
-    <div
-      className="fixed z-50 w-80 rounded-lg border border-[hsl(var(--color-input-border))] bg-floating shadow-xl"
-      style={{ bottom: pos.bottom, right: pos.right }}
-      onMouseDown={(e) => e.stopPropagation()}
-    >
+  const content = (
+    <>
       {/* Search bar */}
       <div className="p-3">
         <input
@@ -108,6 +107,37 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
       <div className="border-t border-[hsl(var(--color-input-border))] px-3 py-1.5 text-right">
         <span className="text-[10px] text-muted">Powered by Klipy</span>
       </div>
+    </>
+  )
+
+  if (isMobile) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
+        {/* Backdrop */}
+        <div className="absolute inset-0 bg-black/50" />
+        {/* Sheet */}
+        <div
+          className="relative rounded-t-2xl border-t border-[hsl(var(--color-input-border))] bg-floating shadow-xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1">
+            <div className="h-1 w-10 rounded-full bg-[hsl(var(--color-input-border))]" />
+          </div>
+          {content}
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  return createPortal(
+    <div
+      className="fixed z-50 w-80 rounded-lg border border-[hsl(var(--color-input-border))] bg-floating shadow-xl"
+      style={{ bottom: pos.bottom, right: pos.right }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {content}
     </div>,
     document.body
   )

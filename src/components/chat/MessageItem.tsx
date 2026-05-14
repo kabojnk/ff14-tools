@@ -25,7 +25,7 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [reactions, setReactions] = useState<Reaction[]>([])
 
-  // Fetch reactions for this message
+  // Fetch reactions and subscribe to realtime changes for this message
   useEffect(() => {
     supabase
       .from('reactions')
@@ -34,7 +34,62 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
       .then(({ data }) => {
         if (data) setReactions(data as Reaction[])
       })
+
+    const channel = supabase
+      .channel(`reactions:${message.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions', filter: `message_id=eq.${message.id}` },
+        (payload) => {
+          setReactions((prev) => {
+            const r = payload.new as Reaction
+            return prev.some((x) => x.id === r.id) ? prev : [...prev, r]
+          })
+        }
+      )
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions', filter: `message_id=eq.${message.id}` },
+        (payload) => {
+          setReactions((prev) => prev.filter((r) => r.id !== (payload.old as Reaction).id))
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [message.id])
+
+  const handleAddReaction = async (emoji: string) => {
+    if (!user) return
+    // Optimistic add
+    const optimistic: Reaction = {
+      id: `optimistic-${Date.now()}`,
+      message_id: message.id,
+      user_id: user.id,
+      emoji,
+      created_at: new Date().toISOString(),
+    }
+    setReactions((prev) => [...prev, optimistic])
+    const { data } = await supabase
+      .from('reactions')
+      .insert({ message_id: message.id, user_id: user.id, emoji })
+      .select()
+      .single()
+    // Replace optimistic entry with real one (realtime INSERT will also arrive but dedup handles it)
+    if (data) {
+      setReactions((prev) => prev.map((r) => r.id === optimistic.id ? data as Reaction : r))
+    } else {
+      setReactions((prev) => prev.filter((r) => r.id !== optimistic.id))
+    }
+  }
+
+  const handleRemoveReaction = async (emoji: string) => {
+    if (!user) return
+    // Optimistic remove
+    setReactions((prev) => prev.filter((r) => !(r.user_id === user.id && r.emoji === emoji)))
+    await supabase
+      .from('reactions')
+      .delete()
+      .eq('message_id', message.id)
+      .eq('user_id', user.id)
+      .eq('emoji', emoji)
+  }
 
   const isOwn = user?.id === message.author_id
   const timestamp = new Date(message.created_at)
@@ -158,7 +213,12 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
         )}
 
         {/* Reactions */}
-        <ReactionDisplay reactions={reactions} messageId={message.id} />
+        <ReactionDisplay
+          reactions={reactions}
+          messageId={message.id}
+          onAdd={handleAddReaction}
+          onRemove={handleRemoveReaction}
+        />
       </div>
 
       {/* Message actions (hover) */}
@@ -180,7 +240,11 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
             </button>
             {showReactionPicker && (
               <div className="absolute right-0 top-full z-50 mt-1">
-                <ReactionPicker messageId={message.id} onClose={() => setShowReactionPicker(false)} />
+                <ReactionPicker
+                  messageId={message.id}
+                  onAdd={handleAddReaction}
+                  onClose={() => setShowReactionPicker(false)}
+                />
               </div>
             )}
           </div>

@@ -1,9 +1,18 @@
+export type UserStatus =
+  | 'online'
+  | 'away'
+  | 'offline'
+  | 'under_close_watch'
+  | 'found_out'
+  | 'you_can_call'
+  | 'potential_eep'
+
 export interface Profile {
   id: string
   nickname: string
   avatar_url: string | null
   profile_message: string | null
-  status: 'online' | 'away' | 'offline'
+  status: UserStatus
   custom_status_text: string | null
   custom_status_emoji: string | null
   created_at: string

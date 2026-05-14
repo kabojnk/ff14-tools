@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { StatusPicker } from '@/components/user/StatusPicker'
+import { StatusPicker, statusColor, statusLabel } from '@/components/user/StatusPicker'
 import { UserSettings } from '@/components/user/UserSettings'
 
 export function UserPanel() {
@@ -30,13 +30,7 @@ export function UserPanel() {
           )}
           <div
             className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[hsl(var(--color-bg-tertiary))]"
-            style={{
-              backgroundColor: profile?.status === 'online'
-                ? 'hsl(var(--color-status-online))'
-                : profile?.status === 'away'
-                  ? 'hsl(var(--color-status-away))'
-                  : 'hsl(var(--color-status-offline))',
-            }}
+            style={{ backgroundColor: profile ? statusColor(profile.status) : 'hsl(var(--color-status-offline))' }}
           />
         </button>
 
@@ -47,11 +41,7 @@ export function UserPanel() {
           </p>
           <p className="truncate text-[11px] leading-tight text-muted">
             {profile?.custom_status_emoji && `${profile.custom_status_emoji} `}
-            {profile?.custom_status_text || (
-              profile?.status === 'online' ? 'Online'
-              : profile?.status === 'away' ? 'Away'
-              : 'Offline'
-            )}
+            {profile?.custom_status_text || (profile ? statusLabel(profile.status) : 'Offline')}
           </p>
         </div>
 
