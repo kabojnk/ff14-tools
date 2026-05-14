@@ -17,11 +17,30 @@ export function MessageList({ channelId }: MessageListProps) {
   const { profile } = useAuthStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
+
+  // Also scroll to bottom when content height grows (e.g. first reaction on last message)
+  // but only if the user is already near the bottom — don't hijack manual scrolling
+  useEffect(() => {
+    const content = contentRef.current
+    const container = containerRef.current
+    if (!content || !container) return
+
+    const observer = new ResizeObserver(() => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      if (scrollHeight - scrollTop - clientHeight < 150) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
+    })
+
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
 
   // Store the current user's profile in cache
   useEffect(() => {
@@ -89,22 +108,24 @@ export function MessageList({ channelId }: MessageListProps) {
         </div>
       )}
 
-      {messages.map((message, i) => (
-        <MessageItem
-          key={message.id}
-          message={message}
-          author={message.author ?? getAuthor(message.author_id)}
-          showHeader={shouldShowHeader(i)}
-          channelId={channelId}
-          onBroadcastEdit={broadcastEditMessage}
-          onBroadcastDelete={broadcastDeleteMessage}
-        />
-      ))}
+      <div ref={contentRef}>
+        {messages.map((message, i) => (
+          <MessageItem
+            key={message.id}
+            message={message}
+            author={message.author ?? getAuthor(message.author_id)}
+            showHeader={shouldShowHeader(i)}
+            channelId={channelId}
+            onBroadcastEdit={broadcastEditMessage}
+            onBroadcastDelete={broadcastDeleteMessage}
+          />
+        ))}
 
-      {/* Typing indicator */}
-      <TypingIndicator channelId={channelId} />
+        {/* Typing indicator */}
+        <TypingIndicator channelId={channelId} />
 
-      <div ref={bottomRef} className="h-1" />
+        <div ref={bottomRef} className="h-1" />
+      </div>
     </div>
   )
 }

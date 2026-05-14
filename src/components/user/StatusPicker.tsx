@@ -53,15 +53,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
   const [customText, setCustomText] = useState(profile?.custom_status_text ?? '')
   const [customEmoji, setCustomEmoji] = useState(profile?.custom_status_emoji ?? '')
 
-  const handleStatusChange = async (status: UserStatus) => {
-    if (!profile) return
-    setSelectedStatus(status)
-    await supabase.from('profiles').update({ status }).eq('id', profile.id)
-    updatePresence(status, profile.custom_status_text, profile.custom_status_emoji, true)
-    await fetchProfile()
-  }
-
-  const handleCustomStatus = async () => {
+  const handleSave = async () => {
     if (!profile) return
     const text = customText.trim() || null
     const emoji = customEmoji.trim() || null
@@ -77,7 +69,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
   const renderOption = (opt: { value: UserStatus; label: string; color: string }) => (
     <button
       key={opt.value}
-      onClick={() => handleStatusChange(opt.value)}
+      onClick={() => setSelectedStatus(opt.value)}
       className={`flex w-full items-center gap-3 rounded-[3px] px-3 py-2 text-left text-sm transition-colors hover:bg-hover ${
         selectedStatus === opt.value ? 'bg-active' : ''
       }`}
@@ -134,7 +126,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
                 Cancel
               </button>
               <button
-                onClick={handleCustomStatus}
+                onClick={handleSave}
                 className="rounded-[3px] bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
               >
                 Save
