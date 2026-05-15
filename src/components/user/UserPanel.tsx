@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
+import { useUiStore } from '@/stores/uiStore'
 import { StatusPicker, statusColor, statusLabel } from '@/components/user/StatusPicker'
 import { UserSettings } from '@/components/user/UserSettings'
 
 export function UserPanel() {
-  const { profile, signOut } = useAuthStore()
+  const { profile } = useAuthStore()
   const { onlineUsers } = usePresenceStore()
+  const { setEepMode } = useUiStore()
   const [showStatus, setShowStatus] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
@@ -65,11 +67,11 @@ export function UserPanel() {
           </svg>
         </button>
 
-        {/* Sign out */}
+        {/* Eep / hide */}
         <button
-          onClick={signOut}
+          onClick={() => setEepMode(true)}
           className="rounded p-1.5 text-interactive transition-colors hover:bg-hover hover:text-interactive-hover"
-          title="Sign out"
+          title="Hide app"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

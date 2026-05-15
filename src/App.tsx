@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { usePresence } from '@/hooks/usePresence'
@@ -34,6 +34,7 @@ function AuthenticatedApp() {
 export default function App() {
   const { initialized, user, initialize } = useAuthStore()
   const { theme } = useUiStore()
+  const [showLogin, setShowLogin] = useState(false)
 
   useEffect(() => {
     initialize()
@@ -43,6 +44,11 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
+  // Collapse login overlay whenever auth resolves (successful login or init)
+  useEffect(() => {
+    if (user) setShowLogin(false)
+  }, [user])
+
   if (!initialized) {
     return (
       <div className="flex h-full items-center justify-center bg-primary">
@@ -51,6 +57,14 @@ export default function App() {
     )
   }
 
-  if (!user) return <LoginPage />
+  if (!user) {
+    return (
+      <>
+        <EepMode onLoginClick={() => setShowLogin(true)} />
+        {showLogin && <LoginPage onCancel={() => setShowLogin(false)} />}
+      </>
+    )
+  }
+
   return <AuthenticatedApp />
 }

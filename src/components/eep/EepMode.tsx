@@ -1,14 +1,26 @@
 import { useState, useCallback } from 'react'
 import { useUiStore } from '@/stores/uiStore'
+import { useAuthStore } from '@/stores/authStore'
 import { getRandomDuties, getDifficultyColor, type FF14Duty } from '@/lib/ff14data'
 import { PinPad } from '@/components/pin/PinPad'
 
-export function EepMode() {
+interface EepModeProps {
+  onLoginClick?: () => void
+}
+
+export function EepMode({ onLoginClick }: EepModeProps) {
   const { setEepMode, eepPassphrase, pinCode, pinLocked, unlockPin } = useUiStore()
+  const { user, signOut } = useAuthStore()
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
   const [showPinPad, setShowPinPad] = useState(false)
   const [pinError, setPinError] = useState(false)
+
+  const handleLogout = async () => {
+    await signOut()
+    // Reset eepMode so the next login opens straight to chat, not eep
+    setEepMode(false)
+  }
 
   const rollContent = useCallback(() => {
     const count = Math.floor(Math.random() * 3) + 3 // 3-5 duties
@@ -53,8 +65,24 @@ export function EepMode() {
             Can&apos;t decide what to run? Let fate choose!
           </p>
         </div>
-        <div className="text-xs" style={{ color: '#606080' }}>
-          v2.1.4
+        <div className="flex items-center gap-1.5 text-xs" style={{ color: '#606080' }}>
+          {user ? (
+            <button
+              onClick={handleLogout}
+              className="transition-colors hover:text-[#a0a0b0]"
+            >
+              Logout
+            </button>
+          ) : onLoginClick ? (
+            <button
+              onClick={onLoginClick}
+              className="transition-colors hover:text-[#a0a0b0]"
+            >
+              Login
+            </button>
+          ) : null}
+          {(user || onLoginClick) && <span>|</span>}
+          <span>v2.1.4</span>
         </div>
       </header>
 
@@ -117,8 +145,8 @@ export function EepMode() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer
+      {/* Footer — passphrase / PIN unlock. Hidden for unauthenticated visitors. */}
+      {user && <footer
         className="px-6 py-4"
         style={{ background: '#16213e', borderTop: '1px solid #0f3460' }}
       >
@@ -161,7 +189,7 @@ export function EepMode() {
             </button>
           </form>
         </div>
-      </footer>
+      </footer>}
 
       {/* PIN overlay */}
       {overlayVisible && (
