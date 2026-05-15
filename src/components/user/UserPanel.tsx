@@ -1,12 +1,20 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
+import { usePresenceStore } from '@/stores/presenceStore'
 import { StatusPicker, statusColor, statusLabel } from '@/components/user/StatusPicker'
 import { UserSettings } from '@/components/user/UserSettings'
 
 export function UserPanel() {
   const { profile, signOut } = useAuthStore()
+  const { onlineUsers } = usePresenceStore()
   const [showStatus, setShowStatus] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+
+  // Use live presence data for the current user so UserPanel stays in sync with the member list
+  const presence = profile ? onlineUsers[profile.id] : null
+  const effectiveStatus = presence?.status ?? profile?.status ?? 'offline'
+  const effectiveCustomText = presence ? presence.custom_status_text : (profile?.custom_status_text ?? null)
+  const effectiveCustomEmoji = presence ? presence.custom_status_emoji : (profile?.custom_status_emoji ?? null)
 
   return (
     <>
@@ -30,7 +38,7 @@ export function UserPanel() {
           )}
           <div
             className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[hsl(var(--color-bg-tertiary))]"
-            style={{ backgroundColor: profile ? statusColor(profile.status) : 'hsl(var(--color-status-offline))' }}
+            style={{ backgroundColor: statusColor(effectiveStatus) }}
           />
         </button>
 
@@ -40,8 +48,8 @@ export function UserPanel() {
             {profile?.nickname ?? 'User'}
           </p>
           <p className="truncate text-[11px] leading-tight text-muted">
-            {profile?.custom_status_emoji && `${profile.custom_status_emoji} `}
-            {profile?.custom_status_text || (profile ? statusLabel(profile.status) : 'Offline')}
+            {effectiveCustomEmoji && `${effectiveCustomEmoji} `}
+            {effectiveCustomText || statusLabel(effectiveStatus)}
           </p>
         </div>
 

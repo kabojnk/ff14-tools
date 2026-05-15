@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Portal } from '@/components/ui/Portal'
 import { statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { UserProfileFull } from '@/components/user/UserProfileFull'
 import type { Profile, UserStatus } from '@/types'
 
 interface UserProfileProps {
@@ -39,6 +40,7 @@ function calcPosition(anchor: DOMRect) {
 
 export function UserProfile({ profile, status, customText, customEmoji, anchorRect, onClose }: UserProfileProps) {
   const cardRef = useRef<HTMLDivElement>(null)
+  const [showFull, setShowFull] = useState(false)
   const { left, top } = calcPosition(anchorRect)
 
   useEffect(() => {
@@ -62,7 +64,11 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
         style={{ left, top, width: CARD_WIDTH }}
       >
         {/* Banner */}
-        <div className="h-16 bg-[hsl(var(--color-brand)/.6)]" />
+        {profile.banner_url ? (
+          <img src={profile.banner_url} alt="" className="h-16 w-full object-cover" />
+        ) : (
+          <div className="h-16 bg-[hsl(var(--color-brand)/.6)]" />
+        )}
 
         {/* Body */}
         <div className="px-4 pb-4">
@@ -102,16 +108,36 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
             </div>
           )}
 
-          {/* About Me */}
+          {/* About Me — truncated preview */}
           {profile.profile_message && (
             <>
               <div className="my-3 border-t border-[hsl(var(--color-input-border))]" />
               <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-secondary">About Me</p>
-              <p className="whitespace-pre-wrap text-xs text-muted">{profile.profile_message}</p>
+              <p className="line-clamp-3 text-xs text-muted">{profile.profile_message}</p>
             </>
           )}
+
+          {/* View Profile button */}
+          <div className="mt-4 border-t border-[hsl(var(--color-input-border))] pt-3">
+            <button
+              onClick={() => setShowFull(true)}
+              className="w-full rounded-[3px] bg-brand py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+            >
+              View Profile
+            </button>
+          </div>
         </div>
       </div>
+
+      {showFull && (
+        <UserProfileFull
+          profile={profile}
+          status={status}
+          customText={customText}
+          customEmoji={customEmoji}
+          onClose={() => { setShowFull(false); onClose() }}
+        />
+      )}
     </Portal>
   )
 }

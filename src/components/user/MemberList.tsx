@@ -22,7 +22,7 @@ export function MemberList() {
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
   const [selectedProfile, setSelectedProfile] = useState<SelectedProfile | null>(null)
 
-  // Fetch all profiles once (so we can show offline members too)
+  // Fetch all profiles and keep them live via realtime
   useEffect(() => {
     supabase
       .from('profiles')
@@ -31,6 +31,23 @@ export function MemberList() {
       .then(({ data }) => {
         if (data) setAllProfiles(data as Profile[])
       })
+
+    const channel = supabase
+      .channel('member-list-profiles')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          setAllProfiles((prev) =>
+            prev.map((p) =>
+              p.id === (payload.new as Profile).id ? { ...p, ...(payload.new as Profile) } : p,
+            ),
+          )
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   // Merge presence data onto profiles

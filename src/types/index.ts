@@ -11,6 +11,7 @@ export interface Profile {
   id: string
   nickname: string
   avatar_url: string | null
+  banner_url: string | null
   profile_message: string | null
   status: UserStatus
   custom_status_text: string | null

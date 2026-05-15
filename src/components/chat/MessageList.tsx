@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMessages } from '@/hooks/useMessages'
 import { useAuthStore } from '@/stores/authStore'
+import { supabase } from '@/lib/supabase'
 import { MessageItem } from '@/components/chat/MessageItem'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import type { Profile } from '@/types'
@@ -18,6 +19,8 @@ export function MessageList({ channelId }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
+  // Increment to re-render when a cached profile is updated via realtime
+  const [, setProfileVersion] = useState(0)
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -48,6 +51,25 @@ export function MessageList({ channelId }: MessageListProps) {
       profileCache[profile.id] = profile
     }
   }, [profile])
+
+  // Keep profile cache fresh for all users via realtime
+  useEffect(() => {
+    const channel = supabase
+      .channel('message-list-profiles')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          const updated = payload.new as Profile
+          if (profileCache[updated.id]) {
+            profileCache[updated.id] = { ...profileCache[updated.id], ...updated }
+            setProfileVersion((v) => v + 1)
+          }
+        },
+      )
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   // Fetch missing profiles
   useEffect(() => {

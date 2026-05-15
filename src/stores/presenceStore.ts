@@ -80,6 +80,21 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
     if (manual) {
       set({ manualStatus: status })
     }
+    // Optimistically update our own entry so the UI is immediately consistent,
+    // without waiting for the server's sync event (which can race on reconnect).
+    if (currentUserId) {
+      set((state) => ({
+        onlineUsers: {
+          ...state.onlineUsers,
+          [currentUserId]: {
+            user_id: currentUserId,
+            status,
+            custom_status_text: customText,
+            custom_status_emoji: customEmoji,
+          },
+        },
+      }))
+    }
     if (presenceChannel && currentUserId) {
       await presenceChannel.track({
         user_id: currentUserId,

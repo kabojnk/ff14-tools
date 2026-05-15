@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
 import { AvatarUpload } from '@/components/user/AvatarUpload'
+import { BannerCrop } from '@/components/user/BannerCrop'
 import { PinPad } from '@/components/pin/PinPad'
 import { Portal } from '@/components/ui/Portal'
 import type { ThemePreset } from '@/types'
@@ -30,6 +31,8 @@ export function UserSettings({ onClose }: UserSettingsProps) {
   const [profileMessage, setProfileMessage] = useState(profile?.profile_message ?? '')
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('profile')
+  const [bannerFile, setBannerFile] = useState<File | null>(null)
+  const bannerInputRef = useRef<HTMLInputElement>(null)
 
   // PIN wizard state
   const [pinStep, setPinStep] = useState<PinStep>('idle')
@@ -122,6 +125,42 @@ export function UserSettings({ onClose }: UserSettingsProps) {
     'change-new': 'Enter a different PIN',
   }
 
+  const handleBannerFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !file.type.startsWith('image/')) return
+    setBannerFile(file)
+    // Reset input so the same file can be re-selected after cancel
+    e.target.value = ''
+  }
+
+  const handleBannerSave = async (cropped: File) => {
+    if (!profile) return
+    const formData = new FormData()
+    formData.append('file', cropped)
+    formData.append('path', `banners/${profile.id}`)
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-media`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: formData,
+      },
+    )
+    if (res.ok) {
+      const { url } = await res.json()
+      await supabase.from('profiles').update({ banner_url: url }).eq('id', profile.id)
+      await fetchProfile()
+    }
+    setBannerFile(null)
+  }
+
+  const handleRemoveBanner = async () => {
+    if (!profile) return
+    await supabase.from('profiles').update({ banner_url: null }).eq('id', profile.id)
+    await fetchProfile()
+  }
+
   const handleSave = async () => {
     if (!profile) return
     setSaving(true)
@@ -194,6 +233,45 @@ export function UserSettings({ onClose }: UserSettingsProps) {
                 <div className="mb-6">
                   <label className="mb-2 block text-xs font-bold uppercase text-secondary">Avatar</label>
                   <AvatarUpload />
+                </div>
+
+                <div className="mb-6">
+                  <label className="mb-2 block text-xs font-bold uppercase text-secondary">Profile Banner</label>
+                  {/* Banner preview — 4:1 aspect ratio */}
+                  <div
+                    className="mb-3 w-full overflow-hidden rounded-lg"
+                    style={{ aspectRatio: '4 / 1' }}
+                  >
+                    {profile?.banner_url ? (
+                      <img src={profile.banner_url} alt="Banner" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full bg-[hsl(var(--color-brand)/.6)]" />
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => bannerInputRef.current?.click()}
+                      className="rounded-[3px] border border-[hsl(var(--color-brand))] px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-white"
+                    >
+                      {profile?.banner_url ? 'Change Banner' : 'Upload Banner'}
+                    </button>
+                    {profile?.banner_url && (
+                      <button
+                        onClick={handleRemoveBanner}
+                        className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-muted">JPG or PNG. Will be cropped to 4:1.</p>
+                  <input
+                    ref={bannerInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerFileSelected}
+                    className="hidden"
+                  />
                 </div>
 
                 <div className="mb-4">
@@ -308,6 +386,15 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           </div>
         </div>
       </div>
+
+      {/* Banner crop modal */}
+      {bannerFile && (
+        <BannerCrop
+          file={bannerFile}
+          onSave={handleBannerSave}
+          onCancel={() => setBannerFile(null)}
+        />
+      )}
 
       {/* PIN entry modal — covers the settings screen on all screen sizes */}
       {pinStep !== 'idle' && (
