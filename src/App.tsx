@@ -20,8 +20,15 @@ function AuthenticatedApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id])
 
-  if (eepMode) return <EepMode />
-  return <AppShell />
+  return (
+    <>
+      {eepMode && <EepMode />}
+      {/* Keep AppShell mounted so MemberList data, mobileView, and scroll state survive eep transitions */}
+      <div style={{ display: eepMode ? 'none' : 'flex', height: '100%', flexDirection: 'column', overflow: 'hidden' }}>
+        <AppShell />
+      </div>
+    </>
+  )
 }
 
 export default function App() {

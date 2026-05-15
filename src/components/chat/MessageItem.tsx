@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
+import { usePresenceStore } from '@/stores/presenceStore'
 import { supabase } from '@/lib/supabase'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { ReactionPicker, ReactionDisplay } from '@/components/chat/ReactionPicker'
 import { MediaViewer } from '@/components/chat/MediaViewer'
+import { UserProfile } from '@/components/user/UserProfile'
 import type { Message, Profile, Reaction } from '@/types'
 
 interface MessageItemProps {
@@ -19,10 +21,23 @@ interface MessageItemProps {
 export function MessageItem({ message, author, showHeader, channelId, onBroadcastDelete }: MessageItemProps) {
   const { user } = useAuthStore()
   const { editMessage, deleteMessage } = useMessageStore()
+  const { onlineUsers } = usePresenceStore()
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content ?? '')
   const [showActions, setShowActions] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
+  const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null)
+
+  const authorPresence = author ? onlineUsers[author.id] : null
+  const authorStatus = authorPresence?.status ?? author?.status ?? 'offline'
+  const authorCustomText = authorPresence?.custom_status_text ?? author?.custom_status_text ?? null
+  const authorCustomEmoji = authorPresence?.custom_status_emoji ?? author?.custom_status_emoji ?? null
+
+  const openProfile = (e: React.MouseEvent) => {
+    if (!author) return
+    e.stopPropagation()
+    setProfileAnchor((e.currentTarget as HTMLElement).getBoundingClientRect())
+  }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [reactions, setReactions] = useState<Reaction[]>([])
 
@@ -149,17 +164,19 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
       {/* Avatar or timestamp gutter */}
       <div className="w-10 flex-shrink-0">
         {showHeader ? (
-          author?.avatar_url ? (
-            <img
-              src={author.avatar_url}
-              alt={author.nickname}
-              className="mt-0.5 h-10 w-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white">
-              {author?.nickname?.charAt(0).toUpperCase() ?? '?'}
-            </div>
-          )
+          <button onClick={openProfile} className="block cursor-pointer">
+            {author?.avatar_url ? (
+              <img
+                src={author.avatar_url}
+                alt={author.nickname}
+                className="mt-0.5 h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            ) : (
+              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white hover:opacity-80 transition-opacity">
+                {author?.nickname?.charAt(0).toUpperCase() ?? '?'}
+              </div>
+            )}
+          </button>
         ) : (
           <span className="hidden text-[11px] text-muted group-hover:inline leading-[22px]">
             {formatTime(timestamp)}
@@ -171,9 +188,9 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
       <div className="min-w-0 flex-1">
         {showHeader && (
           <div className="flex items-baseline gap-2">
-            <span className="font-medium text-primary hover:underline cursor-pointer">
+            <button onClick={openProfile} className="font-medium text-primary hover:underline cursor-pointer">
               {author?.nickname ?? 'Unknown'}
-            </span>
+            </button>
             <span className="text-xs text-muted">{formatDate(timestamp)}</span>
           </div>
         )}
@@ -221,6 +238,18 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
           onRemove={handleRemoveReaction}
         />
       </div>
+
+      {/* Author profile card */}
+      {profileAnchor && author && (
+        <UserProfile
+          profile={author}
+          status={authorStatus}
+          customText={authorCustomText}
+          customEmoji={authorCustomEmoji}
+          anchorRect={profileAnchor}
+          onClose={() => setProfileAnchor(null)}
+        />
+      )}
 
       {/* Message actions (hover) */}
       {showActions && !isEditing && (
