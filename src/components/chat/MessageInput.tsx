@@ -268,13 +268,17 @@ export function MessageInput({ channel }: MessageInputProps) {
           placeholder={uploading ? 'Uploading...' : `Message #${channel.name}`}
           className="max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent py-2.5 text-[15px] text-primary outline-none placeholder:text-muted"
           rows={1}
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck
+          enterKeyHint="send"
         />
 
-        {/* GIF button */}
+        {/* GIF button — hidden on mobile when there's content to keep layout clean */}
         <button
           ref={gifButtonRef}
           onClick={() => { setShowGif(!showGif); setShowEmoji(false) }}
-          className="flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover"
+          className={`flex-shrink-0 rounded p-1 text-interactive transition-colors hover:text-interactive-hover ${content.trim() ? 'hidden sm:block' : ''}`}
           title="Search GIFs"
         >
           <span className="text-xs font-bold">GIF</span>
@@ -308,6 +312,19 @@ export function MessageInput({ channel }: MessageInputProps) {
             />
           )}
         </div>
+
+        {/* Send button — visible on mobile when there's content to send */}
+        {(content.trim() || pendingAttachments.length > 0) && (
+          <button
+            onClick={handleSend}
+            className="flex-shrink-0 sm:hidden flex h-8 w-8 items-center justify-center rounded-full bg-brand transition-colors hover:bg-brand-hover"
+            title="Send"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-white translate-x-px">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        )}
         </div>
       </div>
     </div>
