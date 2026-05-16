@@ -9,6 +9,7 @@ import { ChannelInfoPanel } from '@/components/chat/ChannelInfoPanel'
 import { MemberList } from '@/components/user/MemberList'
 import { CreateChannelModal } from '@/components/channels/CreateChannelModal'
 import { UserPanel } from '@/components/user/UserPanel'
+import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
 import type { Message } from '@/types'
 
 // Mobile views — mutually exclusive full-screen panels
@@ -19,8 +20,14 @@ export function AppShell() {
   const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
   const [mobileView, setMobileView] = useState<MobileView>('channels')
   const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const [channelInfoTab, setChannelInfoTab] = useState<InfoTab>('media')
   const [showChannelInfo, setShowChannelInfo] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+
+  const openInfoPanel = (tab: InfoTab = 'media') => {
+    setChannelInfoTab(tab)
+    setShowChannelInfo(true)
+  }
 
   useEffect(() => {
     fetchChannels()
@@ -64,7 +71,7 @@ export function AppShell() {
         <main className="flex flex-1 flex-col overflow-hidden bg-primary">
           {activeChannel ? (
             <>
-              <ChannelHeader channel={activeChannel} />
+              <ChannelHeader channel={activeChannel} onInfoOpen={openInfoPanel} />
               <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
               <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
             </>
@@ -114,7 +121,7 @@ export function AppShell() {
                 <ChannelHeader
                   channel={activeChannel}
                   mobileBack={() => setMobileView('channels')}
-                  onInfoOpen={() => setShowChannelInfo(true)}
+                  onInfoOpen={openInfoPanel}
                 />
                 <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
                 <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
@@ -127,10 +134,11 @@ export function AppShell() {
           </main>
         )}
 
-        {/* Channel info panel overlay */}
+        {/* Channel info panel overlay — mobile + desktop */}
         {showChannelInfo && activeChannel && (
           <ChannelInfoPanel
             channel={activeChannel}
+            initialTab={channelInfoTab}
             onClose={() => setShowChannelInfo(false)}
           />
         )}

@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useChannelStore } from '@/stores/channelStore'
 import { useUiStore } from '@/stores/uiStore'
 import type { Channel } from '@/types'
+import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
 
 interface ChannelHeaderProps {
   channel: Channel
   mobileBack?: () => void
-  onInfoOpen?: () => void
+  onInfoOpen?: (tab?: InfoTab) => void
 }
 
 export function ChannelHeader({ channel, mobileBack, onInfoOpen }: ChannelHeaderProps) {
@@ -59,7 +60,7 @@ export function ChannelHeader({ channel, mobileBack, onInfoOpen }: ChannelHeader
       {/* Channel name — tappable on mobile to open info panel */}
       {onInfoOpen ? (
         <button
-          onClick={onInfoOpen}
+          onClick={() => onInfoOpen()}
           className="flex items-center gap-0.5 text-left md:pointer-events-none"
         >
           <h3 className="text-[15px] font-semibold text-primary">{channel.name}</h3>
@@ -80,6 +81,43 @@ export function ChannelHeader({ channel, mobileBack, onInfoOpen }: ChannelHeader
       )}
 
       <div className="flex-1" />
+
+      {/* Desktop utility icons — Pins, Media, Search */}
+      {onInfoOpen && (
+        <div className="hidden items-center gap-0.5 md:flex">
+          <button
+            onClick={() => onInfoOpen('pins')}
+            className="rounded p-1.5 text-interactive transition-colors hover:bg-hover hover:text-interactive-hover"
+            title="Pinned Messages"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="17" x2="12" y2="22" />
+              <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onInfoOpen('media')}
+            className="rounded p-1.5 text-interactive transition-colors hover:bg-hover hover:text-interactive-hover"
+            title="Media"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <polyline points="21 15 16 10 5 21" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onInfoOpen('search')}
+            className="rounded p-1.5 text-interactive transition-colors hover:bg-hover hover:text-interactive-hover"
+            title="Search Messages"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Member list toggle — desktop only (mobile uses the Members tab) */}
       <button

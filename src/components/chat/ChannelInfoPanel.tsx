@@ -5,17 +5,18 @@ import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { Portal } from '@/components/ui/Portal'
 import type { Attachment, Channel, Message } from '@/types'
 
+export type InfoTab = 'media' | 'pins' | 'search'
+
 interface ChannelInfoPanelProps {
   channel: Channel
+  initialTab?: InfoTab
   onClose: () => void
 }
 
-type InfoTab = 'media' | 'pins' | 'search'
-
 type MediaItem = { attachment: Attachment; message: Message }
 
-export function ChannelInfoPanel({ channel, onClose }: ChannelInfoPanelProps) {
-  const [activeTab, setActiveTab] = useState<InfoTab>('media')
+export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
+  const [activeTab, setActiveTab] = useState<InfoTab>(initialTab)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState('')

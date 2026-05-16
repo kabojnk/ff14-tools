@@ -44,6 +44,7 @@ export function usePinnedMessages(channelId: string) {
 
   const pinMessage = async (messageId: string) => {
     if (!user) return
+    setPinnedIds((prev) => new Set([...prev, messageId]))
     await supabase.from('pinned_messages').insert({
       channel_id: channelId,
       message_id: messageId,
@@ -52,6 +53,11 @@ export function usePinnedMessages(channelId: string) {
   }
 
   const unpinMessage = async (messageId: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(messageId)
+      return next
+    })
     await supabase
       .from('pinned_messages')
       .delete()
