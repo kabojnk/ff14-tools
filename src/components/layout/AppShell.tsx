@@ -133,17 +133,12 @@ export function AppShell() {
 
         {/* Bottom tab bar — hidden while keyboard is open in chat to reclaim space */}
         {!(keyboardOpen && mobileView === 'chat') && (
-          <>
-            <MobileTabBar
-              active={mobileView}
-              onChange={setMobileView}
-              hasChannel={!!activeChannel}
-              onEep={() => setEepMode(true)}
-            />
-            {/* Safe area background fill — extends tab bar color behind home indicator
-                without pushing the icons up (matches native iOS tab bar behaviour) */}
-            <div className="flex-shrink-0 bg-secondary" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
-          </>
+          <MobileTabBar
+            active={mobileView}
+            onChange={setMobileView}
+            hasChannel={!!activeChannel}
+            onEep={() => setEepMode(true)}
+          />
         )}
       </div>
 
@@ -224,57 +219,62 @@ function MobileTabBar({
   onEep: () => void
 }) {
   return (
-    <nav className="flex flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
-      <TabButton
-        label="Channels"
-        active={active === 'channels'}
-        onClick={() => onChange('channels')}
-        icon={
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="9" x2="20" y2="9" />
-            <line x1="4" y1="15" x2="20" y2="15" />
-            <line x1="10" y1="3" x2="8" y2="21" />
-            <line x1="16" y1="3" x2="14" y2="21" />
+    <nav
+      className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="flex">
+        <TabButton
+          label="Channels"
+          active={active === 'channels'}
+          onClick={() => onChange('channels')}
+          icon={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="9" x2="20" y2="9" />
+              <line x1="4" y1="15" x2="20" y2="15" />
+              <line x1="10" y1="3" x2="8" y2="21" />
+              <line x1="16" y1="3" x2="14" y2="21" />
+            </svg>
+          }
+        />
+        <TabButton
+          label="Chat"
+          active={active === 'chat'}
+          onClick={() => onChange('chat')}
+          disabled={!hasChannel}
+          icon={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          }
+        />
+        <TabButton
+          label="Members"
+          active={active === 'members'}
+          onClick={() => onChange('members')}
+          icon={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9" cy="7" r="4" />
+              <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              <path d="M21 21v-2a4 4 0 0 0-3-3.85" />
+            </svg>
+          }
+        />
+        {/* Eep — visually distinct, always accessible */}
+        <button
+          onClick={onEep}
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
+          style={{ color: '#e94560' }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
-        }
-      />
-      <TabButton
-        label="Chat"
-        active={active === 'chat'}
-        onClick={() => onChange('chat')}
-        disabled={!hasChannel}
-        icon={
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-        }
-      />
-      <TabButton
-        label="Members"
-        active={active === 'members'}
-        onClick={() => onChange('members')}
-        icon={
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="9" cy="7" r="4" />
-            <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            <path d="M21 21v-2a4 4 0 0 0-3-3.85" />
-          </svg>
-        }
-      />
-      {/* Eep — visually distinct, always accessible */}
-      <button
-        onClick={onEep}
-        className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
-        style={{ color: '#e94560' }}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-          <line x1="12" y1="9" x2="12" y2="13"/>
-          <line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        Eep!
-      </button>
+          Eep!
+        </button>
+      </div>
     </nav>
   )
 }
