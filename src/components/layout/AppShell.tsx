@@ -133,12 +133,17 @@ export function AppShell() {
 
         {/* Bottom tab bar — hidden while keyboard is open in chat to reclaim space */}
         {!(keyboardOpen && mobileView === 'chat') && (
-          <MobileTabBar
-            active={mobileView}
-            onChange={setMobileView}
-            hasChannel={!!activeChannel}
-            onEep={() => setEepMode(true)}
-          />
+          <>
+            <MobileTabBar
+              active={mobileView}
+              onChange={setMobileView}
+              hasChannel={!!activeChannel}
+              onEep={() => setEepMode(true)}
+            />
+            {/* Safe area background fill — extends tab bar color behind home indicator
+                without pushing the icons up (matches native iOS tab bar behaviour) */}
+            <div className="flex-shrink-0 bg-secondary" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+          </>
         )}
       </div>
 
