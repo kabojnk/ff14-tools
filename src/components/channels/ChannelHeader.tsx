@@ -25,7 +25,9 @@ export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
   }
 
   return (
-    <div className="relative flex h-[var(--header-height)] flex-shrink-0 items-center gap-2 border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm">
+    <div className="relative flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-primary shadow-sm">
+      <div className="pt-safe md:hidden" />
+    <div className="flex h-[var(--header-height)] items-center gap-2 px-5">
       {/* Mobile nav button — back arrow when mobileBack provided, otherwise hamburger */}
       <button
         onClick={mobileBack ?? toggleSidebar}
@@ -124,6 +126,7 @@ export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
           </>
         )}
       </div>
+    </div>
     </div>
   )
 }

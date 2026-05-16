@@ -16,10 +16,20 @@ export function AppShell() {
   const { setEepMode, memberListOpen } = useUiStore()
   const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
   const [mobileView, setMobileView] = useState<MobileView>('channels')
+  const [keyboardOpen, setKeyboardOpen] = useState(false)
 
   useEffect(() => {
     fetchChannels()
   }, [fetchChannels])
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const baseHeight = vv.height
+    const onResize = () => setKeyboardOpen(vv.height < baseHeight - 100)
+    vv.addEventListener('resize', onResize)
+    return () => vv.removeEventListener('resize', onResize)
+  }, [])
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null
 
@@ -72,8 +82,11 @@ export function AppShell() {
         {/* Channels panel */}
         {mobileView === 'channels' && (
           <div className="flex h-full flex-col bg-secondary">
-            <div className="flex h-[var(--header-height)] flex-shrink-0 items-center border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm">
-              <h2 className="text-[15px] font-semibold text-primary">Channels</h2>
+            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
+              <div className="pt-safe" />
+              <div className="flex h-[var(--header-height)] items-center px-5">
+                <h2 className="text-[15px] font-semibold text-primary">Channels</h2>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               <MobileChannelList onSelect={handleMobileChannelSelect} />
@@ -106,8 +119,11 @@ export function AppShell() {
         {/* Members panel */}
         {mobileView === 'members' && (
           <div className="flex h-full flex-col bg-secondary">
-            <div className="flex h-[var(--header-height)] flex-shrink-0 items-center border-b border-[hsl(var(--color-bg-tertiary))] px-5 shadow-sm">
-              <h2 className="text-[15px] font-semibold text-primary">Members</h2>
+            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
+              <div className="pt-safe" />
+              <div className="flex h-[var(--header-height)] items-center px-5">
+                <h2 className="text-[15px] font-semibold text-primary">Members</h2>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto">
               <MemberList />
@@ -115,13 +131,15 @@ export function AppShell() {
           </div>
         )}
 
-        {/* Bottom tab bar */}
-        <MobileTabBar
-          active={mobileView}
-          onChange={setMobileView}
-          hasChannel={!!activeChannel}
-          onEep={() => setEepMode(true)}
-        />
+        {/* Bottom tab bar — hidden while keyboard is open in chat to reclaim space */}
+        {!(keyboardOpen && mobileView === 'chat') && (
+          <MobileTabBar
+            active={mobileView}
+            onChange={setMobileView}
+            hasChannel={!!activeChannel}
+            onEep={() => setEepMode(true)}
+          />
+        )}
       </div>
 
       <EepShortcutListener onActivate={() => setEepMode(true)} />

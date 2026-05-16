@@ -54,8 +54,8 @@ export function EepMode({ onLoginClick }: EepModeProps) {
     <div className="flex h-full flex-col" style={{ background: '#1a1a2e', color: '#e0e0e0' }}>
       {/* Header */}
       <header
-        className="flex items-center justify-between px-6 py-4"
-        style={{ background: '#16213e', borderBottom: '2px solid #0f3460' }}
+        style={{ background: '#16213e', borderBottom: '2px solid #0f3460', paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))' }}
+        className="flex items-center justify-between px-6 pb-4"
       >
         <div>
           <h1 className="text-xl font-bold" style={{ color: '#e94560' }}>

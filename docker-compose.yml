@@ -11,5 +11,5 @@ services:
         VITE_TENOR_API_KEY: ${VITE_TENOR_API_KEY}
         VITE_BUNNY_CDN_URL: ${VITE_BUNNY_CDN_URL}
     ports:
-      - "80:80"
+      - "8080:80"
     restart: unless-stopped

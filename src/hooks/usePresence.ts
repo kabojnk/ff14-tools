@@ -25,23 +25,35 @@ export function usePresence() {
       profile.custom_status_emoji
     )
 
-    // When the tab hides (switch tab, minimize, alt-tab) → appear offline.
-    // When it comes back → restore their chosen status.
-    // We only touch the realtime presence track here, not the DB, so their
-    // status preference survives refreshes and tab switches.
+    const showPrivacyScreen = () => {
+      const el = document.getElementById('privacy-screen')
+      if (el) el.style.display = 'flex'
+    }
+    const hidePrivacyScreen = () => {
+      const el = document.getElementById('privacy-screen')
+      if (el) el.style.display = 'none'
+    }
+
+    // pagehide fires before the app switcher screenshot on iOS — show the
+    // privacy screen via direct DOM mutation (no React re-render needed).
+    const handlePageHide = () => {
+      showPrivacyScreen()
+      useUiStore.getState().setEepMode(true)
+    }
+    const handlePageShow = () => {
+      hidePrivacyScreen()
+    }
+
     const handleVisibilityChange = () => {
       const userId = user.id
       if (document.visibilityState === 'hidden') {
-        // Snapshot the current live status before going offline
+        showPrivacyScreen()
         const live = usePresenceStore.getState().onlineUsers[userId]?.status
         if (live && live !== 'offline') savedStatusRef.current = live
         updatePresence('offline', null, null)
-
-        // Switch to fake screen so app switcher preview is private.
-        // PIN unlock is voluntary — only triggered by the blue circle button.
         useUiStore.getState().setEepMode(true)
       } else {
-        // Restore presence — eep/lock state stays until user authenticates
+        hidePrivacyScreen()
         const p = useAuthStore.getState().profile
         updatePresence(
           savedStatusRef.current,
@@ -51,10 +63,14 @@ export function usePresence() {
       }
     }
 
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       cleanupPresence()
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   // Only re-run if the logged-in user changes — not on every profile update

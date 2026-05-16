@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 
     <!-- Primary favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
@@ -25,6 +25,11 @@
     <title>XIV Tools</title>
   </head>
   <body>
+    <!-- Shown synchronously on pagehide so the app switcher snapshot hides the chat -->
+    <div id="privacy-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:#1a1a2e;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+      <div style="color:#e94560;font-size:1.25rem;font-weight:700;">FF14 Random Content Running Agenda Picker</div>
+      <div style="color:#a0a0b0;font-size:0.875rem;">Can't decide what to run? Let fate choose!</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -9,6 +9,7 @@ COPY . .
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_BUNNY_CDN_URL
+ARG VITE_TENOR_API_KEY
 
 # Skip tsc type-check in Docker — esbuild handles transpilation; type-check runs locally
 RUN node_modules/.bin/vite build
