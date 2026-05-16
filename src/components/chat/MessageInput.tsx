@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useChannelStore } from '@/stores/channelStore'
@@ -56,20 +57,18 @@ export function MessageInput({ channel }: MessageInputProps) {
     setPendingAttachments([])
 
     // Send the message with attachments
-    const { data, error } = await import('@/lib/supabase').then(({ supabase }) =>
-      supabase
-        .from('messages')
-        .insert({
-          channel_id: channel.id,
-          session_id: session.id,
-          author_id: user.id,
-          content: trimmed || null,
-          attachments: attachmentsToSend,
-          type: 'text',
-        })
-        .select()
-        .single()
-    )
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        channel_id: channel.id,
+        session_id: session.id,
+        author_id: user.id,
+        content: trimmed || null,
+        attachments: attachmentsToSend,
+        type: 'text',
+      })
+      .select()
+      .single()
 
     if (!error && data) {
       useMessageStore.getState().addMessage(channel.id, data)
@@ -132,26 +131,24 @@ export function MessageInput({ channel }: MessageInputProps) {
     if (!session) return
 
     // Send GIF as a message immediately
-    const { data, error } = await import('@/lib/supabase').then(({ supabase }) =>
-      supabase
-        .from('messages')
-        .insert({
-          channel_id: channel.id,
-          session_id: session.id,
-          author_id: user.id,
-          content: null,
-          attachments: [{
-            url: gif.url,
-            type: 'gif' as const,
-            filename: gif.title || 'gif',
-            size: 0,
-            spoiler: false,
-          }],
-          type: 'gif',
-        })
-        .select()
-        .single()
-    )
+    const { data, error } = await supabase
+      .from('messages')
+      .insert({
+        channel_id: channel.id,
+        session_id: session.id,
+        author_id: user.id,
+        content: null,
+        attachments: [{
+          url: gif.url,
+          type: 'gif' as const,
+          filename: gif.title || 'gif',
+          size: 0,
+          spoiler: false,
+        }],
+        type: 'gif',
+      })
+      .select()
+      .single()
 
     if (!error && data) {
       useMessageStore.getState().addMessage(channel.id, data)
