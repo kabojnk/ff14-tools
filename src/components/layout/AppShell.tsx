@@ -224,7 +224,7 @@ function MobileTabBar({
   onEep: () => void
 }) {
   return (
-    <nav className="flex flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary pb-safe">
+    <nav className="flex flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
       <TabButton
         label="Channels"
         active={active === 'channels'}
