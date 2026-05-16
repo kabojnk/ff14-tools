@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
+import { uploadFile } from '@/lib/bunny'
 import { AvatarUpload } from '@/components/user/AvatarUpload'
 import { BannerCrop } from '@/components/user/BannerCrop'
 import { PinPad } from '@/components/pin/PinPad'
@@ -153,18 +154,12 @@ export function UserSettings({ onClose }: UserSettingsProps) {
 
   const handleBannerSave = async (cropped: File) => {
     if (!profile) return
-    const formData = new FormData()
-    formData.append('file', cropped)
-    formData.append('path', `banners/${profile.id}`)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-media`,
-      { method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}` }, body: formData },
-    )
-    if (res.ok) {
-      const { url } = await res.json()
+    try {
+      const { url } = await uploadFile(cropped, `banners/${profile.id}`)
       await supabase.from('profiles').update({ banner_url: url }).eq('id', profile.id)
       await fetchProfile()
+    } catch {
+      // Upload failed silently
     }
     setBannerFile(null)
   }

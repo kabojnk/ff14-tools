@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
+import { uploadFile } from '@/lib/bunny'
 
 export function AvatarUpload() {
   const { profile, fetchProfile } = useAuthStore()
@@ -18,32 +19,9 @@ export function AvatarUpload() {
     setUploading(true)
 
     try {
-      // Upload via Edge Function to bunny.net
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('path', `avatars/${profile.id}`)
-
-      const { data: { session } } = await supabase.auth.getSession()
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/upload-media`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: formData,
-        }
-      )
-
-      if (response.ok) {
-        const { url } = await response.json()
-        await supabase
-          .from('profiles')
-          .update({ avatar_url: url })
-          .eq('id', profile.id)
-        await fetchProfile()
-      }
+      const { url } = await uploadFile(file, `avatars/${profile.id}`)
+      await supabase.from('profiles').update({ avatar_url: url }).eq('id', profile.id)
+      await fetchProfile()
     } catch {
       // Upload failed silently
     } finally {
