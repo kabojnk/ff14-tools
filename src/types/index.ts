@@ -84,3 +84,11 @@ export interface AppSettings {
 }
 
 export type ThemePreset = 'dark' | 'light' | 'midnight'
+
+export interface PinnedMessage {
+  id: string
+  channel_id: string
+  message_id: string
+  pinned_by: string
+  pinned_at: string
+}

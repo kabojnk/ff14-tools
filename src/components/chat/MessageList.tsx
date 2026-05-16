@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMessages } from '@/hooks/useMessages'
+import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import { MessageItem } from '@/components/chat/MessageItem'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
-import type { Profile } from '@/types'
+import type { Message, Profile } from '@/types'
 
 interface MessageListProps {
   channelId: string
+  onSetReply?: (message: Message) => void
 }
 
 // Cache profiles in memory to avoid re-fetching
 const profileCache: Record<string, Profile> = {}
 
-export function MessageList({ channelId }: MessageListProps) {
+export function MessageList({ channelId, onSetReply }: MessageListProps) {
   const { messages, loading, broadcastEditMessage, broadcastDeleteMessage } = useMessages(channelId)
+  const { pinnedIds, pinMessage, unpinMessage } = usePinnedMessages(channelId)
   const { profile } = useAuthStore()
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -185,8 +188,12 @@ export function MessageList({ channelId }: MessageListProps) {
             author={message.author ?? getAuthor(message.author_id)}
             showHeader={shouldShowHeader(i)}
             channelId={channelId}
+            isPinned={pinnedIds.has(message.id)}
             onBroadcastEdit={broadcastEditMessage}
             onBroadcastDelete={broadcastDeleteMessage}
+            onPin={pinMessage}
+            onUnpin={unpinMessage}
+            onSetReply={onSetReply}
           />
         ))}
 

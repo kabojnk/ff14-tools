@@ -5,10 +5,11 @@ import type { Channel } from '@/types'
 
 interface ChannelHeaderProps {
   channel: Channel
-  mobileBack?: () => void // when provided, shows a back arrow instead of hamburger
+  mobileBack?: () => void
+  onInfoOpen?: () => void
 }
 
-export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
+export function ChannelHeader({ channel, mobileBack, onInfoOpen }: ChannelHeaderProps) {
   const { archiveChannel, dragTheLake } = useChannelStore()
   const { toggleSidebar, toggleMemberList, memberListOpen } = useUiStore()
   const [showMenu, setShowMenu] = useState(false)
@@ -47,14 +48,28 @@ export function ChannelHeader({ channel, mobileBack }: ChannelHeaderProps) {
         )}
       </button>
 
-      {/* Channel name */}
+      {/* Channel icon */}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted">
         <line x1="4" y1="9" x2="20" y2="9" />
         <line x1="4" y1="15" x2="20" y2="15" />
         <line x1="10" y1="3" x2="8" y2="21" />
         <line x1="16" y1="3" x2="14" y2="21" />
       </svg>
-      <h3 className="text-[15px] font-semibold text-primary">{channel.name}</h3>
+
+      {/* Channel name — tappable on mobile to open info panel */}
+      {onInfoOpen ? (
+        <button
+          onClick={onInfoOpen}
+          className="flex items-center gap-0.5 text-left md:pointer-events-none"
+        >
+          <h3 className="text-[15px] font-semibold text-primary">{channel.name}</h3>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted md:hidden">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      ) : (
+        <h3 className="text-[15px] font-semibold text-primary">{channel.name}</h3>
+      )}
 
       {/* Description divider + text */}
       {channel.description && (

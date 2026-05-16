@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { supabase } from '@/lib/supabase'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { ReactionPicker, ReactionDisplay } from '@/components/chat/ReactionPicker'
+import { MessageContextMenu } from '@/components/chat/MessageContextMenu'
 import { MediaViewer } from '@/components/chat/MediaViewer'
 import { UserProfile } from '@/components/user/UserProfile'
 import type { Message, Profile, Reaction } from '@/types'
@@ -12,13 +13,27 @@ import type { Message, Profile, Reaction } from '@/types'
 interface MessageItemProps {
   message: Message
   author: Profile | null
-  showHeader: boolean // Whether to show avatar + name (false for consecutive messages from same author)
+  showHeader: boolean
   channelId: string
+  isPinned?: boolean
   onBroadcastEdit: (message: Message) => void
   onBroadcastDelete: (messageId: string) => void
+  onPin?: (messageId: string) => void
+  onUnpin?: (messageId: string) => void
+  onSetReply?: (message: Message) => void
 }
 
-export function MessageItem({ message, author, showHeader, channelId, onBroadcastDelete }: MessageItemProps) {
+export function MessageItem({
+  message,
+  author,
+  showHeader,
+  channelId,
+  isPinned = false,
+  onBroadcastDelete,
+  onPin,
+  onUnpin,
+  onSetReply,
+}: MessageItemProps) {
   const { user } = useAuthStore()
   const { editMessage, deleteMessage } = useMessageStore()
   const { onlineUsers } = usePresenceStore()
@@ -27,6 +42,35 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
   const [showActions, setShowActions] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
   const [profileAnchor, setProfileAnchor] = useState<DOMRect | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [reactions, setReactions] = useState<Reaction[]>([])
+
+  // Context menu state
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null)
+
+  // Long-press detection
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    }
+  }, [])
+
+  const handleTouchStart = () => {
+    longPressTimer.current = setTimeout(() => {
+      navigator.vibrate?.(10)
+      setShowMobileMenu(true)
+    }, 500)
+  }
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
 
   const authorPresence = author ? onlineUsers[author.id] : null
   const authorStatus = authorPresence?.status ?? author?.status ?? 'offline'
@@ -38,10 +82,8 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
     e.stopPropagation()
     setProfileAnchor((e.currentTarget as HTMLElement).getBoundingClientRect())
   }
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [reactions, setReactions] = useState<Reaction[]>([])
 
-  // Fetch reactions and subscribe to realtime changes for this message
+  // Fetch reactions and subscribe to realtime changes
   useEffect(() => {
     supabase
       .from('reactions')
@@ -59,13 +101,11 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
             const r = payload.new as Reaction
             return prev.some((x) => x.id === r.id) ? prev : [...prev, r]
           })
-        }
-      )
+        })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions', filter: `message_id=eq.${message.id}` },
         (payload) => {
           setReactions((prev) => prev.filter((r) => r.id !== (payload.old as Reaction).id))
-        }
-      )
+        })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -73,7 +113,6 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
 
   const handleAddReaction = async (emoji: string) => {
     if (!user) return
-    // Optimistic add
     const optimistic: Reaction = {
       id: `optimistic-${Date.now()}`,
       message_id: message.id,
@@ -87,7 +126,6 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
       .insert({ message_id: message.id, user_id: user.id, emoji })
       .select()
       .single()
-    // Replace optimistic entry with real one (realtime INSERT will also arrive but dedup handles it)
     if (data) {
       setReactions((prev) => prev.map((r) => r.id === optimistic.id ? data as Reaction : r))
     } else {
@@ -97,7 +135,6 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
 
   const handleRemoveReaction = async (emoji: string) => {
     if (!user) return
-    // Optimistic remove
     setReactions((prev) => prev.filter((r) => !(r.user_id === user.id && r.emoji === emoji)))
     await supabase
       .from('reactions')
@@ -105,6 +142,20 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
       .eq('message_id', message.id)
       .eq('user_id', user.id)
       .eq('emoji', emoji)
+  }
+
+  const handleCopy = () => {
+    if (message.content) {
+      navigator.clipboard.writeText(message.content).catch(() => {})
+    }
+  }
+
+  const handlePin = () => {
+    if (isPinned) {
+      onUnpin?.(message.id)
+    } else {
+      onPin?.(message.id)
+    }
   }
 
   const isOwn = user?.id === message.author_id
@@ -118,7 +169,6 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
     }
     await editMessage(message.id, editContent, channelId)
     setIsEditing(false)
-    // Broadcast will be handled by the caller if needed
   }
 
   const handleDelete = async () => {
@@ -138,198 +188,250 @@ export function MessageItem({ message, author, showHeader, channelId, onBroadcas
     }
   }
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  const formatTime = (date: Date) =>
+    date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
   const formatDate = (date: Date) => {
     const today = new Date()
-    if (date.toDateString() === today.toDateString()) {
-      return `Today at ${formatTime(date)}`
-    }
+    if (date.toDateString() === today.toDateString()) return `Today at ${formatTime(date)}`
     const yesterday = new Date(today)
     yesterday.setDate(yesterday.getDate() - 1)
-    if (date.toDateString() === yesterday.toDateString()) {
-      return `Yesterday at ${formatTime(date)}`
-    }
+    if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${formatTime(date)}`
     return `${date.toLocaleDateString()} ${formatTime(date)}`
   }
 
+  const sharedContextMenuProps = {
+    message,
+    author,
+    isOwn,
+    isPinned,
+    onCopy: handleCopy,
+    onReply: () => onSetReply?.(message),
+    onPin: handlePin,
+    onAddReaction: handleAddReaction,
+    onEdit: () => { setIsEditing(true); setShowMobileMenu(false); setMoreAnchor(null) },
+    onDelete: () => { setShowDeleteConfirm(true); setShowMobileMenu(false); setMoreAnchor(null) },
+  }
+
   return (
-    <div
-      className={`group relative flex gap-4 px-5 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''}`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { setShowActions(false); setShowDeleteConfirm(false) }}
-    >
-      {/* Avatar or timestamp gutter */}
-      <div className="w-10 flex-shrink-0">
-        {showHeader ? (
-          <button onClick={openProfile} className="block cursor-pointer">
-            {author?.avatar_url ? (
-              <img
-                src={author.avatar_url}
-                alt={author.nickname}
-                className="mt-0.5 h-10 w-10 rounded-full object-cover hover:opacity-80 transition-opacity"
-              />
-            ) : (
-              <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white hover:opacity-80 transition-opacity">
-                {author?.nickname?.charAt(0).toUpperCase() ?? '?'}
-              </div>
-            )}
-          </button>
-        ) : (
-          <span className="hidden text-[11px] text-muted group-hover:inline leading-[22px]">
-            {formatTime(timestamp)}
-          </span>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        {showHeader && (
-          <div className="flex items-baseline gap-2">
-            <button onClick={openProfile} className="font-medium text-primary hover:underline cursor-pointer">
-              {author?.nickname ?? 'Unknown'}
-            </button>
-            <span className="text-xs text-muted">{formatDate(timestamp)}</span>
-          </div>
-        )}
-
-        {isEditing ? (
-          <div className="mt-1">
-            <textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              onKeyDown={handleEditKeyDown}
-              className="w-full resize-none rounded bg-input p-2 text-sm text-primary outline-none"
-              rows={Math.min(editContent.split('\n').length + 1, 6)}
-              autoFocus
-            />
-            <p className="mt-1 text-xs text-muted">
-              escape to <button onClick={() => setIsEditing(false)} className="text-link hover:underline">cancel</button>
-              {' '}&middot; enter to <button onClick={handleEdit} className="text-link hover:underline">save</button>
-            </p>
-          </div>
-        ) : (
-          <div className="text-[15px] leading-[22px] text-secondary">
-            {message.content && <MarkdownRenderer content={message.content} />}
-            {editedAt && (
-              <span className="ml-1 text-[10px] text-muted" title={formatDate(editedAt)}>
-                (edited)
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Attachments */}
-        {message.attachments.length > 0 && (
-          <div className="mt-1 space-y-1">
-            {message.attachments.map((attachment, i) => (
-              <MediaEmbed key={i} attachment={attachment} />
-            ))}
-          </div>
-        )}
-
-        {/* Reactions */}
-        <ReactionDisplay
-          reactions={reactions}
-          messageId={message.id}
-          onAdd={handleAddReaction}
-          onRemove={handleRemoveReaction}
-        />
-      </div>
-
-      {/* Author profile card */}
-      {profileAnchor && author && (
-        <UserProfile
-          profile={author}
-          status={authorStatus}
-          customText={authorCustomText}
-          customEmoji={authorCustomEmoji}
-          anchorRect={profileAnchor}
-          onClose={() => setProfileAnchor(null)}
-        />
-      )}
-
-      {/* Message actions (hover) */}
-      {showActions && !isEditing && (
-        <div className="absolute -top-3 right-4 flex rounded border border-[hsl(var(--color-bg-tertiary))] bg-primary shadow-sm">
-          {/* Reaction button */}
-          <div className="relative">
-            <button
-              onClick={() => setShowReactionPicker(!showReactionPicker)}
-              className="p-1.5 text-interactive transition-colors hover:text-interactive-hover"
-              title="Add Reaction"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                <line x1="9" y1="9" x2="9.01" y2="9" />
-                <line x1="15" y1="9" x2="15.01" y2="9" />
-              </svg>
-            </button>
-            {showReactionPicker && (
-              <div className="absolute right-0 top-full z-50 mt-1">
-                <ReactionPicker
-                  messageId={message.id}
-                  onAdd={handleAddReaction}
-                  onClose={() => setShowReactionPicker(false)}
+    <>
+      <div
+        className={`group relative flex gap-4 px-5 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''} ${isPinned ? 'bg-brand/5' : ''}`}
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => { setShowActions(false); setShowDeleteConfirm(false) }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={cancelLongPress}
+        onTouchMove={cancelLongPress}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Avatar or timestamp gutter */}
+        <div className="w-10 flex-shrink-0">
+          {showHeader ? (
+            <button onClick={openProfile} className="block cursor-pointer">
+              {author?.avatar_url ? (
+                <img
+                  src={author.avatar_url}
+                  alt={author.nickname}
+                  className="mt-0.5 h-10 w-10 rounded-full object-cover transition-opacity hover:opacity-80"
                 />
-              </div>
-            )}
-          </div>
-          {isOwn && (
-            <>
-              {showDeleteConfirm ? (
-                // Inline delete confirmation — replaces the normal action buttons
-                <div className="flex items-center gap-1 px-1.5">
-                  <span className="text-xs text-danger font-medium">Delete?</span>
-                  <button
-                    onClick={handleDelete}
-                    className="rounded px-1.5 py-0.5 text-xs font-medium text-white bg-danger hover:opacity-90 transition-opacity"
-                  >
-                    Yes
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    className="rounded px-1.5 py-0.5 text-xs font-medium text-interactive hover:text-interactive-hover transition-colors"
-                  >
-                    No
-                  </button>
-                </div>
               ) : (
-                <>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="p-1.5 text-interactive transition-colors hover:text-interactive-hover"
-                    title="Edit"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="p-1.5 text-interactive transition-colors hover:text-danger"
-                    title="Delete"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
-                </>
+                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white transition-opacity hover:opacity-80">
+                  {author?.nickname?.charAt(0).toUpperCase() ?? '?'}
+                </div>
               )}
-            </>
+            </button>
+          ) : (
+            <span className="hidden text-[11px] text-muted leading-[22px] group-hover:inline">
+              {formatTime(timestamp)}
+            </span>
           )}
         </div>
+
+        {/* Content */}
+        <div className="min-w-0 flex-1">
+          {showHeader && (
+            <div className="flex items-baseline gap-2">
+              <button onClick={openProfile} className="cursor-pointer font-medium text-primary hover:underline">
+                {author?.nickname ?? 'Unknown'}
+              </button>
+              <span className="text-xs text-muted">{formatDate(timestamp)}</span>
+              {isPinned && (
+                <span className="text-[11px] text-muted" title="Pinned">📌</span>
+              )}
+            </div>
+          )}
+
+          {isEditing ? (
+            <div className="mt-1">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                onKeyDown={handleEditKeyDown}
+                className="w-full resize-none rounded bg-input p-2 text-sm text-primary outline-none"
+                rows={Math.min(editContent.split('\n').length + 1, 6)}
+                autoFocus
+              />
+              <p className="mt-1 text-xs text-muted">
+                escape to <button onClick={() => setIsEditing(false)} className="text-link hover:underline">cancel</button>
+                {' '}&middot; enter to <button onClick={handleEdit} className="text-link hover:underline">save</button>
+              </p>
+            </div>
+          ) : (
+            <div className="text-[15px] leading-[22px] text-secondary">
+              {message.content && <MarkdownRenderer content={message.content} />}
+              {editedAt && (
+                <span className="ml-1 text-[10px] text-muted" title={formatDate(editedAt)}>
+                  (edited)
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Attachments */}
+          {message.attachments.length > 0 && (
+            <div className="mt-1 space-y-1">
+              {message.attachments.map((attachment, i) => (
+                <MediaEmbed key={i} attachment={attachment} />
+              ))}
+            </div>
+          )}
+
+          <ReactionDisplay
+            reactions={reactions}
+            messageId={message.id}
+            onAdd={handleAddReaction}
+            onRemove={handleRemoveReaction}
+          />
+        </div>
+
+        {/* Author profile card */}
+        {profileAnchor && author && (
+          <UserProfile
+            profile={author}
+            status={authorStatus}
+            customText={authorCustomText}
+            customEmoji={authorCustomEmoji}
+            anchorRect={profileAnchor}
+            onClose={() => setProfileAnchor(null)}
+          />
+        )}
+
+        {/* Message actions (desktop hover) */}
+        {showActions && !isEditing && (
+          <div className="absolute -top-3 right-4 flex rounded border border-[hsl(var(--color-bg-tertiary))] bg-primary shadow-sm">
+            {/* Reaction button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowReactionPicker(!showReactionPicker)}
+                className="p-1.5 text-interactive transition-colors hover:text-interactive-hover"
+                title="Add Reaction"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                  <line x1="9" y1="9" x2="9.01" y2="9" />
+                  <line x1="15" y1="9" x2="15.01" y2="9" />
+                </svg>
+              </button>
+              {showReactionPicker && (
+                <div className="absolute right-0 top-full z-50 mt-1">
+                  <ReactionPicker
+                    messageId={message.id}
+                    onAdd={handleAddReaction}
+                    onClose={() => setShowReactionPicker(false)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {isOwn && (
+              <>
+                {showDeleteConfirm ? (
+                  <div className="flex items-center gap-1 px-1.5">
+                    <span className="text-xs font-medium text-danger">Delete?</span>
+                    <button
+                      onClick={handleDelete}
+                      className="rounded bg-danger px-1.5 py-0.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="rounded px-1.5 py-0.5 text-xs font-medium text-interactive transition-colors hover:text-interactive-hover"
+                    >
+                      No
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="p-1.5 text-interactive transition-colors hover:text-interactive-hover"
+                      title="Edit"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="p-1.5 text-interactive transition-colors hover:text-danger"
+                      title="Delete"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* "..." more actions */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMoreAnchor(
+                    moreAnchor ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()
+                  )
+                }}
+                className="p-1.5 text-interactive transition-colors hover:text-interactive-hover"
+                title="More actions"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="1" />
+                  <circle cx="19" cy="12" r="1" />
+                  <circle cx="5" cy="12" r="1" />
+                </svg>
+              </button>
+              {moreAnchor && (
+                <MessageContextMenu
+                  {...sharedContextMenuProps}
+                  anchorRect={moreAnchor}
+                  onClose={() => setMoreAnchor(null)}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile context menu — bottom sheet */}
+      {showMobileMenu && (
+        <MessageContextMenu
+          {...sharedContextMenuProps}
+          onClose={() => setShowMobileMenu(false)}
+        />
       )}
-    </div>
+    </>
   )
 }
 
-// Inline media embed for attachments
+// ── Inline media embed ──────────────────────────────────────────────────────
+
 function MediaEmbed({ attachment }: { attachment: Message['attachments'][number] }) {
   const [spoilerRevealed, setSpoilerRevealed] = useState(!attachment.spoiler)
   const [viewerOpen, setViewerOpen] = useState(false)
@@ -349,19 +451,12 @@ function MediaEmbed({ attachment }: { attachment: Message['attachments'][number]
           />
           {!spoilerRevealed && (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
-                SPOILER
-              </span>
+              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">SPOILER</span>
             </div>
           )}
         </div>
         {viewerOpen && (
-          <MediaViewer
-            url={attachment.url}
-            filename={attachment.filename}
-            type={attachment.type}
-            onClose={() => setViewerOpen(false)}
-          />
+          <MediaViewer url={attachment.url} filename={attachment.filename} type={attachment.type} onClose={() => setViewerOpen(false)} />
         )}
       </>
     )
@@ -376,17 +471,11 @@ function MediaEmbed({ attachment }: { attachment: Message['attachments'][number]
               className="flex h-48 w-80 cursor-pointer items-center justify-center rounded bg-tertiary"
               onClick={() => setSpoilerRevealed(true)}
             >
-              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">
-                SPOILER
-              </span>
+              <span className="rounded bg-black/60 px-3 py-1 text-sm font-semibold text-white">SPOILER</span>
             </div>
           ) : (
             <div className="group/video relative">
-              <video
-                src={attachment.url}
-                controls
-                className="max-h-[300px] rounded"
-              />
+              <video src={attachment.url} controls className="max-h-[300px] rounded" />
               <button
                 onClick={() => setViewerOpen(true)}
                 className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded bg-black/60 text-white opacity-0 transition-opacity group-hover/video:opacity-100"
@@ -400,18 +489,12 @@ function MediaEmbed({ attachment }: { attachment: Message['attachments'][number]
           )}
         </div>
         {viewerOpen && (
-          <MediaViewer
-            url={attachment.url}
-            filename={attachment.filename}
-            type="video"
-            onClose={() => setViewerOpen(false)}
-          />
+          <MediaViewer url={attachment.url} filename={attachment.filename} type="video" onClose={() => setViewerOpen(false)} />
         )}
       </>
     )
   }
 
-  // Generic file
   return (
     <a
       href={attachment.url}

@@ -5,9 +5,11 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { ChannelHeader } from '@/components/channels/ChannelHeader'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
+import { ChannelInfoPanel } from '@/components/chat/ChannelInfoPanel'
 import { MemberList } from '@/components/user/MemberList'
 import { CreateChannelModal } from '@/components/channels/CreateChannelModal'
 import { UserPanel } from '@/components/user/UserPanel'
+import type { Message } from '@/types'
 
 // Mobile views — mutually exclusive full-screen panels
 type MobileView = 'channels' | 'chat' | 'members'
@@ -17,6 +19,8 @@ export function AppShell() {
   const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
   const [mobileView, setMobileView] = useState<MobileView>('channels')
   const [keyboardOpen, setKeyboardOpen] = useState(false)
+  const [showChannelInfo, setShowChannelInfo] = useState(false)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
 
   useEffect(() => {
     fetchChannels()
@@ -32,6 +36,12 @@ export function AppShell() {
   }, [])
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null
+
+  // Reset reply and info panel when channel changes
+  useEffect(() => {
+    setReplyTo(null)
+    setShowChannelInfo(false)
+  }, [activeChannelId])
 
   // Tapping a channel on mobile navigates straight to chat
   const handleMobileChannelSelect = (channelId: string) => {
@@ -55,8 +65,8 @@ export function AppShell() {
           {activeChannel ? (
             <>
               <ChannelHeader channel={activeChannel} />
-              <MessageList channelId={activeChannel.id} />
-              <MessageInput channel={activeChannel} />
+              <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
+              <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center">
@@ -104,9 +114,10 @@ export function AppShell() {
                 <ChannelHeader
                   channel={activeChannel}
                   mobileBack={() => setMobileView('channels')}
+                  onInfoOpen={() => setShowChannelInfo(true)}
                 />
-                <MessageList channelId={activeChannel.id} />
-                <MessageInput channel={activeChannel} />
+                <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
+                <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
               </>
             ) : (
               <div className="flex flex-1 items-center justify-center">
@@ -114,6 +125,14 @@ export function AppShell() {
               </div>
             )}
           </main>
+        )}
+
+        {/* Channel info panel overlay */}
+        {showChannelInfo && activeChannel && (
+          <ChannelInfoPanel
+            channel={activeChannel}
+            onClose={() => setShowChannelInfo(false)}
+          />
         )}
 
         {/* Members panel */}

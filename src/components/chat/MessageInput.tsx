@@ -8,14 +8,16 @@ import { useTyping } from '@/hooks/useTyping'
 import { uploadFile, getFileType } from '@/lib/bunny'
 import { EmojiPicker } from '@/components/chat/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
-import type { Channel, Attachment } from '@/types'
+import type { Channel, Attachment, Message } from '@/types'
 import type { TenorGif } from '@/lib/tenor'
 
 interface MessageInputProps {
   channel: Channel
+  replyTo?: Message | null
+  onCancelReply?: () => void
 }
 
-export function MessageInput({ channel }: MessageInputProps) {
+export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputProps) {
   const { user } = useAuthStore()
   const { getOrCreateSession, dragTheLake } = useChannelStore()
   const { setEepMode } = useUiStore()
@@ -55,6 +57,7 @@ export function MessageInput({ channel }: MessageInputProps) {
     const attachmentsToSend = pendingAttachments
     setContent('')
     setPendingAttachments([])
+    onCancelReply?.()
 
     // Send the message with attachments
     const { data, error } = await supabase
@@ -202,6 +205,29 @@ export function MessageInput({ channel }: MessageInputProps) {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
+      {/* Reply bar */}
+      {replyTo && (
+        <div className="mb-1 flex items-center gap-2 rounded-t-lg bg-input px-4 py-2 text-xs text-muted">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-brand">
+            <polyline points="9 17 4 12 9 7" />
+            <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+          </svg>
+          <span className="flex-1 truncate">
+            Replying to{' '}
+            <span className="font-medium text-primary">{replyTo.content?.slice(0, 60) ?? 'attachment'}</span>
+          </span>
+          <button
+            onClick={onCancelReply}
+            className="flex-shrink-0 text-muted transition-colors hover:text-interactive-hover"
+            title="Cancel reply"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className={`rounded-lg bg-input ${pendingAttachments.length > 0 ? 'pt-3' : ''}`}>
         {/* Pending attachments preview */}
         {pendingAttachments.length > 0 && (
