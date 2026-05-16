@@ -10,7 +10,8 @@ ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_BUNNY_CDN_URL
 
-RUN npm run build
+# Skip tsc type-check in Docker — esbuild handles transpilation; type-check runs locally
+RUN node_modules/.bin/vite build
 
 # Production stage
 FROM nginx:alpine
