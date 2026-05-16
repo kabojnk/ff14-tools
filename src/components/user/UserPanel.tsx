@@ -14,7 +14,7 @@ export function UserPanel() {
 
   // Use live presence data for the current user so UserPanel stays in sync with the member list
   const presence = profile ? onlineUsers[profile.id] : null
-  const effectiveStatus = presence?.status ?? profile?.status ?? 'offline'
+  const effectiveStatus = presence?.status ?? 'offline'
   const effectiveCustomText = presence ? presence.custom_status_text : (profile?.custom_status_text ?? null)
   const effectiveCustomEmoji = presence ? presence.custom_status_emoji : (profile?.custom_status_emoji ?? null)
 

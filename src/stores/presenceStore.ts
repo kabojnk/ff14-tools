@@ -52,12 +52,18 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
 
     channel
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState<PresenceUser>()
+        const serverState = channel.presenceState<PresenceUser>()
         const users: Record<string, PresenceUser> = {}
-        for (const [, presences] of Object.entries(state)) {
+        for (const [, presences] of Object.entries(serverState)) {
           for (const presence of presences) {
             users[presence.user_id] = presence
           }
+        }
+        // If the server hasn't confirmed our track yet, keep our optimistic self-entry
+        // so we don't flash as offline while the round-trip is in flight.
+        const { currentUserId, onlineUsers } = get()
+        if (currentUserId && !users[currentUserId] && onlineUsers[currentUserId]) {
+          users[currentUserId] = onlineUsers[currentUserId]
         }
         set({ onlineUsers: users })
       })
@@ -72,7 +78,16 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
         }
       })
 
-    set({ presenceChannel: channel, currentUserId: userId })
+    // Set channel + currentUserId + optimistic self-entry in one update so the UI
+    // is immediately consistent before the Realtime subscription round-trip completes.
+    set((state) => ({
+      presenceChannel: channel,
+      currentUserId: userId,
+      onlineUsers: {
+        ...state.onlineUsers,
+        [userId]: { user_id: userId, status, custom_status_text: customText, custom_status_emoji: customEmoji },
+      },
+    }))
   },
 
   updatePresence: async (status, customText, customEmoji, manual = false) => {

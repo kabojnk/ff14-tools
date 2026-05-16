@@ -40,8 +40,20 @@ export function usePresence() {
       showPrivacyScreen()
       useUiStore.getState().setEepMode(true)
     }
+    const restorePresence = () => {
+      const ps = usePresenceStore.getState()
+      if (!ps.presenceChannel || !ps.currentUserId) return
+      const p = useAuthStore.getState().profile
+      // Prefer an explicitly-chosen manual status over the auto-saved ref
+      const statusToRestore = ps.manualStatus ?? savedStatusRef.current
+      updatePresence(statusToRestore, p?.custom_status_text ?? null, p?.custom_status_emoji ?? null)
+    }
+
     const handlePageShow = () => {
       hidePrivacyScreen()
+      // pageshow is the reliable restore event on iOS PWA — visibilitychange(visible)
+      // does not always fire when returning from the background.
+      restorePresence()
     }
 
     const handleVisibilityChange = () => {
@@ -54,12 +66,7 @@ export function usePresence() {
         useUiStore.getState().setEepMode(true)
       } else {
         hidePrivacyScreen()
-        const p = useAuthStore.getState().profile
-        updatePresence(
-          savedStatusRef.current,
-          p?.custom_status_text ?? null,
-          p?.custom_status_emoji ?? null
-        )
+        restorePresence()
       }
     }
 
