@@ -77,7 +77,7 @@ export function AppShell() {
       </div>
 
       {/* ── Mobile layout: full-screen views + bottom tab bar ── */}
-      <div className="flex flex-1 flex-col overflow-hidden md:hidden">
+      <div className="flex flex-1 flex-col overflow-hidden md:hidden bg-secondary" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
 
         {/* Channels panel */}
         {mobileView === 'channels' && (
@@ -219,10 +219,7 @@ function MobileTabBar({
   onEep: () => void
 }) {
   return (
-    <nav
-      className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-    >
+    <nav className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
       <div className="flex">
         <TabButton
           label="Channels"
