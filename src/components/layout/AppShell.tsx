@@ -77,7 +77,7 @@ export function AppShell() {
       </div>
 
       {/* ── Mobile layout: full-screen views + bottom tab bar ── */}
-      <div className="flex flex-1 flex-col overflow-hidden md:hidden bg-secondary" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="flex flex-1 flex-col overflow-hidden md:hidden">
 
         {/* Channels panel */}
         {mobileView === 'channels' && (

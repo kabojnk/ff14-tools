@@ -131,7 +131,7 @@
 
   body {
     font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    background-color: hsl(var(--color-bg-primary));
+    background-color: hsl(var(--color-bg-secondary));
     color: hsl(var(--color-text-primary));
     font-size: 16px;
     line-height: 1.375;
