@@ -21,23 +21,70 @@ export function MessageList({ channelId }: MessageListProps) {
   const contentRef = useRef<HTMLDivElement>(null)
   // Increment to re-render when a cached profile is updated via realtime
   const [, setProfileVersion] = useState(0)
+  // Tracks whether this is the initial load for the current channel
+  const initialLoadDoneRef = useRef(false)
+  // Tracks whether the user has scrolled up manually (so we don't hijack their position)
+  const userScrolledUpRef = useRef(false)
 
-  // Auto-scroll to bottom on new messages
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const container = containerRef.current
+    if (!container) return
+    if (behavior === 'instant') {
+      container.scrollTop = container.scrollHeight
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior })
+    }
+  }
+
+  // Reset state whenever the channel changes
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    initialLoadDoneRef.current = false
+    userScrolledUpRef.current = false
+  }, [channelId])
+
+  // Track manual upward scrolling so the ResizeObserver doesn't override it
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    const onScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      userScrolledUpRef.current = scrollHeight - scrollTop - clientHeight > 150
+    }
+    container.addEventListener('scroll', onScroll, { passive: true })
+    return () => container.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // Scroll to bottom when messages arrive
+  useEffect(() => {
+    if (messages.length === 0) return
+
+    if (!initialLoadDoneRef.current) {
+      // Initial load: jump instantly so images don't leave us mid-list,
+      // then retry 400 ms later to catch images that finish loading after the first paint.
+      initialLoadDoneRef.current = true
+      userScrolledUpRef.current = false
+      scrollToBottom('instant')
+      const t = setTimeout(() => scrollToBottom('instant'), 400)
+      return () => clearTimeout(t)
+    }
+
+    // New message arrived: smooth scroll only if the user is already near the bottom
+    if (!userScrolledUpRef.current) {
+      scrollToBottom('smooth')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length])
 
-  // Also scroll to bottom when content height grows (e.g. first reaction on last message)
-  // but only if the user is already near the bottom — don't hijack manual scrolling
+  // Also scroll when content height grows (reactions, image load-in, etc.),
+  // but only if the user hasn't scrolled up
   useEffect(() => {
     const content = contentRef.current
     const container = containerRef.current
     if (!content || !container) return
 
     const observer = new ResizeObserver(() => {
-      const { scrollTop, scrollHeight, clientHeight } = container
-      if (scrollHeight - scrollTop - clientHeight < 150) {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      if (!userScrolledUpRef.current) {
+        container.scrollTop = container.scrollHeight
       }
     })
 
@@ -45,10 +92,12 @@ export function MessageList({ channelId }: MessageListProps) {
     return () => observer.disconnect()
   }, [])
 
-  // Store the current user's profile in cache
+  // Store the current user's profile in cache and trigger re-render so
+  // display name changes appear immediately in existing message headers.
   useEffect(() => {
     if (profile) {
       profileCache[profile.id] = profile
+      setProfileVersion((v) => v + 1)
     }
   }, [profile])
 
