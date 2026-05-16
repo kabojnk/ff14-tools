@@ -80,19 +80,17 @@ export function MessageList({ channelId }: MessageListProps) {
       }
     }
     if (missingIds.size > 0) {
-      import('@/lib/supabase').then(({ supabase }) => {
-        supabase
-          .from('profiles')
-          .select('*')
-          .in('id', Array.from(missingIds))
-          .then(({ data }) => {
-            if (data) {
-              for (const p of data) {
-                profileCache[p.id] = p as Profile
-              }
+      supabase
+        .from('profiles')
+        .select('*')
+        .in('id', Array.from(missingIds))
+        .then(({ data }) => {
+          if (data) {
+            for (const p of data) {
+              profileCache[p.id] = p as Profile
             }
-          })
-      })
+          }
+        })
     }
   }, [messages])
 
