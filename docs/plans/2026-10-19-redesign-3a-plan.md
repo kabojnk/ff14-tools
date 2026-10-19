@@ -49,6 +49,124 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 **Production safety:** No task touches hosted Supabase or pushes. Task 4's migration is additive.
 
+## Plan review amendments (override the task text below where they conflict)
+
+Two reviewers checked this plan against the code, the library sources and the local database. Their fixes are listed here by task, and implementers must apply them. Where an amendment contradicts a task's text, **the amendment wins**.
+
+**T0 (lead, before the parallel tasks): dependencies.** Install `lucide-react`, `@khanacademy/simple-markdown` and `highlight.js` in one commit, so that no parallel task touches `package-lock.json`. Also create `src/components/ui/Icon.tsx`.
+
+**T1 themes**
+- **First paint.** Put the default (dark) token values on `:root` as well as `[data-theme="dark"]`. Set `data-theme` **synchronously**, from an inline script in `index.html` that reads the same localStorage key with a try/catch, so the first frame is already themed.
+- **The disguise never shows the chat theme.**
+  - While `eepMode` is on, `theme-color` is the FF14 bar colour `#1a1a2e`.
+  - `LoginPage` is pinned to fixed FF14-style colours, not the legacy utilities.
+  - The pre-auth "Loading…" screen renders the disguise when `eepMode` is on (otherwise a neutral fixed-colour screen), never theme colours.
+  - `EepMode` and `PinPad` already use inline colours, so leave them alone.
+- **Legacy remap.** Cover every legacy use: grep `hsl(var(--color-` (95 uses in 24 files), including `text-link`, `text-interactive-hover`, `bg-brand-hover`, `text-danger`, scrollbars, the spoiler variables and arbitrary classes such as `focus:border-[hsl(var(--color-brand))]`. `lib/status.ts` presence colours read `--presence-*`, and its test is updated.
+- **Contrast pairs to add:**
+  - At least 4.5:1: `accent` (links) on `them` and on `me`; the time and "edited" colour on `me` and on `them`; date-chip text on `bar`.
+  - At least 3:1: every `--code-*` token on `--code-bg`.
+
+  The parser **fails** on any tested token that isn't a plain hex or opaque `rgb()`, rather than skipping it.
+
+**T2 markdown**
+- **Parse mode.** `simple-markdown` 4.x has a default export only (`SimpleMarkdown.defaultRules`, `.parserFor`, `.outputFor`). Parse with `{ inline: true }`. Heading, list, quote (`>` and `>>>`), fence and `-#` are re-implemented as **inline-mode rules gated on line start** (the previous capture ends with `\n`, or it's the start of the message), the way Discord does it. The default block rules return null in inline mode. `u` (underline) already exists among the defaults.
+- **Output.** Write every rule's React output with `React.createElement`. Don't use the package's built-in `react` output, which builds element objects by hand.
+- **Links.** Keep the plan's link allowlist; the built-in sanitiser only blocks `javascript:`, `vbscript:` and `data:`.
+- **Robustness.** Memoise the parsed output per content string with a small cache. Any parser error falls back to plain text.
+- **highlight.js.** Use an explicit import map, for example `{ js: () => import('highlight.js/lib/languages/javascript'), … }`. A template-string `import()` won't resolve in Vite. Highlighting lands after the first paint, so `MessageList` re-pins to the bottom when a code block finishes highlighting if it was at the bottom.
+
+**T3 database: add presence columns; harden spoiler and reply**
+- **Spoiler parsing.** In `rebuild_message_media`, use `coalesce(a->'spoiler' = 'true'::jsonb, false)` for the spoiler flag. A malformed value must never break an insert or the migration.
+- **Backfill.** Replace the full-rebuild backfill with `update public.message_media mm set spoiler = true from public.messages m, jsonb_array_elements(m.attachments) a where mm.message_id = m.id and mm.url = a->>'url' and a->'spoiler' = 'true'::jsonb and not mm.spoiler`. That keeps row IDs, and a re-run changes nothing.
+- **`set_attachment_spoiler` checks.** It requires all of:
+  - `jsonb_typeof(attachments->p_index) = 'object'`
+  - an attachment `type` of image, video or gif
+  - a **visible** session
+  - a non-deleted message
+
+  Otherwise it raises `22023`.
+- **Reply check.** The reply trigger fires on `update of reply_to, conversation_id`.
+- **Presence storage (new; reviewer finding: `profiles.status` defaults to `'offline'`, so it can't mean Invisible):**
+  - `profiles.presence_override text check (presence_override in ('away', 'invisible'))`, default null.
+  - `profiles.last_seen_at timestamptz`.
+  - RPC `touch_last_seen()`: `security definer`, empty `search_path`, sets the caller's `last_seen_at = now()`, executable by `authenticated` only.
+  - pgTAP tests for both columns and the RPC.
+  - `profiles.status` is left as it is for old apps.
+- **Seed and restore.** Update the seed and `e2e/supabase.ts` `restoreStatuses()` to reset `presence_override` to null.
+
+**T4 logic.** Date chips show the weekday name for messages within **7** days, matching the spec.
+
+**T5 presence**
+- **`displayed()`** reads `profile.presence_override`: `'away'` gives away, `'invisible'` gives offline, null gives the aggregate. It never reads `profiles.status`.
+- **Payload.** Send `{ user_id, device_id, presence, status: <legacy mapping of presence>, at }` so cached old apps still read `status`. When `aggregate` gets a payload with no `presence`, it maps `status` through `presenceOf()`.
+- **Aggregation** iterates **every** presence entry. Two tabs share a `device_id`, so it can't key by `device_id`.
+- **Re-track** the **current** state on every `SUBSCRIBED`. Today the subscribe closure re-sends the initial state.
+- **Last seen.** Call `touch_last_seen()` on `pagehide` and on hide, and send a heartbeat every 60 s while visible. "Last seen" comes from `profiles.last_seen_at`, live through the profile binding added in T7. Don't use presence `at`, because a suspended iPhone simply drops off the channel.
+- **No idle detector.** Presence is online while visible and offline (for that device) while hidden. "Away" exists only as a manual override. Drop "away while idle".
+- **StatusPicker.** Away and Invisible write `presence_override`, and Online clears it.
+
+**T6 layout and launch**
+- **Launch state.**
+  - Touch `hasPin`/`pinLocked` only after a **successful** `loadPin` response, and set `pinLocked = false` when the length is null.
+  - Remove `hasPin` in `authStore.signOut`, which covers every logout path.
+  - The `uiStore` launch-state tests use `vi.resetModules()`, because the state is computed when the module loads.
+- **Passphrase while locked.** In `EepMode`, while `pinLocked`, a correct passphrase **opens the PIN pad** instead of the chat. This closes the gap before the PIN length loads. Add a unit test.
+- **e2e setup.**
+  - `auth.setup.ts` removes `hasPin` from the saved storageState.
+  - Add a `ChatUser.unlockIfLocked()` helper.
+  - The launch test injects `hasPin` with `addInitScript`.
+  - The "no PIN" reload case clears Bea's PIN with the service client and restores it afterwards.
+- **Landscape check.** Use **932×430** (`hasTouch`, `isMobile`) on Chromium only. It's wider than 900 px with a coarse pointer, so it actually tests the pointer and hover rule.
+- **Carry over from the old `AppShell`:** the Esc-Esc and Ctrl+Shift+E Eep shortcuts, and the `visualViewport` keyboard handling.
+- **StatusPicker's new home.** It opens from the desktop left column's me-row and from the phone list screen's avatar.
+- **e2e for statuses.** `statuses.spec` stops using `openMembers`/`member()`. It uses `partnerCard()` (T7) and the left-column me-row.
+- **Draft test.** The draft-across-breakpoint e2e runs on `chromium-desktop` only, because a coarse pointer never crosses the breakpoint.
+- **Safe areas.** The header and composer pad with `env(safe-area-inset-*)`.
+
+**T7 header**
+- **Live profiles (new).** Add a `profiles` UPDATE `postgres_changes` binding on the conversation channel, filtered `id=in.(<memberIds>)`, feeding a small `profileStore`. It must **drop `lock_pin`** from the payload and never store it. This replaces the subscriptions in `MemberList` and the old `MessageList`, which T6 and T8 delete. Header, pill, presence override and last seen all read from it.
+- **Keep the e2e hooks:** the `data-realtime` attribute on the message list container, and the composer placeholder `Message #<Space>`.
+  - `dragTheLake` and `openInfoPanel` in the e2e fixtures move to the new menu (`menuitem` roles, new item names).
+  - The pink-colour assertion in `statuses.spec` checks the pill dot's colour, not the `color-mix` text.
+
+**T8 message list**
+- **Client-generated IDs.** Don't match pending messages on content. The client generates `messages.id` with `crypto.randomUUID()` and uses it as the pending key. `addMessage` merges into the pending entry by ID. A retry that gets `23505` counts as success.
+- **Interim behaviour until T9–T11.** Extract the old `MessageItem`'s reaction row, context menu (edit, delete, pin, copy, reply) and **inline edit** into `components/chat/legacy/LegacyMessageExtras.tsx`, rendered inside the new `MessageRow`. That way the existing behaviour and specs keep working. T9 replaces the reactions, T10 the menu, and T11 the edit (moved into the composer).
+- **`ChannelInfoPanel`** imports `MarkdownRenderer`. Switch it to the new `Markdown` here.
+- **Typing bubble.** `TypingBubble` has an accessible name, `"<Name> is typing"`, which keeps the e2e `typing()` helper working.
+- **Scroll position.** Each space's scroll position is kept when switching tabs (a per-`spaceKey` map).
+- **Spoilers.** The `MediaBlock` key includes the spoiler flag, so a re-marked item blurs again. The full-screen viewer and the current media tab blur spoilers too.
+- **Read ticks.** `partnerReadAt` clears when either person's `read_receipts` turns off, using the profile store from T7.
+- **Accessibility.** Ticks, `JumpToLatest` and the typing bubble have labels.
+
+**T9 reactions**
+- **DELETE events** carry only the primary key and reach every subscriber, so the store must treat **unknown IDs as no-ops**.
+- **INSERT** dedupes on `(message_id, user_id, emoji)` and replaces the optimistic row with the server ID.
+- **Reload.** Re-run `loadFor` for loaded messages on rejoin and after a lake reload.
+- **Motion.** Reaction chips pop in.
+
+**T10 actions**
+- **Long-press.**
+  - Use pointer events: `pointercancel` aborts when iOS starts a scroll. Set `touch-action: pan-y`.
+  - Set `-webkit-touch-callout: none` and `user-select: none` on bubbles, and `draggable={false}` on media.
+  - The e2e test triggers it with `pointerdown`, then a wait, then `pointerup`.
+- **Hover toolbar** renders only when `isDesktop`.
+- **Shortcuts.** R and E are scoped to a focused message row (`tabIndex={0}`), not the window. The action sheet is also reachable from the keyboard through a "More actions" button inside each row, for screen-reader users.
+- **Edit** moves to T11 (composer editing). T10 only wires the menu item to it, through a `composerStore.startEdit(message)` stub that T11 implements.
+- **Motion.** The sheet slides up.
+
+**T11 composer**
+- **Phone Return rule.** On phones (non-desktop layout), Return **always** inserts a newline. Drop the hardware-keyboard detection, which can't be detected reliably.
+- **Safari composition.** Ignore Enter when `e.nativeEvent.isComposing`, when `e.keyCode === 229`, or within the same tick as a `compositionend`. Safari fires `compositionend` before the Enter `keydown`. Unit-test that event order.
+- **e2e.** `ChatUser.send()` clicks **Send** in the mobile layout, and so do the three spec calls that press Enter (`messaging.spec.ts` 40 and 61, `lake.spec.ts` 42).
+- **Composer editing** comes here (from T10). The composer keeps the iOS keyboard from covering it, using `visualViewport`.
+
+**T12 screenshots**
+- **CI.** `updateSnapshots` is a top-level config option only, so use a separate CI step: `npx playwright test --project=screenshots-desktop --project=screenshots-phone --update-snapshots=missing`. Upload the `*-snapshots` folders with `if: always()`, in their own artifact.
+- **Projects.** Pin `runs-on: ubuntu-24.04`. Use two projects (desktop 1280×800, phone 393×852 with a coarse pointer). The other projects `testIgnore` the screenshot spec.
+- **Masks:** times, date chips, presence and typing. Wait for code highlighting before taking the shot.
+
 ## Task graph
 
 ```

@@ -72,6 +72,7 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
 ## 2. Layout
 
 - **Breakpoint.** The desktop layout applies when `(min-width: 900px) and (hover: hover) and (pointer: fine)`. A landscape iPhone (852 px, coarse pointer) therefore stays in the mobile layout, which fixes the issue flagged in sub-project 1. `useMediaQuery` already supports this; only the query changes. Drafts already survive a layout switch.
+- **Passphrase while locked.** While the PIN lock is on, a correct passphrase opens the PIN pad instead of the chat (this closes a gap before the PIN length has loaded).
 - **Phone launch with a PIN set.** Every cold launch, and every page reload, of the phone layout (coarse pointer) when the user has a PIN opens on the **FF14 screen with the PIN lock armed**: `eepMode = true` and `pinLocked = true` before anything renders. No chat is ever painted first. This doesn't depend on whether the last session ended unlocked. The desktop layout keeps today's behaviour. Without a PIN, phones open as described below.
   - The PIN length is known only after the profile loads, so until then the app shows the FF14 screen (never the chat) whenever the device has previously had a PIN. A per-device `hasPin` flag in localStorage, kept in step whenever the PIN is set or cleared, covers that. A freshly logged-in phone with no flag opens normally.
 - **Phone.** With one conversation, the app opens **straight into the chat** (header → tabs → messages → composer). A back chevron in the header leads to a simple conversation list, which today holds one row (Bea) and later holds more. With more than one conversation, the app opens on the list.
@@ -167,7 +168,7 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
   - A device check confirms that predictive text and autocorrect work (added to the iPhone checklist).
 - **Enter.**
   - **Desktop:** Enter sends and Shift+Enter adds a new line.
-  - **Phone:** Return adds a new line and the send button sends, which is the iOS convention. Using a hardware keyboard on a phone falls back to the desktop behaviour.
+  - **Phone:** Return adds a new line and the send button sends, which is the iOS convention. This holds with a hardware keyboard too, since that can't be detected reliably.
 - **Drafts, slash commands and the typing indicator** keep their current behaviour. That includes the stop-typing fix and `/eep` and `/drag`.
 - **Attachments** show as removable thumbnails above the field while uploading, with a progress ring.
 - **Formatting toolbar.** None. Markdown is typed, as in Discord.
@@ -192,7 +193,7 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
 
 - **Presence.** Each device tracks presence under a key of `<userId>:<deviceId>` (a random ID stored in localStorage). A user's displayed state is the **most-online** across their devices (online > away > offline), and "last seen" is the latest.
   - Backgrounding one device no longer marks the user offline everywhere.
-  - Manual Away and Invisible apply to all of that user's devices: they're written to the profile, and every device respects them.
+  - Manual Away and Invisible apply to all of that user's devices. They're written to `profiles.presence_override`, and every device respects them. "Last seen" comes from `profiles.last_seen_at`, set on hide and by a 60 s heartbeat, because a suspended iPhone simply drops off the presence channel. There's no idle-based Away.
 - **Typing.** Typing is per space on the conversation channel, as sub-project 2 left it. The indicator is a typing bubble with animated dots in the message list, not a text line. The old text line moves into the header subline ("typing…").
 
 ## 10. Motion
@@ -278,7 +279,7 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
 | Concern | Applies | Notes |
 |---|---|---|
 | Error handling | Yes | See the section above |
-| Security | Yes | Markdown: no raw HTML, link-scheme allowlist, `noopener`. Custom emoji uploads keep the existing size and type checks in `upload-media`. No schema change in 3a. 3b needs custom emoji delete for any member, which matches the current RLS. |
+| Security | Yes | Markdown: no raw HTML, link-scheme allowlist, `noopener`. Custom emoji uploads keep the existing size and type checks in `upload-media`. 3a adds small schema pieces: `set_attachment_spoiler`, `message_media.spoiler`, `messages.reply_to` (same conversation only), `profiles.presence_override`, `profiles.last_seen_at` and `touch_last_seen()`. 3b's custom emoji delete for any member matches the current RLS. |
 | Test strategy | Yes | See the section above, including visual baselines per theme |
 | Accessibility | Yes | AA contrast tests; icon buttons have labels; the tabs are `role="tablist"`; reaction chips are buttons with `aria-pressed`; reduced motion is respected |
 
