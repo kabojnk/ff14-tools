@@ -3,25 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(23);
 
--- Fixture (idempotent; the Task 8 seed provides the same rows): one conversation, Alice + Bea, general (main) + schist channels.
-insert into public.conversations (id, created_by, created_at)
-values ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', now() - interval '1 year')
-on conflict do nothing;
-insert into public.conversation_members (conversation_id, user_id) values
-  ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111'),
-  ('d0000000-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222')
-on conflict do nothing;
-update public.channels set conversation_id = 'd0000000-0000-4000-8000-000000000001', space = 'main'
- where id = 'aaaaaaaa-0000-4000-8000-000000000001' and conversation_id is null;
-insert into public.channels (id, name, position, conversation_id, space)
-values ('aaaaaaaa-0000-4000-8000-000000000002', 'schist', 1, 'd0000000-0000-4000-8000-000000000001', 'schist')
-on conflict do nothing;
-update public.sessions set conversation_id = 'd0000000-0000-4000-8000-000000000001'
- where id = 'bbbbbbbb-0000-4000-8000-000000000001' and conversation_id is null;
-update public.messages set conversation_id = 'd0000000-0000-4000-8000-000000000001', space = 'main'
- where channel_id = 'aaaaaaaa-0000-4000-8000-000000000001' and conversation_id is null;
-update public.pinned_messages set conversation_id = 'd0000000-0000-4000-8000-000000000001'
- where channel_id = 'aaaaaaaa-0000-4000-8000-000000000001' and conversation_id is null;
+-- Uses the seed: conversation d000…0001 (Alice + Bea), general (main) + schist channels, session bbbb…0001.
 
 -- Messages: old app sends channel_id only
 insert into public.messages (id, channel_id, session_id, author_id, content) values

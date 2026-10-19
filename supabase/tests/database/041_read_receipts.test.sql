@@ -3,14 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(9);
 
--- Fixture (idempotent; the Task 8 seed provides the conversation)
-insert into public.conversations (id, created_by, created_at)
-values ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', now() - interval '1 year')
-on conflict do nothing;
-insert into public.conversation_members (conversation_id, user_id) values
-  ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111'),
-  ('d0000000-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222')
-on conflict do nothing;
+-- Uses the seed: conversation d000…0001 (Alice + Bea), general (main) + schist channels, session bbbb…0001.
 delete from public.read_positions;
 insert into public.read_positions (conversation_id, user_id, space, last_read_at) values
   ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'main', now()),

@@ -3,26 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(39);
 
--- Fixture (idempotent; the Task 8 seed provides the same rows): one conversation, Alice + Bea, general (main) + schist channels.
-insert into public.conversations (id, created_by, created_at)
-values ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', now() - interval '1 year')
-on conflict do nothing;
-insert into public.conversation_members (conversation_id, user_id) values
-  ('d0000000-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111'),
-  ('d0000000-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222')
-on conflict do nothing;
-update public.channels set conversation_id = 'd0000000-0000-4000-8000-000000000001', space = 'main'
- where id = 'aaaaaaaa-0000-4000-8000-000000000001' and conversation_id is null;
-insert into public.channels (id, name, position, conversation_id, space)
-values ('aaaaaaaa-0000-4000-8000-000000000002', 'schist', 1, 'd0000000-0000-4000-8000-000000000001', 'schist')
-on conflict do nothing;
-update public.sessions set conversation_id = 'd0000000-0000-4000-8000-000000000001'
- where id = 'bbbbbbbb-0000-4000-8000-000000000001' and conversation_id is null;
-update public.messages set conversation_id = 'd0000000-0000-4000-8000-000000000001', space = 'main'
- where channel_id = 'aaaaaaaa-0000-4000-8000-000000000001' and conversation_id is null;
--- The lake password the tests use (the seed sets the same value)
-update public.private_secrets set value_hash = extensions.crypt('test-lake-password', extensions.gen_salt('bf'))
- where key = 'lake_password';
+-- Uses the seed: conversation d000…0001 (Alice + Bea), general (main) + schist channels, session bbbb…0001.
 -- A message in each space, and an extra channel the old app would also drag
 insert into public.messages (conversation_id, space, session_id, author_id, content) values
   ('d0000000-0000-4000-8000-000000000001', 'main',   'bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'rpc main'),
