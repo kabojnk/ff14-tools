@@ -46,6 +46,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 6. **`mark_read` clamps to `now()`,** so a client clock in the future can't mark later messages as read.
 7. **Pins:** fetched per conversation and filtered by space on the client. No new foreign key is needed.
 8. **The expand step drops `NOT NULL` on `channel_id`** in messages, sessions and pins, so the new app's inserts never depend on a channel row existing.
+9. **Plan review fixes beyond the spec:**
+   - `get_channel_messages` becomes `security invoker`, not executable by `anon`. It was a definer function that would have bypassed membership.
+   - The `channels` policies become members-only, with no client updates.
+   - Old-app PIN writes re-hash through a trigger.
+   - The `change_sheets` wrapper collapses the old app's burst of per-channel calls into one drag.
+   - Messages and pins can't point across conversations.
+   - `mark_read` rejects a null time.
+   - The media backfill keeps existing row IDs on a re-run.
+10. **The migration test fixture lives in `supabase/migration-test/`,** not `supabase/tests/`, because `supabase test db` runs every `.sql` file under its path.
 
 ---
 
@@ -61,8 +70,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 | `supabase/migrations/20261019120500_conversations_rpcs.sql` | Create | `get_messages`, `mark_read`, PIN, lake RPCs, `change_sheets` wrapper |
 | `supabase/seed.sql` | Rewrite | New-shape seed: Alice, Bea, Cleo, conversation, both spaces, hidden session, media, PINs, lake password |
 | `supabase/tests/database/*.test.sql` | Create | pgTAP: smoke, RLS, receipts, RPCs, compatibility, media |
-| `supabase/tests/fixtures/legacy-history.sql` | Create | Old-shape, multi-channel history for the migration test |
-| `supabase/tests/migration/assert.sql` | Create | Post-migration assertions (raise on mismatch) |
+| `supabase/migration-test/legacy-history.sql` | Create | Old-shape, multi-channel history for the migration test |
+| `supabase/migration-test/assert.sql` | Create | Post-migration assertions (raise on mismatch) |
 | `scripts/test-migration.sh` | Create | baseline → fixture → migrate → assert → re-run → assert → reset |
 | `package.json` | Modify | `test:db`, `test:migration` |
 | `src/types/index.ts` | Modify | Conversation, Space, StatusDefinition, MediaItem, ReadPosition; message, session and profile fields |
@@ -96,14 +105,18 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 ```
 DB track:   T1 ─ T2 ─ T3 ─ T4 ─ T5 ─ T6 ─ T7 ─ T8(seed)
-App track:               T9 ─ T10 ─ T11 ─ T12 ─┬─ T13 (PIN)
-                                               ├─ T14 (Lake + receipts)
+App track:               T9 ─ T10 ─ T11 ─ T12 ─┬─ T13 (PIN) ─ T14 (Lake + receipts)
                                                ├─ T15 (statuses)
                                                └─ T16 (media)
                                                       ↓
                                      T17 (e2e, after T8 + T13–16) ─ T18 (CI + docs)
 ```
-T9–T11 (types, pure helpers, stores with mocked clients) can start once T3 has fixed the column names. T12 onwards needs T8's seed to run the app locally. T13–T16 touch separate files and can run in parallel worktrees. Each one rebases onto the latest branch before its commit.
+T9–T11 (types, pure helpers, stores with mocked clients) can start once T3 has fixed the column names. T12 onwards needs T8's seed to run the app locally. T12 also adds every shared e2e helper, so later tasks never wait on T17.
+- **T13 → T14 run one after the other**, because both edit `UserSettings.tsx`.
+- **T15 and T16** don't share files with T13/T14. However, every e2e run uses the **one local Supabase stack and port 5174**, so tasks that run e2e tests can't run at the same time. In practice:
+  - T1–T8 (database) and T9–T11 (no database) run in parallel.
+  - T12 onwards runs one task at a time.
+- Each of T13–T16 writes **and runs** its own spec. T17 adds only the cross-cutting specs (spaces, compatibility) and the repeat-run check.
 
 ---
 
@@ -111,7 +124,7 @@ T9–T11 (types, pure helpers, stores with mocked clients) can start once T3 has
 
 **Files:** `package.json`, `supabase/tests/database/000_smoke.test.sql`, `supabase/seed.sql` (add Cleo only)
 
-- [ ] Add the script `"test:db": "npx --yes supabase@2 test db"`.
+- [ ] Add the script `"test:db": "npx --yes supabase@2 test db supabase/tests/database"`. The CLI runs every `.sql` file under the given path, so the migration-test files must live **outside** `supabase/tests`..
 - [ ] Add Cleo to `seed.sql`, copying the Alice/Bea pattern: `cccc1111-…` is already used for messages, so use ID `33333333-3333-4333-8333-333333333333`, `cleo@test.local` / `password123`, nickname "Cleo", no PIN.
 - [ ] Write `000_smoke.test.sql`. It proves that pgTAP works **while impersonating `authenticated`**, which every later test depends on:
 ```sql
@@ -131,12 +144,13 @@ select * from finish();
 rollback;
 ```
 - [ ] `npm run db:reset && npm run test:db` passes all three tests.
+  - The plan review confirmed that pgTAP works after `set local role authenticated`. The fallback below is kept only in case a newer image changes that.
   - **If pgTAP fails with `permission denied` on its temp tables after `set local role authenticated`:** capture each value under the role and assert after `reset role`. For example, run `create temp table _got as select count(*) n from public.profiles;` as `authenticated`, then `reset role` and call `select is((select n from _got), …)`. Grant on that temp table if needed. Record whichever pattern works in a comment at the top of `000_smoke.test.sql`; every later database test copies it.
 - [ ] Commit: `Add pgTAP database test harness`
 
 ### Task 2: migration test harness (red)
 
-**Files:** `scripts/test-migration.sh`, `supabase/tests/fixtures/legacy-history.sql`, `supabase/tests/migration/assert.sql`, `package.json`
+**Files:** `scripts/test-migration.sh`, `supabase/migration-test/legacy-history.sql`, `supabase/migration-test/assert.sql`, `package.json`
 
 - [ ] `scripts/test-migration.sh` (`chmod +x`):
 ```bash
@@ -157,18 +171,32 @@ trap restore EXIT
 echo "→ baseline schema only"
 sb db reset --version "$BASELINE" --no-seed
 echo "→ loading legacy (old-shape) history"
-psql_db < supabase/tests/fixtures/legacy-history.sql
+psql_db < supabase/migration-test/legacy-history.sql
 echo "→ applying pending migrations"
 sb migration up --local
 echo "→ asserting"
-psql_db < supabase/tests/migration/assert.sql
+psql_db < supabase/migration-test/assert.sql
+
+checksum() {
+  psql_db -At -c "select md5(string_agg(x, '|' order by x)) from (
+    select 'm:'||id||':'||coalesce(conversation_id::text,'')||':'||coalesce(space,'')||':'||session_id from public.messages
+    union all select 's:'||id||':'||visible||':'||coalesce(conversation_id::text,'') from public.sessions
+    union all select 'c:'||conversation_id||':'||user_id from public.conversation_members
+    union all select 'x:'||id||':'||coalesce(conversation_id::text,'')||':'||coalesce(space,'')||':'||archived from public.channels
+    union all select 'mm:'||id||':'||message_id||':'||kind||':'||url||':'||coalesce(extension,'') from public.message_media
+    union all select 'p:'||id||':'||coalesce(status_id::text,'')||':'||coalesce(lock_pin_length::text,'') from public.profiles
+  ) t(x)"
+}
+before=$(checksum)
 
 echo "→ re-running every post-baseline migration (idempotency)"
 for f in $(ls supabase/migrations/*.sql | sort); do
   v=$(basename "$f" | cut -d_ -f1)
   if [ "$v" -gt "$BASELINE" ]; then psql_db < "$f"; fi
 done
-psql_db < supabase/tests/migration/assert.sql
+psql_db < supabase/migration-test/assert.sql
+after=$(checksum)
+if [ "$before" != "$after" ]; then echo "✗ re-running the migrations changed data"; exit 1; fi
 echo "✓ migration test passed"
 ```
 - [ ] Add `"test:migration": "bash scripts/test-migration.sh"`.
@@ -359,6 +387,8 @@ alter table public.messages add column if not exists conversation_id uuid refere
 alter table public.messages add column if not exists space text;
 alter table public.messages drop constraint if exists messages_space_check;
 alter table public.messages add constraint messages_space_check check (space in ('main', 'schist'));
+alter table public.messages drop constraint if exists messages_space_required;
+alter table public.messages add constraint messages_space_required check (conversation_id is null or space is not null);
 alter table public.messages alter column channel_id drop not null;
 create index if not exists messages_conv_space_created_idx on public.messages (conversation_id, space, created_at desc);
 
@@ -471,9 +501,12 @@ do $$
 declare
   v_conv uuid;
   n bigint;
+  v_total bigint;
 begin
   -- Nothing to migrate on an empty database (fresh local reset: the seed creates its own conversation).
   if not exists (select 1 from public.profiles) then return; end if;
+
+  select count(*) into v_total from public.messages;
 
   select id into v_conv from public.conversations order by created_at limit 1;
   if v_conv is null then
@@ -524,6 +557,12 @@ begin
   -- Assertions: any failure rolls the whole file back.
   select count(*) into n from public.messages where conversation_id is null or space is null;
   if n > 0 then raise exception 'backfill: % messages without a conversation/space', n; end if;
+  select count(*) into n from public.messages;
+  if n <> v_total then raise exception 'backfill: message count changed (% → %)', v_total, n; end if;
+  -- every channel's messages landed in that channel's space
+  select count(*) into n from public.messages m join public.channels c on c.id = m.channel_id
+   where m.space is distinct from c.space or m.conversation_id is distinct from c.conversation_id;
+  if n > 0 then raise exception 'backfill: % messages are in a different space from their channel', n; end if;
   select count(*) into n from public.sessions where conversation_id is null;
   if n > 0 then raise exception 'backfill: % sessions without a conversation', n; end if;
   select count(*) into n from public.pinned_messages where conversation_id is null;
@@ -591,6 +630,12 @@ begin
   elsif new.channel_id is null and new.conversation_id is not null then
     new.channel_id := public.compat_channel_for(new.conversation_id, new.space);
   end if;
+  -- A message must belong to its session's conversation; never trust the client for this.
+  if new.session_id is not null and exists (
+       select 1 from public.sessions s
+        where s.id = new.session_id and s.conversation_id is distinct from new.conversation_id) then
+    raise exception 'message session belongs to a different conversation' using errcode = '23514';
+  end if;
   return new;
 end $$;
 drop trigger if exists messages_compat on public.messages;
@@ -616,9 +661,8 @@ create trigger sessions_compat before insert on public.sessions
 create or replace function public.pins_compat() returns trigger
 language plpgsql security definer set search_path = '' as $$
 begin
-  if new.conversation_id is null then
-    select m.conversation_id into new.conversation_id from public.messages m where m.id = new.message_id;
-  end if;
+  -- Always taken from the pinned message, so a pin can't point across conversations.
+  select m.conversation_id into new.conversation_id from public.messages m where m.id = new.message_id;
   if new.channel_id is null then
     select m.channel_id into new.channel_id from public.messages m where m.id = new.message_id;
   end if;
@@ -641,6 +685,31 @@ end $$;
 drop trigger if exists profiles_status_compat on public.profiles;
 create trigger profiles_status_compat before update of status on public.profiles
   for each row execute function public.profiles_status_compat();
+
+-- Old app sets/clears the PIN by writing profiles.lock_pin directly → keep the hash and length in step.
+-- set_pin()/clear_pin() also write lock_pin; the "already verifies" check avoids hashing twice.
+create or replace function public.profiles_pin_compat() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.lock_pin is null then
+    delete from public.private_pins where user_id = new.id;
+    new.lock_pin_length := null;
+  elsif new.lock_pin !~ '^[0-9]{4,6}$' then
+    raise exception 'PIN must be 4–6 digits' using errcode = '22023';
+  else
+    if not exists (select 1 from public.private_pins pp
+                    where pp.user_id = new.id and pp.pin_hash = extensions.crypt(new.lock_pin, pp.pin_hash)) then
+      insert into public.private_pins (user_id, pin_hash)
+      values (new.id, extensions.crypt(new.lock_pin, extensions.gen_salt('bf')))
+      on conflict (user_id) do update set pin_hash = excluded.pin_hash;
+    end if;
+    new.lock_pin_length := char_length(new.lock_pin);
+  end if;
+  return new;
+end $$;
+drop trigger if exists profiles_pin_compat on public.profiles;
+create trigger profiles_pin_compat before update of lock_pin on public.profiles
+  for each row execute function public.profiles_pin_compat();
 ```
 - [ ] Write `030_compat.test.sql` first. Run it as Alice (`authenticated`), with the RLS from Task 6 not yet applied. For now, run the inserts as `postgres` and add the role-based variants in Task 6.
   - A message inserted with only `channel_id` (schist channel) gets `conversation_id` and `space = 'schist'`.
@@ -652,6 +721,9 @@ create trigger profiles_status_compat before update of status on public.profiles
   - Updating `profiles.status` to `'potential_eep'` sets the matching `status_id`.
   - Updating it to `'online'` keeps the existing `status_id`.
   - After deleting the `potential_eep` definition, setting `status='potential_eep'` gives `status_id` null and the update still succeeds.
+  - **Old-app PIN:** `update profiles set lock_pin = '4444'` makes `verify_pin('4444')` true and `'1234'` false, with `lock_pin_length` 4. Setting it to `null` removes the hash, so `verify_pin` is false and the length is null.
+  - **Cross-conversation:** a message whose `session_id` belongs to another conversation is rejected (`23514`). A pin's `conversation_id` is always the message's, even if the client sends another.
+  - A message with `conversation_id` but no `space` is rejected by `messages_space_required`.
 - [ ] Green on `test:db`. `test:migration` is unchanged: it still fails only on media.
 - [ ] Commit: `Add old-app compatibility triggers`
 
@@ -718,6 +790,23 @@ create policy "members react as themselves" on public.reactions for insert to au
 create policy "users remove own reactions" on public.reactions for delete to authenticated
   using (auth.uid() = user_id);
 
+-- channels (old-app compatibility only): members only; no client updates (renaming/archiving is gone)
+drop policy if exists "Authenticated users can create channels" on public.channels;
+drop policy if exists "Authenticated users can update channels" on public.channels;
+drop policy if exists "Authenticated users can view active channels" on public.channels;
+drop policy if exists "members read active channels" on public.channels;
+drop policy if exists "members create channels" on public.channels;
+create policy "members read active channels" on public.channels for select to authenticated
+  using (not archived and public.is_member(conversation_id));
+create policy "members create channels" on public.channels for insert to authenticated
+  with check (public.is_member(conversation_id));  -- channels_compat fills conversation_id first
+
+-- The old history RPC was SECURITY DEFINER and executable by anon, so it would bypass the policies above.
+alter function public.get_channel_messages(uuid, integer, timestamptz) security invoker;
+alter function public.get_channel_messages(uuid, integer, timestamptz) set search_path = '';
+revoke execute on function public.get_channel_messages(uuid, integer, timestamptz) from public, anon;
+grant execute on function public.get_channel_messages(uuid, integer, timestamptz) to authenticated;
+
 -- new tables
 drop policy if exists "members read conversations" on public.conversations;
 create policy "members read conversations" on public.conversations for select to authenticated
@@ -768,6 +857,9 @@ create policy "members send conversation events" on realtime.messages for insert
   - `update public.sessions set visible = true` as Alice affects 0 rows.
   - Statuses are readable and writable by Cleo too (anyone signed in).
   - `topic_conversation('conv:not-a-uuid')` is null, and an `is_member` check on it is false.
+  - **Old history RPC:** `get_channel_messages(general)` returns 0 rows for Cleo, and `anon` can't execute it (`has_function_privilege`). Alice still gets the visible messages.
+  - **Channels:** Cleo sees no channels. Alice's `update channels set space = 'schist'` affects 0 rows.
+- [ ] `get_channel_messages`' existing body already uses `public.`-qualified names (see the baseline), so it still works with `search_path = ''`. Confirm this in the test above.
 - [ ] Write `041_read_receipts.test.sql`: a 2×2 matrix of Alice/Bea receipts on/off. Alice always sees her own row, and sees Bea's only when both are on.
 - [ ] Add the role-based variants to `030_compat.test.sql`: an old-app insert as Alice with only `channel_id` passes RLS, because `WITH CHECK` runs after the BEFORE trigger.
 - [ ] Green on `test:db`.
@@ -849,8 +941,25 @@ create trigger messages_sync_media
   after insert or update of content, attachments, deleted, conversation_id, space, session_id on public.messages
   for each row execute function public.sync_message_media();
 
--- Backfill (delete + insert per message, so re-running is safe)
-select public.rebuild_message_media(m) from public.messages m;
+-- Backfill only messages that have no rows yet, so a re-run keeps existing row IDs (paging cursors stay valid).
+do $$
+declare
+  m public.messages;
+  n bigint;
+  v_expected bigint;
+begin
+  for m in select * from public.messages x
+            where not exists (select 1 from public.message_media mm where mm.message_id = x.id) loop
+    perform public.rebuild_message_media(m);
+  end loop;
+
+  -- Assertion: one attachment row per attachment with a URL on every live, mapped message.
+  select count(*) into v_expected
+    from public.messages x, jsonb_array_elements(case when jsonb_typeof(x.attachments) = 'array' then x.attachments else '[]'::jsonb end) a
+   where not x.deleted and x.conversation_id is not null and coalesce(a->>'url', '') <> '';
+  select count(*) into n from public.message_media where kind <> 'link';
+  if n <> v_expected then raise exception 'media backfill: expected % attachment rows, got %', v_expected, n; end if;
+end $$;
 
 -- Gallery query. RLS (invoker) applies membership and Drag-the-Lake visibility.
 create or replace function public.get_media(
@@ -921,6 +1030,7 @@ begin
   if p_space is null or p_space not in ('main', 'schist') then
     raise exception 'unknown space %', p_space using errcode = '22023';
   end if;
+  if p_at is null then raise exception 'p_at is required' using errcode = '22023'; end if;
   insert into public.read_positions as rp (conversation_id, user_id, space, last_read_at)
   values (p_conversation, auth.uid(), p_space, least(p_at, now()))
   on conflict (conversation_id, user_id, space)
@@ -1004,12 +1114,25 @@ begin
 end $$;
 
 -- Old app: Drag the Lake per channel → drags the whole conversation.
+-- The old app fires one call per channel at once. Only the first drags; repeats within 10 s that find a
+-- fresh, empty, sole visible session return it, so no caller is left holding an already-hidden session.
 create or replace function public.change_sheets(p_channel_id uuid)
 returns uuid language plpgsql security definer set search_path = '' as $$
-declare v_conv uuid;
+declare
+  v_conv uuid;
+  v_recent uuid;
 begin
   select conversation_id into v_conv from public.channels where id = p_channel_id;
   if v_conv is null then raise exception 'channel % is not mapped to a conversation', p_channel_id; end if;
+  perform public.require_member(v_conv);
+  perform 1 from public.conversations where id = v_conv for update; -- serialise the burst
+  select s.id into v_recent from public.sessions s
+   where s.conversation_id = v_conv and s.visible
+     and s.created_at > now() - interval '10 seconds'
+     and not exists (select 1 from public.messages m where m.session_id = s.id)
+     and (select count(*) from public.sessions v where v.conversation_id = v_conv and v.visible) = 1
+   order by s.created_at desc limit 1;
+  if v_recent is not null then return v_recent; end if;
   return public.drag_the_lake(v_conv);
 end $$;
 
@@ -1037,7 +1160,8 @@ end $$;
   - **Drag the Lake:** afterwards Alice sees exactly one visible session and zero old messages; it works across both spaces.
   - **Fill the Lake:** `'wrong'` → false and nothing changes; the right password → true and every session is visible.
   - **Lake password:** `set_lake_password` with a wrong current → false; a blank new → `22023`; Cleo → `42501`; after a change, the old password fails and the new one works.
-  - **Old app:** `change_sheets(general channel)` drags the conversation.
+  - **Old app:** `change_sheets(general channel)` drags the conversation. Three calls in a row (general, schist, old-raids, as the old app's loop does) give **one** new visible session, all three return its ID, and a message inserted into that ID is visible.
+  - `mark_read(…, null)` is rejected (`22023`).
   - **Grants:** `anon` cannot execute `verify_pin` (`has_function_privilege`).
 - [ ] `npm run test:db` is green and **`npm run test:migration` is green**, including the re-run.
 - [ ] Commit (one commit for both files): `Add media index, gallery query and conversation RPCs`
@@ -1197,7 +1321,7 @@ interface ConversationState {
 **Files:**
 - **Create:** `src/lib/conversationRealtime.ts`, `src/hooks/useConversationRealtime.ts`, `src/components/spaces/SpaceList.tsx`
 - **Rewrite:** `useMessages.ts`, `useTyping.ts`, `usePinnedMessages.ts`
-- **Modify:** `AppShell.tsx`, `Sidebar.tsx`, `ChannelHeader.tsx`, `SheetsButton.tsx`, `MessageList.tsx`, `MessageInput.tsx`, `MessageItem.tsx`, `TypingIndicator.tsx`, `ChannelInfoPanel.tsx` (pins and search tabs only; media is Task 16), `presenceStore.ts`, `App.tsx` (load the conversation after auth), `e2e/users.ts`, `e2e/fixtures.ts`
+- **Modify:** `AppShell.tsx`, `Sidebar.tsx`, `ChannelHeader.tsx`, `SheetsButton.tsx`, `MessageList.tsx`, `MessageInput.tsx`, `MessageItem.tsx`, `TypingIndicator.tsx`, `ChannelInfoPanel.tsx` (pins and search tabs only; media is Task 16), `presenceStore.ts`, `e2e/users.ts`, `e2e/fixtures.ts`, `e2e/global-setup.ts`, `e2e/auth.spec.ts` (asserts the `general` button), `e2e/messaging.spec.ts` (clicks `general` inline in the draft test)
 - **Delete:** `channelStore.ts`, `useChannels.ts`, `CreateChannelModal.tsx`, `ChannelList.tsx`
 
 - [ ] **`conversationRealtime.ts`.** A module-level singleton, because only one subscription may exist per device:
@@ -1220,7 +1344,14 @@ export function sendLake(): void
     - `INSERT`/`UPDATE` on `messages` with `filter: conversation_id=eq.<id>`. An update with `deleted = true` maps to `'delete'`.
     - `*` on `sessions` with the same filter maps to `onLake()`, debounced by 250 ms.
     - `INSERT`/`UPDATE` on `read_positions` with the same filter.
-  - Before subscribing, call `await supabase.realtime.setAuth()` so the private channel carries the user's token.
+  - **Lifecycle (StrictMode-safe).** `main.tsx` uses `<StrictMode>`, and `RealtimeClient.channel()` returns an existing channel for a topic until the server acknowledges the leave.
+    - Do **not** call `setAuth()` explicitly. supabase-js passes an `accessToken` callback, and `subscribe()` sets the token itself.
+    - Create the channel **synchronously** inside `joinConversation`.
+    - Before creating it, remove any channel still registered for `realtime:conv:<id>` (`supabase.getChannels()`), so a channel that is still leaving is never reused.
+    - Keep a module-level **generation counter**. `leave()` bumps it and removes the channel. Callbacks from an older generation return early.
+    - `joinConversation` called again for the same ID while joined returns the existing `leave` instead of subscribing twice.
+    - Sign-out calls `leave()`.
+    - Unit-test this with a fake client: mount, unmount, mount gives exactly one `subscribe()` call on a fresh channel and one `removeChannel()`.
   - If `postgres_changes` bindings turn out not to work on a private channel in the local stack, move them to a second, non-private channel, `conv-db:<id>`. That's safe because `postgres_changes` already applies RLS per subscriber. Note the change in the commit message.
   - On a re-`SUBSCRIBED`, call `onStatus(…, true)`. The caller then refetches.
 - [ ] **`useConversationRealtime()`.** Mount it once in `AppShell`. It joins when `conversation` is set and wires the handlers:
@@ -1242,7 +1373,7 @@ export function sendLake(): void
   - Attributes: `data-space={space}`, `data-unread={String(unread)}`, `aria-current` when active.
   - It replaces `ChannelList` in `Sidebar` and `MobileChannelList` in `AppShell`, under a "Spaces" header instead of "Text Channels". The create (+) button is removed.
 - [ ] **`AppShell`:**
-  - Replace `fetchChannels`/`activeChannel` with `conversationStore` (`load` on mount when `user` is set).
+  - Replace `fetchChannels`/`activeChannel` with `conversationStore`. `load` runs **only here**, on mount when `user` is set; `App.tsx` doesn't load it too.
   - `ChannelHeader`, `MessageList`, `MessageInput` and `ChannelInfoPanel` receive `{ conversationId, space }`. The header shows `SPACE_LABEL[space]`.
   - The mobile list → chat navigation is unchanged.
   - The reply and info-panel state reset when the space changes.
@@ -1261,17 +1392,31 @@ export function sendLake(): void
     - the newest message exists
 
     Re-check on new messages, on scroll, and on `visibilitychange`.
+    Also re-check when `uiStore.eepMode` becomes false (unlock), because `AppShell` stays mounted behind Eep.
   - Call `markReadLocal` immediately, so the dot clears without waiting.
-  - Call `flush()` on `pagehide`, and `dispose()` on unmount.
+  - Call `flush()` on `pagehide`. On unmount, call **`flush()` and then `dispose()`**, so a pending mark isn't lost when going back to the list on mobile.
+- [ ] **`latest` stays truthful.**
+  - Recompute `latest[space]` from `get_messages(limit 1)` after a `delete` event for the newest message, and after every lake reload. This stops a deleted newest message from leaving a space unread forever.
+  - Refetch `latest` for both spaces on the **first** `SUBSCRIBED` as well as on re-joins, which covers messages sent between `load()` and the join.
+- [ ] **Sending races a lake reload.** If the insert fails with `42501` (the session was just hidden), refetch the session once and retry. Unit-test this in `conversationStore`/`MessageInput` with a mocked client.
 - [ ] **`MessageItem`:** the props pass `key` (`spaceKey`) instead of `channelId`, for edit and delete. The per-message reaction subscription stays as is; reactions are redesigned in sub-project 3.
 - [ ] **`ChannelInfoPanel`:**
   - **Pins tab:** pinned IDs come from `usePinnedMessages(conversationId)`, then the messages are fetched and filtered to `space`.
   - **Search tab:** `.eq('conversation_id', …).eq('space', space)`.
+  - **Media tab (temporary until Task 16):** switch its query from `channel_id` to `.eq('conversation_id', …).eq('space', space)`, so `tsc` passes with the `channel` prop gone.
 - [ ] **`presenceStore`:** delete `startTyping`/`subscribeTyping`, which have no callers (grep to confirm).
 - [ ] **e2e:**
   - `users.ts` gains `IDS` (conversation, sessions, channels) and `LAKE_PASSWORD = 'test-lake-password'`.
-  - `ChatUser.openChat(space: 'Main' | 'Schist' = 'Main')` clicks `getByRole('button', { name: space })`, visible-filtered, then waits for the composer and `[data-realtime="SUBSCRIBED"]`.
-  - Every existing spec is updated to call `openChat()`.
+  - `ChatUser.openChat(space: 'Main' | 'Schist' = 'Main')` clicks `[data-space="main|schist"]`, visible-filtered, then waits for the composer and `[data-realtime="SUBSCRIBED"]`.
+  - Every existing spec is updated to call `openChat()`. `auth.spec.ts` asserts the Main space button, and the draft test in `messaging.spec.ts` uses `openSpace`.
+  - **Add all the shared helpers now:** `openSpace(name)`, `spaceButton(name)`, `openSettings()`, `openInfoPanel(tab)`, and `serviceClient()`.
+    - `serviceClient()` uses the local service-role key. `global-setup` reads it with `npx --yes supabase@2 status -o env` **every run, even with `E2E_SKIP_RESET=1`**, and writes it to the gitignored `e2e/.auth/env.json`.
+  - Add a **`restore` helper** for state-changing specs, run in `afterEach`/`finally` through `serviceClient`:
+    - reset Alice's and Bea's PINs to the seed values
+    - reset the lake password to `test-lake-password`
+    - set every seed session's visibility back to the seed state
+
+    `global-setup` resets the database only once per run, and `webkit-iphone` runs after `chromium-desktop` (with CI retries), so each spec must leave the seed state as it found it.
 - [ ] Run `npm run db:reset && npm run e2e`. All 18 existing tests pass again, which is the regression gate for the rewire. `tsc -b`, `lint` and `npm test` are green.
 - [ ] Commit: `Move the app onto conversations and spaces with one private realtime channel`
 
@@ -1289,7 +1434,7 @@ export function sendLake(): void
   - `EepMode`'s `verify` becomes `verifyPin`.
   - In `UserSettings`, `verifyCurrentPin` becomes `verifyPin`, and the set flows call `setPin`/`clearPinRemote`.
   - The "has a PIN" checks use `pinLength !== null` instead of `pinCode`.
-- [ ] **e2e:** add a test where Alice sets a **5-digit** PIN in Settings, backgrounds the app, and unlocks with it. Restore `1234` at the end, or rely on the per-run DB reset; the suite resets in global setup.
+- [ ] **e2e:** add a test where Alice sets a **5-digit** PIN in Settings, backgrounds the app, and unlocks with it. It restores `1234` in `finally` via the `restore` helper. Run `npx playwright test e2e/pin-lock.spec.ts` on both projects.
 - [ ] Commit: `Verify and set the PIN on the server`
 
 ### Task 14: Settings: Fill the Lake, lake password, read receipts
@@ -1305,7 +1450,7 @@ export function sendLake(): void
     - It is disabled while the new password is blank.
   - **Read receipts:** a switch labelled "Read receipts", with the help text "If you turn this off, you won't see when others have read your messages either."
     - It updates `profiles.read_receipts` for my row, optimistically, and reverts on error.
-- [ ] **e2e:** add `e2e/lake.spec.ts` (written here, run in Task 17).
+- [ ] **e2e:** write and run `e2e/lake.spec.ts` (the cases are listed under Task 17), using the `restore` helper in `afterEach`.
 - [ ] Commit: `Add Fill the Lake, lake password and read receipts settings`
 
 ### Task 15: shared statuses
@@ -1326,8 +1471,10 @@ export function sendLake(): void
   3. **Status message:** a text input, max 128 characters. The emoji input is removed.
 
   **Save** writes `{ status: presence, status_id, custom_status_text }`. It no longer writes `custom_status_emoji`.
-- [ ] **Display.** Wherever a profile's custom status was shown (grep for `custom_status_text` and the old helpers in `UserPanel`, `MemberList`, `UserProfile`, `UserProfileFull`), show the definition's label in its colour as plain coloured text plus the message. The pill design is deferred. The presence dot uses `presenceOf`.
-- [ ] **e2e:** add `e2e/statuses.spec.ts` (written here, run in Task 17).
+- [ ] **Display.** Wherever a profile's custom status was shown (grep for `custom_status_text`, `custom_status_emoji` and the old helpers in `UserPanel`, `MemberList`, `MessageItem`, `UserProfile`, `UserProfileFull`), show the definition's label in its colour as plain coloured text plus the message. The pill design is deferred. The presence dot uses `presenceOf`.
+- [ ] **Presence payload.** Remove `custom_status_emoji` from `PresenceUser`, the `track` payload, and the `initPresence`/`updatePresence` signatures (`presenceStore.ts`, `usePresence.ts`). Custom status display reads only `profile.status_id`, which `MemberList` already keeps live through `postgres_changes` on profiles.
+- [ ] **`MemberList` grouping.** The `ALERT_STATUSES` group (members with a legacy alert value in `status`) becomes "members with a custom status (`status_id` set)", grouped under each status's label. Members without one are grouped by presence, as today.
+- [ ] **e2e:** write and run `e2e/statuses.spec.ts` (the cases are listed under Task 17). Delete any created statuses in `afterEach`.
 - [ ] Commit: `Use shared coloured statuses and a text-only status message`
 
 ### Task 16: media gallery filters
@@ -1352,22 +1499,22 @@ export function sendLake(): void
   - **Links** are a list: host plus the full URL, opening in a new tab with `rel="noopener noreferrer"`.
   - **Voice** shows the empty state "No voice memos yet".
   - **Load more** is either a sentinel `IntersectionObserver` or a "Load more" button. Use the button if the observer complicates tests.
-- [ ] **e2e:** add `e2e/media.spec.ts` (written here, run in Task 17).
+- [ ] **e2e:** write and run `e2e/media.spec.ts` (the cases are listed under Task 17), with `restore` in `afterEach`.
 - [ ] Commit: `Filter the media gallery by type, extension and space`
 
 ### Task 17: two-user e2e specs
 
 **Files:** `e2e/spaces.spec.ts`, `e2e/lake.spec.ts`, `e2e/statuses.spec.ts`, `e2e/media.spec.ts`, `e2e/compat.spec.ts`, and helpers in `e2e/fixtures.ts`
 
-Add these helpers: `ChatUser.openSpace(name)`, `spaceButton(name)` (visible-filtered), `openSettings()`, `openInfoPanel('media')`, and `serviceClient()` (supabase-js with the local **service role** key, read from `npx supabase status -o env` in global setup and written to `e2e/.auth/env.json`, so it is never committed).
+The helpers already exist from Task 12. `lake`, `statuses` and `media` were written in Tasks 14–16; this task adds `spaces` and `compat` and runs everything repeatedly.
 
 - [ ] **`spaces.spec.ts`:**
   - Alice sends in Schist while Bea sits in Main. Bea's Schist button gets `data-unread="true"` within 5 s, and the message doesn't appear in Bea's Main.
   - Bea opens Schist, the message is visible, and `data-unread` becomes `false`.
   - **Cross-device:** Bea's `secondDevice` (a second context, same storage state) sees Schist go from unread to read within 5 s, without reloading.
-  - Typing in Schist shows "Alice is typing" only in Bea's Schist, not in Main.
+  - **Typing isolation:** Alice types in Schist. Bea (sitting in Schist) sees "Alice is typing", while Bea's `secondDevice` (sitting in Main) does not. Assert both within the 5 s expiry window.
 - [ ] **`lake.spec.ts`:**
-  - Alice drags. Bea's Main and Schist both clear live, Bea's unsent draft survives, and a new message from Bea after the drag is visible to both.
+  - Alice drags. Bea (in Main) and Bea's `secondDevice` (in Schist) both clear live. Bea's unsent draft survives, and a new message from Bea after the drag is visible to both.
   - Alice opens Settings and fills with `wrong`, which shows "Wrong password.", and nothing returns for Bea.
   - Filling with `LAKE_PASSWORD` shows "Lake filled." and Bea sees `Seed: from the lake` within 5 s.
   - Changing the lake password: current and new, then fill with the old password fails and the new one works. The global reset restores the seed for later runs.
@@ -1392,6 +1539,7 @@ Add these helpers: `ChatUser.openSpace(name)`, `spaceButton(name)` (visible-filt
 
 - [ ] **CI:**
   - `on.push.branches: [main]` (stops the duplicate runs on PR branches); `pull_request` is unchanged.
+  - Raise the `e2e` job's `timeout-minutes` from 20 to 30.
   - In the `e2e` job, after `db:start`: `npm run test:db`, then `npm run test:migration`. The migration test ends with a reset, which re-applies the seed, so `E2E_SKIP_RESET=1` stays valid.
 - [ ] **`SETUP.md`:** add `test:db` and `test:migration` to the Testing table. The seeded accounts are now Alice, Bea and **Cleo (not a member)**, with lake password `test-lake-password`.
 - [ ] **`docs/testing/release-rehearsal.md`.** The user runs this before the eventual production release, after sub-project 3:
@@ -1414,6 +1562,7 @@ Add these helpers: `ChatUser.openSpace(name)`, `spaceButton(name)` (visible-filt
 - **Plain-text `lock_pin`** stays readable by members until contract, because old apps check it locally. The hash path is the only one the new app uses.
 - **`lock_pin_length`** is visible to other members, which reveals PIN length only. Accepted.
 - **Reaction delete events under RLS** carry only the primary key, so `MessageItem`'s filtered DELETE subscription can miss them. Reactions are redesigned in sub-project 3. This is noted in the roadmap.
+- **A cached old app doesn't receive live messages from the new app.** It only listens on public `channel:<id>` broadcasts, which nothing sends to any more. It sees new messages when it refetches (reload, rejoin, channel switch). This isn't a regression: production's old app never sent those broadcasts, which was the live-delivery bug fixed in sub-project 1. It also only matters during the release window. Deliberately not bridged.
 - **There is no attempt limit** on `verify_pin`/`fill_the_lake`. With two users and bcrypt, this is accepted; it can be revisited.
 
 ## Testing summary
