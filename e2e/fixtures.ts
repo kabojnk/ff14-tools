@@ -56,6 +56,15 @@ export class ChatUser {
     await settings.first().click()
   }
 
+  /** Opens User Settings on the Security tab (desktop) or screen (mobile: gear → Security). */
+  async openSecurity() {
+    await this.openSettings()
+    const gear = this.page.getByTitle('Settings', { exact: true }).filter({ visible: true })
+    if ((await gear.count()) > 0) await gear.first().click()
+    await this.page.getByRole('button', { name: 'Security', exact: true }).filter({ visible: true }).first().click()
+    await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
+  }
+
   /** Opens the info panel of the current space on a tab. */
   async openInfoPanel(tab: InfoTabName) {
     const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }

@@ -9,7 +9,7 @@ interface EepModeProps {
 }
 
 export function EepMode({ onLoginClick }: EepModeProps) {
-  const { setEepMode, eepPassphrase, pinCode, pinLength, pinLocked, unlockPin, clearPin } = useUiStore()
+  const { setEepMode, eepPassphrase, pinLength, pinLocked, unlockPin, clearPin, verifyPin } = useUiStore()
   const { user, signOut } = useAuthStore()
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
@@ -36,7 +36,6 @@ export function EepMode({ onLoginClick }: EepModeProps) {
     setCustomRaid('')
   }
 
-  const verifyPin = async (pin: string) => pin === pinCode
 
   const handlePinSuccess = () => {
     if (pinLocked) unlockPin()
@@ -148,7 +147,7 @@ export function EepMode({ onLoginClick }: EepModeProps) {
       >
         <div className="flex items-end gap-3">
           {/* PIN unlock button — only shown if a PIN is configured */}
-          {pinCode && (
+          {pinLength !== null && (
             <button
               onClick={() => setShowPinPad(true)}
               className="mb-0.5 h-9 w-9 flex-shrink-0 rounded-full"
