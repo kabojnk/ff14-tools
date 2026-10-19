@@ -28,7 +28,9 @@ The user approved these private claude.ai pages:
 | Formatting | **Discord markdown**: simple-markdown with Discord's rules, plus highlight.js |
 | Profile editor | One sheet: banner, avatar, nickname, plain-text status message, Online/Away/Invisible, and the shared custom-status list with inline edit and a swatch palette |
 | Media gallery | Kind chips (All, Photos, Videos, GIFs, Files, Links, Voice), an extension box, a This space/Both toggle, and grouping by month |
-| iOS | **Capacitor wrapper + TestFlight internal testing** (`2026-10-19-ios-native-research.md`), built after 3a |
+| iOS | **Capacitor wrapper + TestFlight internal testing** (`2026-10-19-ios-native-research.md`), built after 3a. The app must be treated as **sensitive in the app switcher**, the way banking apps are (see "iOS app requirements") |
+| Phone launch with a PIN | **Opens on the FF14 screen, locked.** Added by the user after reviewing the spec |
+| Spoiler media | **Discord-style spoiler photos and videos**, plus something Discord doesn't allow: **marking or unmarking media as a spoiler after it's posted** |
 
 The FF14 disguise (Eep mode, the passphrase, the PIN lock flow and the PIN pad) is **unchanged** in look and behaviour. The new Eep! button only triggers it.
 
@@ -70,6 +72,8 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
 ## 2. Layout
 
 - **Breakpoint.** The desktop layout applies when `(min-width: 900px) and (hover: hover) and (pointer: fine)`. A landscape iPhone (852 px, coarse pointer) therefore stays in the mobile layout, which fixes the issue flagged in sub-project 1. `useMediaQuery` already supports this; only the query changes. Drafts already survive a layout switch.
+- **Phone launch with a PIN set.** Every cold launch, and every page reload, of the phone layout (coarse pointer) when the user has a PIN opens on the **FF14 screen with the PIN lock armed**: `eepMode = true` and `pinLocked = true` before anything renders. No chat is ever painted first. This doesn't depend on whether the last session ended unlocked. The desktop layout keeps today's behaviour. Without a PIN, phones open as described below.
+  - The PIN length is known only after the profile loads, so until then the app shows the FF14 screen (never the chat) whenever the device has previously had a PIN. A per-device `hasPin` flag in localStorage, kept in step whenever the PIN is set or cleared, covers that. A freshly logged-in phone with no flag opens normally.
 - **Phone.** With one conversation, the app opens **straight into the chat** (header → tabs → messages → composer). A back chevron in the header leads to a simple conversation list, which today holds one row (Bea) and later holds more. With more than one conversation, the app opens on the list.
 - **Desktop.** A left column (240 px):
   - your avatar, name and presence, plus a settings gear
@@ -111,10 +115,24 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
   - **Images and video:** rounded to the bubble, with the time overlaid on a scrim. A run of several images forms a grid of up to 4 with "+N".
   - **GIFs:** autoplay muted, honouring reduced motion.
   - **Files:** a file row (icon with an extension badge, name, size).
-  - **Spoilers:** blurred until tapped.
+  - **Spoilers:** see section 4a.
 - **Links.** Links are shown as underlined, clickable text. No previews are fetched, consistent with sub-project 2.
 - **Deleted messages** disappear, as today.
 - **System messages** (for example "Bea dragged the lake") show as date-chip-style centred notes.
+
+## 4a. Spoiler photos and videos
+
+- **Display (Discord-style).** A spoiler image, GIF or video shows heavily blurred and darkened, with a centred "SPOILER" label. Video doesn't autoplay. Tapping reveals it for that viewer only; the reveal isn't stored and resets when the message re-renders after a reload. The full-screen viewer and the media gallery respect the flag: gallery thumbnails stay blurred with a small spoiler badge until revealed.
+- **Before sending.** Each pending attachment thumbnail above the composer has a **spoiler toggle** (an eye-off icon). It sets `attachment.spoiler = true`.
+- **After posting.** Discord doesn't allow this. Long-press (phone) or the ⋯ menu (desktop) on a photo or video gives **"Mark as spoiler"** or **"Remove spoiler"**. In a multi-image message it applies to the item that was pressed. **Either member** can do this on **any** message's media, so the partner can also hide something sensitive. The change shows up live for both of you.
+- **Data (small schema addition, 3a):**
+  - A new RPC `set_attachment_spoiler(p_message uuid, p_index int, p_spoiler boolean)`.
+    - It's `security definer` with an empty `search_path`, checks membership and the index, and updates `messages.attachments[p_index].spoiler` with `jsonb_set`.
+    - It doesn't touch `edited_at`, because marking a spoiler isn't an edit, and it doesn't touch content.
+  - It's needed because RLS lets only the author update a message.
+  - `message_media` gains `spoiler boolean not null default false`, filled by `rebuild_message_media` from the attachment, so the gallery can blur spoilers without loading messages.
+  - Both changes are additive, with pgTAP tests: a member can set it; a non-member gets `42501`; an out-of-range index is rejected; content and `edited_at` don't change; the media row is rebuilt.
+- **Realtime.** The `messages` UPDATE goes out through the existing `postgres_changes` safety net as an `edit`, and the bubble re-renders blurred. A viewer who had already revealed that item sees it blurred again, which is the safe default.
 
 ## 5. Reactions
 
@@ -211,6 +229,14 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
     - **About:** version.
   - Log out lives under Security, as today.
 
+## iOS app requirements (for the iOS spec, recorded here so they aren't lost)
+
+- **Sensitive in the app switcher, like banking apps.** Whenever the app stops being active (app-switcher swipe, home gesture, Control Center, Notification Center, an incoming call, Siri, or the lock button), it shows a cover **before iOS takes its snapshot**. The switcher card never shows chat content.
+  - Use `@capacitor/privacy-screen` (native overlay on `willResignActive`) with the **FF14 picker screen as the cover image**, so the switcher card shows the disguise rather than a blur. A blur is the fallback if the image route fails on a device.
+  - Coming back to the app removes the cover only once the app is active. The JS layer has already armed Eep mode and the PIN lock (existing behaviour), so the user lands on the FF14 screen.
+  - **Screen recording and mirroring:** while iOS reports the screen as captured (`UIScreen.isCaptured`), show the cover too. Screenshots can't be blocked on iOS, so none of this claims otherwise.
+  - Acceptance: tested on a device for each trigger above, in light and dark system appearance. Added to the iPhone checklist.
+
 ## Error handling
 
 - **Failed sends** keep the bubble with a red "!" and **Retry**. The draft isn't lost. A failed upload shows on its thumbnail with Retry and Remove.
@@ -234,6 +260,12 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
   - **Read ticks:** Alice's message shows ✓, then ✓✓ once Bea reads it; it stays ✓ when Bea has receipts off.
   - **Presence:** Bea on two devices; one goes to the background, and Alice still sees Bea online.
   - **Eep!:** the button shows the disguise immediately.
+  - **Phone launch with a PIN:** a reload in the phone layout lands on the FF14 screen, locked; the desktop layout doesn't. A reload with no PIN opens the chat.
+  - **Spoilers:**
+    - Alice sends a photo marked as a spoiler, and Bea sees it blurred until she taps it.
+    - Bea marks one of Alice's earlier photos as a spoiler, and Alice's view blurs it live.
+    - Removing the spoiler unblurs it for both of them.
+    - The gallery thumbnail follows.
   - **New messages:** the divider and jump-to-latest count.
   - **Layout:** landscape iPhone size (852×393, touch) stays in the mobile layout.
   - **Markdown:** a code block renders highlighted and has a copy button.
