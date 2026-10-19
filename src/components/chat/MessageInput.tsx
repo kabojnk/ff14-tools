@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
@@ -18,16 +18,27 @@ interface MessageInputProps {
   onCancelReply?: () => void
 }
 
+// Unsent drafts by channel. They outlive MessageInput, which remounts when the layout crosses the
+// desktop breakpoint (e.g. rotating an iPhone), so a half-typed message isn't lost.
+const drafts = new Map<string, { content: string; attachments: Attachment[] }>()
+
 export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputProps) {
   const { user } = useAuthStore()
   const { getOrCreateSession, dragTheLake } = useChannelStore()
   const { setEepMode } = useUiStore()
   const { sendTyping } = useTyping(channel.id)
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(() => drafts.get(channel.id)?.content ?? '')
   const [showEmoji, setShowEmoji] = useState(false)
   const [showGif, setShowGif] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>([])
+  const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>(
+    () => drafts.get(channel.id)?.attachments ?? [],
+  )
+
+  useEffect(() => {
+    if (content || pendingAttachments.length > 0) drafts.set(channel.id, { content, attachments: pendingAttachments })
+    else drafts.delete(channel.id)
+  }, [channel.id, content, pendingAttachments])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const gifButtonRef = useRef<HTMLButtonElement>(null)
