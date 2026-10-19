@@ -25,6 +25,8 @@ export function useConversationRealtime() {
         if (kind === 'new') {
           store.addMessage(key, m as Message)
           conv().noteMessage(m as Message)
+          // Their message is here, so they've stopped typing (even if the stop broadcast was lost).
+          useTypingStore.getState().stopTyping(m.space, (m as Message).author_id)
         } else if (kind === 'edit') {
           store.updateMessage(key, m as Message)
         } else {
@@ -38,6 +40,9 @@ export function useConversationRealtime() {
       },
       onTyping(space, user) {
         if (user.user_id !== myId) useTypingStore.getState().noteTyping(space, user)
+      },
+      onTypingStop(space, userId) {
+        useTypingStore.getState().stopTyping(space, userId)
       },
       onLake() {
         void conv().reloadAfterLake()

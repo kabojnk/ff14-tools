@@ -38,7 +38,7 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
   const { user } = useAuthStore()
   const dragTheLake = useConversationStore((s) => s.dragTheLake)
   const { setEepMode } = useUiStore()
-  const { sendTyping } = useTyping(space)
+  const { sendTyping, stopTyping } = useTyping(space)
   const draftKey = spaceKey(conversationId, space)
   const [content, setContent] = useState(() => drafts.get(draftKey)?.content ?? '')
   const [showEmoji, setShowEmoji] = useState(false)
@@ -59,6 +59,7 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
   const handleSend = useCallback(async () => {
     const trimmed = content.trim()
     if ((!trimmed && pendingAttachments.length === 0) || !user) return
+    stopTyping()
 
     // Handle slash commands
     if (trimmed.startsWith('/') && pendingAttachments.length === 0) {
@@ -89,7 +90,7 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, pendingAttachments, user, space, dragTheLake, setEepMode, onCancelReply])
+  }, [content, pendingAttachments, user, space, dragTheLake, setEepMode, onCancelReply, stopTyping])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -100,7 +101,9 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value)
-    sendTyping()
+    // Clearing the box counts as stopping; anything else is typing.
+    if (e.target.value.trim()) sendTyping()
+    else stopTyping()
 
     // Auto-resize textarea
     const textarea = textareaRef.current

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { sendTyping as broadcastTyping } from '@/lib/conversationRealtime'
+import { sendTyping as broadcastTyping, sendTypingStop as broadcastTypingStop } from '@/lib/conversationRealtime'
 import { useAuthStore } from '@/stores/authStore'
 import { useTypingStore } from '@/stores/typingStore'
 import type { Space } from '@/types'
@@ -26,8 +26,17 @@ export function useTyping(space: Space) {
     broadcastTyping(space, { user_id: user.id, nickname: profile.nickname })
   }, [user, profile, space])
 
+  /** Message sent, command run or box cleared: tell the others now, and let the next keystroke announce again at once. */
+  const stopTyping = useCallback(() => {
+    const last = lastSentRef.current
+    lastSentRef.current = { space, at: 0 }
+    if (!user || last.at === 0) return
+    broadcastTypingStop(last.space, user.id)
+  }, [user, space])
+
   return {
     typingUsers: typing.filter((t) => t.user_id !== user?.id),
     sendTyping,
+    stopTyping,
   }
 }

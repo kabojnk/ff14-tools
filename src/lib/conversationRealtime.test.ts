@@ -69,7 +69,7 @@ function fakeClient() {
 }
 
 function handlers(): ConversationHandlers & { [K in keyof ConversationHandlers]: ReturnType<typeof vi.fn> } {
-  return { onMessage: vi.fn(), onTyping: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onStatus: vi.fn() }
+  return { onMessage: vi.fn(), onTyping: vi.fn(), onTypingStop: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onStatus: vi.fn() }
 }
 
 describe('conversationRealtime', () => {
@@ -189,6 +189,20 @@ describe('conversationRealtime', () => {
     leave()
     rt.sendLake()
     expect(created[0].sent).toHaveLength(3)
+  })
+
+  it('relays typing stops both ways', () => {
+    const { client, created } = fakeClient()
+    const rt = createConversationRealtime(client)
+    const h = handlers()
+    rt.joinConversation('c1', h)
+    created[0].emitBroadcast('typing_stop', { space: 'schist', user_id: 'u2' })
+    expect(h.onTypingStop).toHaveBeenCalledWith('schist', 'u2')
+
+    rt.sendTypingStop('main', 'u1')
+    expect(created[0].sent).toEqual([
+      { type: 'broadcast', event: 'typing_stop', payload: { space: 'main', user_id: 'u1' } },
+    ])
   })
 
   it('leaveConversation (sign-out) removes the channel', () => {

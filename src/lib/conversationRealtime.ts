@@ -10,6 +10,7 @@ export type MessageRef = { id: string; space: Space; created_at?: string }
 export interface ConversationHandlers {
   onMessage(m: Message | MessageRef, kind: MessageEventKind): void
   onTyping(space: Space, user: { user_id: string; nickname: string }): void
+  onTypingStop(space: Space, userId: string): void
   onLake(): void
   onReadPosition(rp: ReadPosition): void
   onStatus(s: RealtimeStatus, rejoined: boolean): void
@@ -79,6 +80,11 @@ export function createConversationRealtime(client: RealtimeClientLike) {
         const { space, user_id, nickname } = payload as { space: Space; user_id: string; nickname: string }
         handlers.onTyping(space, { user_id, nickname })
       })
+      .on('broadcast', { event: 'typing_stop' }, ({ payload }) => {
+        if (!live()) return
+        const { space, user_id } = payload as { space: Space; user_id: string }
+        handlers.onTypingStop(space, user_id)
+      })
       .on('broadcast', { event: 'lake' }, () => {
         if (live()) lake()
       })
@@ -137,6 +143,7 @@ export function createConversationRealtime(client: RealtimeClientLike) {
     leaveConversation: () => current?.leave(),
     sendMessageEvent: (kind: MessageEventKind, m: Message | MessageRef) => send('message', { kind, message: m }),
     sendTyping: (space: Space, user: { user_id: string; nickname: string }) => send('typing', { space, ...user }),
+    sendTypingStop: (space: Space, userId: string) => send('typing_stop', { space, user_id: userId }),
     sendLake: () => send('lake', {}),
   }
 }
@@ -150,4 +157,4 @@ const realtime = createConversationRealtime({
   },
 })
 
-export const { joinConversation, leaveConversation, sendMessageEvent, sendTyping, sendLake } = realtime
+export const { joinConversation, leaveConversation, sendMessageEvent, sendTyping, sendTypingStop, sendLake } = realtime

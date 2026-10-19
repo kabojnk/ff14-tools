@@ -13,6 +13,8 @@ export interface TypingEntry {
 interface TypingState {
   typing: Record<Space, TypingEntry[]>
   noteTyping: (space: Space, user: { user_id: string; nickname: string }, at?: number) => void
+  /** They sent their message (or cleared the box): hide the indicator until they type again. */
+  stopTyping: (space: Space, userId: string) => void
   prune: (now: number) => void
   clear: () => void
 }
@@ -29,6 +31,13 @@ export const useTypingStore = create<TypingState>((set) => ({
         [space]: [...state.typing[space].filter((t) => t.user_id !== user.user_id), { user_id: user.user_id, nickname: user.nickname, at }],
       },
     })),
+
+  stopTyping: (space, userId) =>
+    set((state) =>
+      state.typing[space].some((t) => t.user_id === userId)
+        ? { typing: { ...state.typing, [space]: state.typing[space].filter((t) => t.user_id !== userId) } }
+        : state,
+    ),
 
   prune: (now) =>
     set((state) => {

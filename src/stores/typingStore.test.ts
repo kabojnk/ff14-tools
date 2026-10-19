@@ -32,4 +32,21 @@ describe('typingStore', () => {
     useTypingStore.getState().prune(1001)
     expect(useTypingStore.getState().typing).toBe(before)
   })
+
+  it('stopTyping removes one user from one space only', () => {
+    const { noteTyping } = useTypingStore.getState()
+    noteTyping('main', { user_id: 'bea', nickname: 'Bea' }, 1000)
+    noteTyping('main', { user_id: 'cleo', nickname: 'Cleo' }, 1000)
+    noteTyping('schist', { user_id: 'bea', nickname: 'Bea' }, 1000)
+    useTypingStore.getState().stopTyping('main', 'bea')
+    const { typing } = useTypingStore.getState()
+    expect(typing.main.map((t) => t.user_id)).toEqual(['cleo'])
+    expect(typing.schist.map((t) => t.user_id)).toEqual(['bea'])
+  })
+
+  it('stopTyping keeps the same state object when the user was not typing', () => {
+    const before = useTypingStore.getState().typing
+    useTypingStore.getState().stopTyping('main', 'bea')
+    expect(useTypingStore.getState().typing).toBe(before)
+  })
 })
