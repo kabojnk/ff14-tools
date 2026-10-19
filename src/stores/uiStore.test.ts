@@ -77,10 +77,45 @@ describe('uiStore PIN', () => {
     expect(useUiStore.getState().pinLength).toBeNull()
   })
 
+  it('loadPin with a PIN marks this device as having one', async () => {
+    mockSingle.mockResolvedValue({ data: { lock_pin_length: 6 }, error: null })
+    await useUiStore.getState().loadPin('user-1')
+    expect(localStorage.getItem('hasPin')).toBe('1')
+  })
+
+  it('loadPin with no PIN forgets the device flag and disarms a launch lock', async () => {
+    localStorage.setItem('hasPin', '1')
+    useUiStore.setState({ eepMode: true, pinLocked: true })
+    mockSingle.mockResolvedValue({ data: { lock_pin_length: null }, error: null })
+    await useUiStore.getState().loadPin('user-1')
+    expect(localStorage.getItem('hasPin')).toBeNull()
+    // Still disguised: the passphrase brings the chat back.
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: false, pinLength: null })
+  })
+
+  it('a failed loadPin leaves the device flag and the launch lock alone (fails closed)', async () => {
+    localStorage.setItem('hasPin', '1')
+    useUiStore.setState({ eepMode: true, pinLocked: true })
+    mockSingle.mockResolvedValue({ data: null, error: { message: 'Failed to fetch' } })
+    await useUiStore.getState().loadPin('user-1')
+    expect(localStorage.getItem('hasPin')).toBe('1')
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: true })
+  })
+
+  it('a rejected loadPin leaves the device flag and the launch lock alone', async () => {
+    localStorage.setItem('hasPin', '1')
+    useUiStore.setState({ pinLocked: true })
+    mockSingle.mockRejectedValue(new TypeError('Failed to fetch'))
+    await useUiStore.getState().loadPin('user-1')
+    expect(localStorage.getItem('hasPin')).toBe('1')
+    expect(useUiStore.getState().pinLocked).toBe(true)
+  })
+
   it('setPin calls set_pin and stores the new length', async () => {
     await useUiStore.getState().setPin('12345')
     expect(mockRpc).toHaveBeenCalledWith('set_pin', { p_pin: '12345' })
     expect(useUiStore.getState().pinLength).toBe(5)
+    expect(localStorage.getItem('hasPin')).toBe('1')
   })
 
   it('setPin rejects and keeps the old length when the RPC fails', async () => {
@@ -90,18 +125,28 @@ describe('uiStore PIN', () => {
     expect(useUiStore.getState().pinLength).toBe(4)
   })
 
+  it('setPin leaves the device flag alone when the RPC fails', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
+    await expect(useUiStore.getState().setPin('999999')).rejects.toThrow()
+    expect(localStorage.getItem('hasPin')).toBeNull()
+  })
+
   it('clearPinRemote calls clear_pin and forgets the length', async () => {
+    localStorage.setItem('hasPin', '1')
     useUiStore.setState({ pinLength: 4 })
     await useUiStore.getState().clearPinRemote()
     expect(mockRpc).toHaveBeenCalledWith('clear_pin')
     expect(useUiStore.getState().pinLength).toBeNull()
+    expect(localStorage.getItem('hasPin')).toBeNull()
   })
 
   it('clearPinRemote rejects and keeps the length when the RPC fails', async () => {
+    localStorage.setItem('hasPin', '1')
     useUiStore.setState({ pinLength: 4 })
     mockRpc.mockResolvedValue({ data: null, error: { message: 'offline' } })
     await expect(useUiStore.getState().clearPinRemote()).rejects.toThrow('offline')
     expect(useUiStore.getState().pinLength).toBe(4)
+    expect(localStorage.getItem('hasPin')).toBe('1')
   })
 
   it('verifyPin returns the RPC result', async () => {
@@ -178,5 +223,60 @@ describe('uiStore theme', () => {
     vi.stubGlobal('matchMedia', undefined)
     const { useUiStore: store } = await import('@/stores/uiStore')
     expect(store.getState().theme).toBe('dark')
+  })
+})
+
+describe('uiStore launch state', () => {
+  // Computed when the module loads (before React renders), so each case loads a fresh copy.
+  async function launch({ coarse, hasPin, eepSession = false }: { coarse: boolean; hasPin: boolean; eepSession?: boolean }) {
+    vi.resetModules()
+    if (hasPin) localStorage.setItem('hasPin', '1')
+    if (eepSession) sessionStorage.setItem('eepMode', 'true')
+    vi.stubGlobal('matchMedia', vi.fn((q: string) => ({ matches: q === '(pointer: coarse)' && coarse })))
+    const mod = await import('@/stores/uiStore')
+    return mod.useUiStore.getState()
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    document.title = ''
+  })
+
+  it('a phone with a PIN opens disguised and locked', async () => {
+    expect(await launch({ coarse: true, hasPin: true })).toMatchObject({ eepMode: true, pinLocked: true })
+    expect(document.title).toBe('FF14 Random Content Picker')
+  })
+
+  it('a phone without a PIN opens the chat', async () => {
+    expect(await launch({ coarse: true, hasPin: false })).toMatchObject({ eepMode: false, pinLocked: false })
+  })
+
+  it('a desktop with a PIN keeps today’s behaviour (opens the chat)', async () => {
+    expect(await launch({ coarse: false, hasPin: true })).toMatchObject({ eepMode: false, pinLocked: false })
+  })
+
+  it('a desktop without a PIN opens the chat', async () => {
+    expect(await launch({ coarse: false, hasPin: false })).toMatchObject({ eepMode: false, pinLocked: false })
+  })
+
+  it('eep mode from this tab still applies, without locking', async () => {
+    expect(await launch({ coarse: false, hasPin: true, eepSession: true })).toMatchObject({ eepMode: true, pinLocked: false })
+  })
+
+  it('only the exact flag counts', async () => {
+    vi.resetModules()
+    localStorage.setItem('hasPin', 'true')
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
+    const { useUiStore: store } = await import('@/stores/uiStore')
+    expect(store.getState().pinLocked).toBe(false)
+  })
+
+  it('survives storage throwing and a missing matchMedia', async () => {
+    vi.resetModules()
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+    vi.stubGlobal('matchMedia', undefined)
+    const { useUiStore: store } = await import('@/stores/uiStore')
+    expect(store.getState()).toMatchObject({ eepMode: false, pinLocked: false })
+    vi.restoreAllMocks()
   })
 })

@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type TestInfo, type Browser } from '@playwright/test'
+import { test as base, expect, type Page, type TestInfo, type Browser, type BrowserContextOptions } from '@playwright/test'
 import { EEP_HEADING, USERS, type SeedUser, type UserKey } from './users'
 import { stubExternalServices } from './stubs'
 
@@ -23,34 +23,66 @@ export class ChatUser {
     return this.page.getByTestId('pin-dots')
   }
 
+  /** A message in the open space's list (not its preview in the conversation list). */
   message(text: string) {
-    return this.page.getByText(text, { exact: true })
+    return this.page.locator('[data-realtime]').getByText(text, { exact: true })
   }
 
-  /** The Main or Schist entry in the space list (sidebar on desktop, the Spaces screen on mobile). */
+  /** The Main or Schist entry in the space list (for now inside the chat column, on both layouts). */
   spaceButton(name: SpaceName) {
     return this.page.locator(`[data-space="${name.toLowerCase()}"]`).filter({ visible: true }).first()
+  }
+
+  /** The conversation's row in the conversation list (desktop left column; the phone list screen). */
+  get conversationRow() {
+    return this.page.locator('[data-conversation]').filter({ visible: true }).first()
+  }
+
+  /** Your own row: the desktop left column's top, or the phone list screen's top bar. */
+  get meRow() {
+    return this.page.locator('[data-me-row]').filter({ visible: true }).first()
+  }
+
+  /** Waits for the app to settle on the chat or the disguise; if it's the disguise, unlocks it with the PIN. */
+  async unlockIfLocked() {
+    await expect(this.page.locator('[data-app-shell]').filter({ visible: true }).or(this.eepHeading).first()).toBeVisible()
+    if (!(await this.eepHeading.isVisible())) return
+    await this.openPinPad()
+    await this.tapPin(this.user.pin)
+    await expect(this.eepHeading).toBeHidden()
   }
 
   /** Loads the app and opens a space (Main by default), waiting for the realtime channel to join. */
   async openChat(space: SpaceName = 'Main') {
     await this.page.goto('/')
+    await this.unlockIfLocked()
     await this.openSpace(space)
   }
 
-  /** Switches to a space without reloading. On mobile it goes back to the Spaces screen first. */
+  /** Phones: from the conversation list into the chat. A no-op when the chat is already showing. */
+  async showChat() {
+    if ((await this.page.locator('[data-layout="phone"]').count()) === 0) return
+    if ((await this.conversationRow.count()) > 0) await this.conversationRow.click()
+  }
+
+  /** Phones: back from the chat to the conversation list. A no-op on desktop (the left column). */
+  async showList() {
+    const back = this.page.getByRole('button', { name: 'Back to chats' }).filter({ visible: true })
+    if ((await back.count()) > 0) await back.first().click()
+    await expect(this.meRow).toBeVisible()
+  }
+
+  /** Switches to a space without reloading (on phones, from the list screen back into the chat first). */
   async openSpace(name: SpaceName) {
-    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
-    if (!(await this.spaceButton(name).isVisible()) && (await back.count()) > 0) await back.first().click()
+    if (!(await this.spaceButton(name).isVisible())) await this.showChat()
     await this.spaceButton(name).click()
     await expect(this.page.getByPlaceholder(`Message #${name}`)).toBeVisible()
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
   }
 
-  /** Makes the space list visible: a no-op on desktop (the sidebar); on mobile, back to the Spaces screen. */
+  /** Makes the space list visible (it sits in the chat column until Task 7's tabs). */
   async showSpaces() {
-    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
-    if (!(await this.spaceButton('Main').isVisible()) && (await back.count()) > 0) await back.first().click()
+    if (!(await this.spaceButton('Main').isVisible())) await this.showChat()
     await expect(this.spaceButton('Main')).toBeVisible()
   }
 
@@ -59,13 +91,10 @@ export class ChatUser {
     return this.page.getByText(`${nickname} is typing`, { exact: true }).filter({ visible: true })
   }
 
-  /** Opens User Settings from the user panel (on mobile, from the Spaces screen). */
+  /** Opens User Settings from your row (on phones, the list screen's top bar). */
   async openSettings() {
-    const settings = this.page.getByTitle('User settings').filter({ visible: true })
-    if ((await settings.count()) === 0) {
-      await this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true }).first().click()
-    }
-    await settings.first().click()
+    await this.showList()
+    await this.meRow.getByTitle('User settings').click()
   }
 
   /** Opens User Settings on the Security tab (desktop) or screen (mobile: gear → Security). */
@@ -77,39 +106,25 @@ export class ChatUser {
     await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
   }
 
-  /** Opens the info panel of the current space on a tab. */
+  /** Opens the info panel of the current space on a tab (desktop: the right slide-over; phones: full screen). */
   async openInfoPanel(tab: InfoTabName) {
     const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }
+    await this.showChat()
     const direct = this.page.getByTitle(titles[tab], { exact: true }).filter({ visible: true })
     if ((await direct.count()) > 0) {
       await direct.first().click()
     } else {
-      // Mobile: tapping the space name opens the panel; then pick the tab.
+      // Phone: tapping the space name opens the panel; then pick the tab.
       await this.page.locator('h3').filter({ visible: true }).first().click()
       await this.page.getByRole('button', { name: tab, exact: true }).filter({ visible: true }).first().click()
     }
     await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
   }
 
-  /** The member list row for a person (the right panel on desktop, the Members screen on mobile). */
-  member(nickname: string) {
-    return this.page.locator(`[data-member="${nickname}"]`).filter({ visible: true }).first()
-  }
-
-  /** Shows the member list: always open on desktop; the Members tab on mobile. */
-  async openMembers() {
-    if ((await this.page.locator('[data-member]').filter({ visible: true }).count()) > 0) return
-    await this.page.getByRole('button', { name: 'Members', exact: true }).filter({ visible: true }).first().click()
-    await expect(this.page.locator('[data-member]').filter({ visible: true }).first()).toBeVisible()
-  }
-
-  /** Opens the status picker from the user panel (on mobile, from the Spaces screen). */
+  /** Opens the status picker from your avatar (on phones, on the list screen). */
   async openStatusPicker() {
-    const button = this.page.getByTitle('Set status').filter({ visible: true })
-    if ((await button.count()) === 0) {
-      await this.page.getByRole('button', { name: 'Spaces', exact: true }).filter({ visible: true }).first().click()
-    }
-    await button.first().click()
+    await this.showList()
+    await this.meRow.getByTitle('Set status').click()
     await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
   }
 
@@ -140,8 +155,14 @@ export class ChatUser {
     await this.page.getByRole('button', { name: 'Add' }).click()
   }
 
+  /**
+   * Opens the PIN pad from the disguise. A locked launch shows it by itself once the PIN length loads,
+   * in the same render as the Unlock button, so wait for either before deciding.
+   */
   async openPinPad() {
-    await this.page.getByRole('button', { name: 'Unlock' }).click()
+    const unlock = this.page.getByRole('button', { name: 'Unlock' })
+    await expect(this.pinDots.or(unlock).first()).toBeVisible()
+    if (!(await this.pinDots.isVisible())) await unlock.click()
     await expect(this.pinDots).toBeVisible()
   }
 
@@ -182,7 +203,8 @@ export class ChatUser {
   }
 }
 
-async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
+/** A signed-in device (context) for a seeded user, like the project's devices unless `overrides` say otherwise. */
+export async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey, overrides: BrowserContextOptions = {}) {
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL } = testInfo.project.use
   const context = await browser.newContext({
     viewport,
@@ -192,6 +214,7 @@ async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
     hasTouch,
     baseURL,
     storageState: USERS[key].storageState,
+    ...overrides,
   })
   await stubExternalServices(context)
   const page = await context.newPage()

@@ -192,7 +192,12 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
 
   return (
     <div
-      className="relative flex-shrink-0 px-5 pb-6"
+      className="relative flex-shrink-0"
+      style={{
+        paddingLeft: 'max(1.25rem, env(safe-area-inset-left))',
+        paddingRight: 'max(1.25rem, env(safe-area-inset-right))',
+        paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))',
+      }}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >

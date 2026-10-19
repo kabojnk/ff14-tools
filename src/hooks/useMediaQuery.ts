@@ -1,5 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
 
+/**
+ * The desktop layout: wide, with a mouse. A landscape iPhone (852 px, coarse pointer) and any
+ * touch-first screen stay in the phone layout.
+ */
+export const DESKTOP_QUERY = '(min-width: 900px) and (hover: hover) and (pointer: fine)'
+
 function getMatch(query: string) {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia(query).matches

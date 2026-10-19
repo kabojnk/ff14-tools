@@ -24,7 +24,7 @@ function AuthenticatedApp() {
   return (
     <>
       {eepMode && <EepMode />}
-      {/* Keep AppShell mounted so MemberList data, mobileView, and scroll state survive eep transitions */}
+      {/* Keep AppShell mounted so the phone view and scroll state survive eep transitions */}
       <div style={{ display: eepMode ? 'none' : 'flex', height: '100%', flexDirection: 'column', overflow: 'hidden' }}>
         <AppShell />
       </div>

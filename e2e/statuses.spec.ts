@@ -33,11 +33,11 @@ function statusDot(user: ChatUser, label: string) {
 }
 
 test.describe('Shared statuses', () => {
-  test('Bea creates a status and picks it; Alice sees it next to her name', async ({ alice, bea }) => {
+  // The member list is gone (Task 6). Alice seeing it next to Bea's name comes back with the partner card (Task 7).
+  test('Bea creates a status and picks it; it shows on her row and in Alice’s open picker', async ({ alice, bea }) => {
     await alice.openChat()
-    await alice.openMembers()
-    await expect(alice.member('Bea')).toBeVisible()
-    await expect(alice.member('Bea')).not.toContainText('Raiding')
+    await alice.openStatusPicker()
+    await expect(statusRow(alice, 'Raiding')).toHaveCount(0)
 
     await bea.openChat()
     await bea.openStatusPicker()
@@ -51,10 +51,16 @@ test.describe('Shared statuses', () => {
     await bea.page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(bea.page.getByRole('heading', { name: 'Set Status' })).toHaveCount(0)
 
-    const label = alice.member('Bea').locator('[data-status-label]')
-    await expect(label).toHaveText('Raiding', { timeout: 5_000 })
+    const label = bea.meRow.locator('[data-status-label]')
+    await expect(label).toHaveText('Raiding')
     await expect(label).toHaveCSS('color', PINK)
-    await expect(alice.member('Bea')).toContainText('back at 9')
+    await expect(bea.meRow).toContainText('back at 9')
+
+    // The shared status reaches Alice's open picker live.
+    await expect(statusDot(alice, 'Raiding')).toHaveCSS('background-color', PINK, { timeout: 5_000 })
+
+    const { data } = await serviceClient().from('profiles').select('custom_status_text').eq('id', IDS.users.bea).single()
+    expect(data).toEqual({ custom_status_text: 'back at 9' })
   })
 
   test('Alice edits the colour and Bea’s open picker updates live', async ({ alice, bea }) => {
@@ -76,9 +82,9 @@ test.describe('Shared statuses', () => {
   test('Alice deletes it: Bea’s custom status clears and her message stays', async ({ alice, bea }) => {
     await beaIsRaiding('back at 9')
     await bea.openChat()
-    await bea.openMembers()
-    await expect(bea.member('Bea').locator('[data-status-label]')).toHaveText('Raiding')
-    await expect(bea.member('Bea')).toContainText('back at 9')
+    await bea.showList()
+    await expect(bea.meRow.locator('[data-status-label]')).toHaveText('Raiding')
+    await expect(bea.meRow).toContainText('back at 9')
 
     await alice.openChat()
     await alice.openStatusPicker()
@@ -86,8 +92,8 @@ test.describe('Shared statuses', () => {
     await alice.page.getByTitle('Delete Raiding').click()
     await expect(statusRow(alice, 'Raiding')).toHaveCount(0)
 
-    await expect(bea.member('Bea').locator('[data-status-label]')).toHaveCount(0, { timeout: 5_000 })
-    await expect(bea.member('Bea')).toContainText('back at 9')
+    await expect(bea.meRow.locator('[data-status-label]')).toHaveCount(0, { timeout: 5_000 })
+    await expect(bea.meRow).toContainText('back at 9')
 
     const { data } = await serviceClient().from('profiles').select('status_id, custom_status_text').eq('id', IDS.users.bea).single()
     expect(data).toEqual({ status_id: null, custom_status_text: 'back at 9' })

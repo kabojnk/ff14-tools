@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { SPACES } from '@/lib/spaces'
+import { messagePreview } from '@/lib/chat/preview'
 import { useMessageStore } from '@/stores/messageStore'
 import type { Attachment, Conversation, Message, ReadPosition, Session, Space } from '@/types'
 
@@ -14,7 +15,8 @@ export interface OutgoingMessage {
   type: Message['type']
 }
 
-type Latest = { at: string; authorId: string } | null
+/** The newest message of a space: when, who, and a one-line preview for the conversation list. */
+type Latest = { at: string; authorId: string; preview: string } | null
 
 interface ConversationState {
   conversation: Conversation | null
@@ -107,7 +109,7 @@ async function fetchLatest(conversationId: string, space: Space): Promise<Latest
   const { data, error } = await supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: 1 })
   if (error) return undefined // keep what we had
   const m = (data as Message[] | null)?.[0]
-  return m ? { at: m.created_at, authorId: m.author_id } : null
+  return m ? { at: m.created_at, authorId: m.author_id, preview: messagePreview(m) } : null
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -272,7 +274,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { conversation, latest } = get()
     if (!conversation || m.conversation_id !== conversation.id || m.deleted) return
     if (!isNewer(m.created_at, latest[m.space]?.at)) return
-    set({ latest: { ...latest, [m.space]: { at: m.created_at, authorId: m.author_id } } })
+    set({ latest: { ...latest, [m.space]: { at: m.created_at, authorId: m.author_id, preview: messagePreview(m) } } })
   },
 
   applyReadPosition: (rp, myId) => {

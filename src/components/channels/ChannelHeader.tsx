@@ -1,19 +1,19 @@
 import { useState } from 'react'
 import { useConversationStore } from '@/stores/conversationStore'
-import { useUiStore } from '@/stores/uiStore'
 import { SPACE_LABEL } from '@/lib/spaces'
 import type { Space } from '@/types'
 import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
 
 interface ChannelHeaderProps {
   space: Space
+  /** Phone layout: the back chevron to the conversation list. Without it, the desktop header. */
   mobileBack?: () => void
   onInfoOpen?: (tab?: InfoTab) => void
 }
 
 export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderProps) {
   const dragTheLake = useConversationStore((s) => s.dragTheLake)
-  const { toggleSidebar, toggleMemberList, memberListOpen } = useUiStore()
+  const phone = !!mobileBack
   const [showMenu, setShowMenu] = useState(false)
   const label = SPACE_LABEL[space]
 
@@ -24,37 +24,35 @@ export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderPr
 
   return (
     <div className="relative flex-shrink-0 border-b border-[color:var(--line)] bg-primary shadow-sm">
-      <div className="pt-safe md:hidden" />
-    <div className="flex h-[var(--header-height)] items-center gap-2 px-5">
-      {/* Mobile nav button — back arrow when mobileBack provided, otherwise hamburger */}
-      <button
-        onClick={mobileBack ?? toggleSidebar}
-        className="mr-1 rounded p-1 text-interactive hover:text-interactive-hover md:hidden"
-        aria-label={mobileBack ? 'Back to spaces' : 'Toggle sidebar'}
-      >
-        {mobileBack ? (
+      {phone && <div className="pt-safe" />}
+    <div
+      className="flex h-[var(--header-height)] items-center gap-2"
+      style={{ paddingLeft: 'max(1.25rem, env(safe-area-inset-left))', paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
+    >
+      {mobileBack && (
+        <button
+          onClick={mobileBack}
+          className="mr-1 rounded p-1 text-interactive hover:text-interactive-hover"
+          aria-label="Back to chats"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
-        ) : (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        )}
-      </button>
+        </button>
+      )}
 
       {/* Space name — tappable on mobile to open info panel */}
       {onInfoOpen ? (
         <button
           onClick={() => onInfoOpen()}
-          className="flex items-center gap-0.5 text-left md:pointer-events-none"
+          className={`flex items-center gap-0.5 text-left ${phone ? '' : 'pointer-events-none'}`}
         >
           <h3 className="text-[15px] font-semibold text-primary">{label}</h3>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted md:hidden">
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
+          {phone && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          )}
         </button>
       ) : (
         <h3 className="text-[15px] font-semibold text-primary">{label}</h3>
@@ -63,8 +61,8 @@ export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderPr
       <div className="flex-1" />
 
       {/* Desktop utility icons — Pins, Media, Search */}
-      {onInfoOpen && (
-        <div className="hidden items-center gap-0.5 md:flex">
+      {onInfoOpen && !phone && (
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => onInfoOpen('pins')}
             className="rounded p-1.5 text-interactive transition-colors hover:bg-hover hover:text-interactive-hover"
@@ -98,20 +96,6 @@ export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderPr
           </button>
         </div>
       )}
-
-      {/* Member list toggle — desktop only (mobile uses the Members tab) */}
-      <button
-        onClick={toggleMemberList}
-        className={`hidden rounded p-1.5 transition-colors hover:bg-hover md:block ${memberListOpen ? 'text-interactive-hover' : 'text-interactive'}`}
-        title={memberListOpen ? 'Hide member list' : 'Show member list'}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="9" cy="7" r="4" />
-          <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          <path d="M21 21v-2a4 4 0 0 0-3-3.85" />
-        </svg>
-      </button>
 
       {/* Space actions */}
       <div className="relative">

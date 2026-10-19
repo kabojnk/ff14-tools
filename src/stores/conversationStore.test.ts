@@ -109,8 +109,8 @@ describe('conversationStore.load', () => {
     expect(s.activeSession).toEqual(SESSION)
     expect(s.readAt).toEqual({ main: '2026-10-19T09:00:00Z', schist: null })
     expect(s.latest).toEqual({
-      main: { at: '2026-10-19T10:00:00Z', authorId: 'bea' },
-      schist: { at: '2026-10-19T08:00:00Z', authorId: 'alice' },
+      main: { at: '2026-10-19T10:00:00Z', authorId: 'bea', preview: 'm2' },
+      schist: { at: '2026-10-19T08:00:00Z', authorId: 'alice', preview: 's1' },
     })
     expect(s.loading).toBe(false)
 
@@ -149,12 +149,12 @@ describe('conversationStore.noteMessage', () => {
 
   it('bumps latest when the message is newer', () => {
     useConversationStore.getState().noteMessage(msg('m3', 'main', '2026-10-19T11:00:00Z', 'alice'))
-    expect(useConversationStore.getState().latest.main).toEqual({ at: '2026-10-19T11:00:00Z', authorId: 'alice' })
+    expect(useConversationStore.getState().latest.main).toEqual({ at: '2026-10-19T11:00:00Z', authorId: 'alice', preview: 'm3' })
   })
 
   it('ignores older messages', () => {
     useConversationStore.getState().noteMessage(msg('old', 'main', '2026-10-19T07:00:00Z', 'alice'))
-    expect(useConversationStore.getState().latest.main).toEqual({ at: '2026-10-19T10:00:00Z', authorId: 'bea' })
+    expect(useConversationStore.getState().latest.main).toEqual({ at: '2026-10-19T10:00:00Z', authorId: 'bea', preview: 'm2' })
   })
 
   it('ignores messages from another conversation', () => {

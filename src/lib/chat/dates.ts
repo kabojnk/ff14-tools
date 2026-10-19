@@ -26,7 +26,7 @@ export function localDayKey(value: Date | string, timeZone?: string): string {
 }
 
 /** Whole calendar days from `from` to `to` (day keys), ignoring DST. */
-function dayDiff(fromKey: string, toKey: string): number {
+export function dayDiff(fromKey: string, toKey: string): number {
   const ms = (key: string) => {
     const [y, m, d] = key.split('-').map(Number)
     return Date.UTC(y, m - 1, d)

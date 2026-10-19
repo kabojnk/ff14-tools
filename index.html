@@ -19,7 +19,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- First paint: apply the stored theme before anything renders (mirrors uiStore's initialTheme
-         and src/lib/themes.ts THEME_IDS), and give the status bar the disguise colour if eep mode is on. -->
+         and src/lib/themes.ts THEME_IDS), and give the status bar the disguise colour if the app opens disguised. -->
     <script>
       (function () {
         var ids = ['light', 'dark', 'midnight', 'latte', 'mocha', 'sakura', 'dawn', 'rosepine', 'dracula', 'nord', 'tokyo'];
@@ -27,6 +27,8 @@
         var eep = false;
         try { theme = localStorage.getItem('theme'); } catch (e) {}
         try { eep = sessionStorage.getItem('eepMode') === 'true'; } catch (e) {}
+        // A phone that has a PIN launches disguised (mirrors uiStore's launchState).
+        try { if (localStorage.getItem('hasPin') === '1' && window.matchMedia('(pointer: coarse)').matches) eep = true; } catch (e) {}
         if (ids.indexOf(theme) < 0) {
           var dark = true;
           try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}

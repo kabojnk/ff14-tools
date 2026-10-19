@@ -17,10 +17,17 @@ interface ChannelInfoPanelProps {
   space: Space
   initialTab?: InfoTab
   onClose: () => void
+  /** `overlay` (phones) covers the screen; `panel` (desktop) fills the right-hand slide-over. */
+  variant?: 'overlay' | 'panel'
 }
 
-export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
+export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose, variant = 'overlay' }: ChannelInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<InfoTab>(initialTab)
+
+  // The desktop panel stays open while another entry point (e.g. "Search messages") picks a tab.
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Message[]>([])
@@ -86,11 +93,11 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
     { value: 'search', label: 'Search' },
   ]
 
-  return (
-    <Portal>
-      <div className="fixed inset-0 z-40 flex flex-col bg-primary">
+  const panel = variant === 'panel'
+  const body = (
+      <div className={panel ? 'flex h-full min-h-0 flex-col bg-primary' : 'fixed inset-0 z-40 flex flex-col bg-primary'}>
         {/* Header */}
-        <div className="flex-shrink-0 bg-secondary pt-safe">
+        <div className={`flex-shrink-0 bg-secondary ${panel ? '' : 'pt-safe'}`}>
           <div className="flex h-12 items-center border-b border-[color:var(--line)] px-4">
             <button
               onClick={onClose}
@@ -195,9 +202,8 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           )}
         </div>
       </div>
-
-    </Portal>
   )
+  return panel ? body : <Portal>{body}</Portal>
 }
 
 const VISUAL_KINDS = new Set<MediaItem['kind']>(['image', 'video', 'gif'])
