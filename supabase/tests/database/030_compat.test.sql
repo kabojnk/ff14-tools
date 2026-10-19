@@ -1,7 +1,7 @@
 -- Old-app (channel-based) ↔ new-app (conversation-based) compatibility triggers.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(23);
 
 -- Fixture (idempotent; the Task 8 seed provides the same rows): one conversation, Alice + Bea, general (main) + schist channels.
 insert into public.conversations (id, created_by, created_at)
@@ -97,10 +97,13 @@ select ok((select pin_hash <> extensions.crypt('1234', pin_hash) from public.pri
             where user_id = '11111111-1111-4111-8111-111111111111'), 'the previous PIN no longer verifies');
 select is((select lock_pin_length from public.profiles where id = '11111111-1111-4111-8111-111111111111'),
   4::smallint, 'lock_pin_length follows the old-app write');
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+select ok(public.verify_pin('4444') and not public.verify_pin('1234'), 'verify_pin follows the old-app write');
 update public.profiles set lock_pin = null where id = '11111111-1111-4111-8111-111111111111';
 select ok(not exists (select 1 from public.private_pins where user_id = '11111111-1111-4111-8111-111111111111')
           and (select lock_pin_length from public.profiles where id = '11111111-1111-4111-8111-111111111111') is null,
   'clearing lock_pin removes the hash and the length');
+select ok(not public.verify_pin('4444'), 'verify_pin is false after the old app clears the PIN');
 
 -- Cross-conversation integrity
 insert into public.conversations (id) values ('d0000000-0000-4000-8000-0000000000f9');
