@@ -16,7 +16,7 @@ export function broadcastNewMessage(channelId: string, message: Message) {
 }
 
 export function useMessages(channelId: string) {
-  const { messages, loading, fetchMessages, addMessage, updateMessage, removeMessage } = useMessageStore()
+  const { messages, loading, fetchChannelMessages, addMessage, updateMessage, removeMessage } = useMessageStore()
   const channelRef = useRef<RealtimeChannel | null>(null)
   const [realtimeStatus, setRealtimeStatus] = useState<string>('CLOSED')
 
@@ -24,7 +24,7 @@ export function useMessages(channelId: string) {
     let active = true
     let joinedBefore = false
     setRealtimeStatus('JOINING')
-    fetchMessages(channelId)
+    fetchChannelMessages(channelId)
 
     // Subscribe to broadcast for this channel
     const broadcastChannel = supabase
@@ -43,7 +43,7 @@ export function useMessages(channelId: string) {
         setRealtimeStatus(status)
         if (status === 'SUBSCRIBED') {
           // A re-join means we may have missed broadcasts while disconnected; backfill.
-          if (joinedBefore) fetchMessages(channelId)
+          if (joinedBefore) fetchChannelMessages(channelId)
           joinedBefore = true
         }
       })
@@ -59,7 +59,7 @@ export function useMessages(channelId: string) {
         channelRef.current = null
       }
     }
-  }, [channelId, fetchMessages, addMessage, updateMessage, removeMessage])
+  }, [channelId, fetchChannelMessages, addMessage, updateMessage, removeMessage])
 
   const broadcastEditMessage = (message: Message) => {
     channelRef.current?.send({
