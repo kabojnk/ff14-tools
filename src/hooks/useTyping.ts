@@ -1,70 +1,42 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useCallback, useEffect, useRef } from 'react'
+import { sendTyping as broadcastTyping, sendTypingStop as broadcastTypingStop } from '@/lib/conversationRealtime'
 import { useAuthStore } from '@/stores/authStore'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import { useTypingStore } from '@/stores/typingStore'
+import type { Space } from '@/types'
 
-interface TypingUser {
-  user_id: string
-  nickname: string
-  timestamp: number
-}
-
-const TYPING_TIMEOUT = 5000 // 5 seconds until typing indicator disappears
 const TYPING_THROTTLE = 3000 // Send typing event at most every 3 seconds
 
-export function useTyping(channelId: string) {
+export function useTyping(space: Space) {
   const { user, profile } = useAuthStore()
-  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const lastTypingSentRef = useRef(0)
-  const cleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const typing = useTypingStore((s) => s.typing[space])
+  const lastSentRef = useRef<{ space: Space; at: number }>({ space, at: 0 })
 
+  // Expire stale indicators (the store keeps them for TYPING_TIMEOUT_MS after the last event).
   useEffect(() => {
-    const channel = supabase
-      .channel(`typing:${channelId}`)
-      .on('broadcast', { event: 'typing_start' }, ({ payload }) => {
-        if (payload.user_id === user?.id) return // Ignore own typing
-        setTypingUsers((prev) => {
-          const filtered = prev.filter((t) => t.user_id !== payload.user_id)
-          return [...filtered, { ...payload, timestamp: Date.now() }]
-        })
-      })
-      .subscribe()
-
-    channelRef.current = channel
-
-    // Cleanup expired typing indicators
-    cleanupIntervalRef.current = setInterval(() => {
-      const now = Date.now()
-      setTypingUsers((prev) => prev.filter((t) => now - t.timestamp < TYPING_TIMEOUT))
-    }, 1000)
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
-      if (cleanupIntervalRef.current) {
-        clearInterval(cleanupIntervalRef.current)
-      }
-    }
-  }, [channelId, user?.id])
+    const t = setInterval(() => useTypingStore.getState().prune(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const sendTyping = useCallback(() => {
-    if (!user || !profile || !channelRef.current) return
+    if (!user || !profile) return
     const now = Date.now()
-    if (now - lastTypingSentRef.current < TYPING_THROTTLE) return
-    lastTypingSentRef.current = now
+    const last = lastSentRef.current
+    if (last.space === space && now - last.at < TYPING_THROTTLE) return
+    lastSentRef.current = { space, at: now }
+    broadcastTyping(space, { user_id: user.id, nickname: profile.nickname })
+  }, [user, profile, space])
 
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'typing_start',
-      payload: { user_id: user.id, nickname: profile.nickname },
-    })
-  }, [user, profile])
+  /** Message sent, command run or box cleared: tell the others now, and let the next keystroke announce again at once. */
+  const stopTyping = useCallback(() => {
+    const last = lastSentRef.current
+    lastSentRef.current = { space, at: 0 }
+    if (!user || last.at === 0) return
+    broadcastTypingStop(last.space, user.id)
+  }, [user, space])
 
   return {
-    typingUsers: typingUsers.filter((t) => t.user_id !== user?.id),
+    typingUsers: typing.filter((t) => t.user_id !== user?.id),
     sendTyping,
+    stopTyping,
   }
 }

@@ -3,88 +3,58 @@ import { supabase } from '@/lib/supabase'
 import { MediaViewer } from '@/components/chat/MediaViewer'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { Portal } from '@/components/ui/Portal'
-import type { Attachment, Channel, Message } from '@/types'
+import { usePinnedMessages } from '@/hooks/usePinnedMessages'
+import { MediaFilters } from '@/components/chat/MediaFilters'
+import { useMediaGallery } from '@/hooks/useMediaGallery'
+import { SPACE_LABEL } from '@/lib/spaces'
+import { formatSize, linkHost, type MediaFilterKind, type MediaScope } from '@/lib/media'
+import type { MediaItem, Message, Space } from '@/types'
 
 export type InfoTab = 'media' | 'pins' | 'search'
 
 interface ChannelInfoPanelProps {
-  channel: Channel
+  conversationId: string
+  space: Space
   initialTab?: InfoTab
   onClose: () => void
 }
 
-type MediaItem = { attachment: Attachment; message: Message }
-
-export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
+export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<InfoTab>(initialTab)
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Message[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
-  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video' } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch media on mount
+  const { pinnedIds, unpinMessage } = usePinnedMessages(conversationId)
+
+  // Pinned messages of this space, newest pin first. Pins belong to the conversation; the space comes from the message.
   useEffect(() => {
-    supabase
-      .from('messages')
-      .select('*')
-      .eq('channel_id', channel.id)
-      .eq('deleted', false)
-      .order('created_at', { ascending: false })
-      .limit(300)
-      .then(({ data }) => {
-        if (!data) return
-        const items: MediaItem[] = []
-        for (const msg of data as Message[]) {
-          for (const att of msg.attachments ?? []) {
-            if (att.type === 'image' || att.type === 'gif' || att.type === 'video') {
-              items.push({ attachment: att, message: msg })
-            }
-          }
-        }
-        setMediaItems(items)
-      })
-  }, [channel.id])
-
-  // Fetch pinned messages with content
-  const fetchPins = async () => {
-    const { data: pins } = await supabase
-      .from('pinned_messages')
-      .select('message_id')
-      .eq('channel_id', channel.id)
-      .order('pinned_at', { ascending: false })
-
-    if (!pins || pins.length === 0) {
+    const ids = [...pinnedIds]
+    if (ids.length === 0) {
       setPinnedMessages([])
       return
     }
-
-    const ids = pins.map((p: { message_id: string }) => p.message_id)
-    const { data: messages } = await supabase
+    let active = true
+    supabase
       .from('messages')
       .select('*')
       .in('id', ids)
+      .eq('space', space)
       .eq('deleted', false)
-
-    if (messages) {
-      const byId = Object.fromEntries((messages as Message[]).map((m) => [m.id, m]))
-      setPinnedMessages(ids.map((id: string) => byId[id]).filter(Boolean))
+      .then(({ data }) => {
+        if (!active || !data) return
+        const byId = Object.fromEntries((data as Message[]).map((m) => [m.id, m]))
+        setPinnedMessages(ids.map((id) => byId[id]).filter(Boolean))
+      })
+    return () => {
+      active = false
     }
-  }
+  }, [pinnedIds, space])
 
-  useEffect(() => {
-    fetchPins()
-  }, [channel.id])
-
-  const handleUnpin = async (messageId: string) => {
-    await supabase
-      .from('pinned_messages')
-      .delete()
-      .eq('channel_id', channel.id)
-      .eq('message_id', messageId)
-    fetchPins()
+  const handleUnpin = (messageId: string) => {
+    void unpinMessage(messageId)
   }
 
   const handleSearch = async () => {
@@ -94,7 +64,8 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
     const { data } = await supabase
       .from('messages')
       .select('*')
-      .eq('channel_id', channel.id)
+      .eq('conversation_id', conversationId)
+      .eq('space', space)
       .eq('deleted', false)
       .ilike('content', `%${q}%`)
       .order('created_at', { ascending: false })
@@ -131,7 +102,7 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
               Back
             </button>
             <h1 className="flex-1 text-center text-base font-semibold text-primary">
-              #{channel.name}
+              {SPACE_LABEL[space]}
             </h1>
             <div className="w-16" />
           </div>
@@ -157,41 +128,12 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
           {/* ── Media tab ── */}
-          {activeTab === 'media' && (
-            mediaItems.length === 0 ? (
-              <EmptyState label="No media in this channel yet." />
-            ) : (
-              <div className="grid grid-cols-3 gap-0.5 p-0.5">
-                {mediaItems.map(({ attachment, message }, i) => (
-                  <button
-                    key={`${message.id}-${i}`}
-                    onClick={() => setViewer({ url: attachment.url, filename: attachment.filename, type: attachment.type as 'image' | 'gif' | 'video' })}
-                    className="relative aspect-square overflow-hidden bg-tertiary"
-                  >
-                    {attachment.type === 'video' ? (
-                      <div className="flex h-full w-full items-center justify-center bg-tertiary text-muted">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <img
-                        src={attachment.url}
-                        alt={attachment.filename}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )
-          )}
+          {activeTab === 'media' && <MediaTab conversationId={conversationId} space={space} />}
 
           {/* ── Pins tab ── */}
           {activeTab === 'pins' && (
             pinnedMessages.length === 0 ? (
-              <EmptyState label="No pinned messages in this channel." />
+              <EmptyState label="No pinned messages in this space." />
             ) : (
               <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
                 {pinnedMessages.map((msg) => (
@@ -254,15 +196,129 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
         </div>
       </div>
 
-      {viewer && (
-        <MediaViewer
-          url={viewer.url}
-          filename={viewer.filename}
-          type={viewer.type}
-          onClose={() => setViewer(null)}
-        />
-      )}
     </Portal>
+  )
+}
+
+const VISUAL_KINDS = new Set<MediaItem['kind']>(['image', 'video', 'gif'])
+
+function MediaTab({ conversationId, space }: { conversationId: string; space: Space }) {
+  const [kind, setKind] = useState<MediaFilterKind>('all')
+  const [extension, setExtension] = useState('')
+  const [scope, setScope] = useState<MediaScope>('space')
+  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video' } | null>(null)
+  const { items, loading, hasMore, loadMore } = useMediaGallery({ conversationId, space, scope, kind, extension })
+
+  const visual = items.filter((i) => VISUAL_KINDS.has(i.kind))
+  const files = items.filter((i) => i.kind === 'file' || i.kind === 'audio')
+  const links = items.filter((i) => i.kind === 'link')
+
+  const emptyLabel =
+    kind === 'voice'
+      ? 'No voice memos yet'
+      : kind !== 'all' || extension.trim()
+        ? 'Nothing matches these filters.'
+        : scope === 'both'
+          ? 'No media yet.'
+          : 'No media in this space yet.'
+
+  return (
+    <>
+      <MediaFilters
+        kind={kind}
+        onKindChange={setKind}
+        extension={extension}
+        onExtensionChange={setExtension}
+        scope={scope}
+        onScopeChange={setScope}
+      />
+
+      {items.length === 0 ? (
+        loading ? <div className="py-12 text-center text-sm text-muted">Loading…</div> : <EmptyState label={emptyLabel} />
+      ) : (
+        <>
+          {visual.length > 0 && (
+            <div className="grid grid-cols-3 gap-0.5 p-0.5">
+              {visual.map((item) => (
+                <button
+                  key={item.id}
+                  data-media-item={item.kind}
+                  onClick={() => setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video' })}
+                  className="relative aspect-square overflow-hidden bg-tertiary"
+                >
+                  {item.kind === 'video' ? (
+                    <div className="flex h-full w-full items-center justify-center bg-tertiary text-muted">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <img src={item.url} alt={item.filename ?? ''} className="h-full w-full object-cover" loading="lazy" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {files.length > 0 && (
+            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+              {files.map((item) => (
+                <a
+                  key={item.id}
+                  data-media-item={item.kind}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover"
+                >
+                  {item.extension && (
+                    <span className="flex-shrink-0 rounded-[3px] bg-tertiary px-1.5 py-0.5 text-[10px] font-bold uppercase text-secondary">
+                      {item.extension}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-sm text-primary">{item.filename ?? item.url}</span>
+                  <span className="flex-shrink-0 text-xs text-muted">{formatSize(item.size)}</span>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {links.length > 0 && (
+            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+              {links.map((item) => (
+                <a
+                  key={item.id}
+                  data-media-item={item.kind}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block px-4 py-3 transition-colors hover:bg-hover"
+                >
+                  <span className="block truncate text-sm font-medium text-primary">{linkHost(item.url)}</span>
+                  <span className="block truncate text-xs text-brand">{item.url}</span>
+                </a>
+              ))}
+            </div>
+          )}
+
+          {hasMore && (
+            <div className="flex justify-center py-3">
+              <button
+                onClick={loadMore}
+                disabled={loading}
+                className="rounded-[3px] px-3 py-1.5 text-sm font-medium text-brand hover:underline disabled:opacity-50"
+              >
+                {loading ? 'Loading…' : 'Load more'}
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {viewer && (
+        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} onClose={() => setViewer(null)} />
+      )}
+    </>
   )
 }
 

@@ -1,7 +1,10 @@
-import { ChannelList } from '@/components/channels/ChannelList'
+import { SpaceList } from '@/components/spaces/SpaceList'
 import { UserPanel } from '@/components/user/UserPanel'
+import { useUiStore } from '@/stores/uiStore'
 
 export function Sidebar() {
+  const { setSidebarOpen } = useUiStore()
+
   return (
     <aside className="flex h-full flex-col bg-secondary">
       {/* Server header */}
@@ -11,9 +14,9 @@ export function Sidebar() {
         <h2 className="truncate text-[15px] font-semibold text-primary">Chat</h2>
       </button>
 
-      {/* Channel list */}
+      {/* Space list */}
       <div className="flex-1 overflow-y-auto">
-        <ChannelList />
+        <SpaceList onSelect={() => setSidebarOpen(false)} />
       </div>
 
       {/* User panel */}

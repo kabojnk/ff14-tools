@@ -1,112 +1,99 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
-import type { Message } from '@/types'
+import { SPACES, spaceKey } from '@/lib/spaces'
+import type { Message, Space } from '@/types'
 
 interface MessageState {
-  messages: Record<string, Message[]> // keyed by channel_id
+  messages: Record<string, Message[]> // keyed by spaceKey(conversationId, space)
   loading: boolean
 
-  fetchMessages: (channelId: string) => Promise<void>
-  editMessage: (messageId: string, newContent: string, channelId: string) => Promise<void>
-  deleteMessage: (messageId: string, channelId: string) => Promise<void>
-  addMessage: (channelId: string, message: Message) => void
-  updateMessage: (channelId: string, message: Message) => void
-  removeMessage: (channelId: string, messageId: string) => void
-  clearMessages: (channelId: string) => void
-  clearAllMessages: () => void
+  fetchMessages: (conversationId: string, space: Space) => Promise<void>
+  editMessage: (messageId: string, newContent: string, key: string) => Promise<void>
+  deleteMessage: (messageId: string, key: string) => Promise<void>
+  addMessage: (key: string, message: Message) => void
+  updateMessage: (key: string, message: Message) => void
+  removeMessage: (key: string, messageId: string) => void
+  clearMessages: (key: string) => void
+  clearConversation: (conversationId: string) => void
 }
 
-export const useMessageStore = create<MessageState>((set, get) => ({
-  messages: {},
-  loading: false,
-
-  fetchMessages: async (channelId) => {
+export const useMessageStore = create<MessageState>((set, get) => {
+  const load = async (key: string, request: PromiseLike<{ data: unknown; error: unknown }>) => {
     set({ loading: true })
-
-    const { data, error } = await supabase.rpc('get_channel_messages', {
-      p_channel_id: channelId,
-      p_limit: 50,
-    })
-
+    const { data, error } = await request
     if (!error && data) {
-      // RPC returns messages in desc order, reverse for display
-      const msgs = (data as Message[]).reverse()
-      set((state) => ({
-        messages: { ...state.messages, [channelId]: msgs },
-        loading: false,
-      }))
+      // The RPCs return newest first; reverse for display.
+      const msgs = [...(data as Message[])].reverse()
+      set((state) => ({ messages: { ...state.messages, [key]: msgs }, loading: false }))
     } else {
       set({ loading: false })
     }
-  },
+  }
 
-  editMessage: async (messageId, newContent, channelId) => {
-    const { data, error } = await supabase
-      .from('messages')
-      .update({ content: newContent, edited_at: new Date().toISOString() })
-      .eq('id', messageId)
-      .select()
-      .single()
+  return {
+    messages: {},
+    loading: false,
 
-    if (!error && data) {
-      get().updateMessage(channelId, data as Message)
-    }
-  },
+    fetchMessages: (conversationId, space) =>
+      load(
+        spaceKey(conversationId, space),
+        supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: 50 }),
+      ),
 
-  deleteMessage: async (messageId, channelId) => {
-    const { error } = await supabase
-      .from('messages')
-      .update({ deleted: true })
-      .eq('id', messageId)
+    editMessage: async (messageId, newContent, key) => {
+      const { data, error } = await supabase
+        .from('messages')
+        .update({ content: newContent, edited_at: new Date().toISOString() })
+        .eq('id', messageId)
+        .select()
+        .single()
 
-    if (!error) {
-      get().removeMessage(channelId, messageId)
-    }
-  },
-
-  addMessage: (channelId, message) => {
-    set((state) => {
-      const existing = state.messages[channelId] ?? []
-      // Avoid duplicates
-      if (existing.some((m) => m.id === message.id)) return state
-      return {
-        messages: {
-          ...state.messages,
-          [channelId]: [...existing, message],
-        },
+      if (!error && data) {
+        get().updateMessage(key, data as Message)
       }
-    })
-  },
+    },
 
-  updateMessage: (channelId, message) => {
-    set((state) => {
-      const existing = state.messages[channelId] ?? []
-      return {
-        messages: {
-          ...state.messages,
-          [channelId]: existing.map((m) => (m.id === message.id ? message : m)),
-        },
+    deleteMessage: async (messageId, key) => {
+      const { error } = await supabase.from('messages').update({ deleted: true }).eq('id', messageId)
+
+      if (!error) {
+        get().removeMessage(key, messageId)
       }
-    })
-  },
+    },
 
-  removeMessage: (channelId, messageId) => {
-    set((state) => {
-      const existing = state.messages[channelId] ?? []
-      return {
-        messages: {
-          ...state.messages,
-          [channelId]: existing.filter((m) => m.id !== messageId),
-        },
-      }
-    })
-  },
+    addMessage: (key, message) => {
+      set((state) => {
+        const existing = state.messages[key] ?? []
+        // Avoid duplicates
+        if (existing.some((m) => m.id === message.id)) return state
+        return { messages: { ...state.messages, [key]: [...existing, message] } }
+      })
+    },
 
-  clearMessages: (channelId) => {
-    set((state) => ({
-      messages: { ...state.messages, [channelId]: [] },
-    }))
-  },
+    updateMessage: (key, message) => {
+      set((state) => {
+        const existing = state.messages[key] ?? []
+        return { messages: { ...state.messages, [key]: existing.map((m) => (m.id === message.id ? message : m)) } }
+      })
+    },
 
-  clearAllMessages: () => set({ messages: {} }),
-}))
+    removeMessage: (key, messageId) => {
+      set((state) => {
+        const existing = state.messages[key] ?? []
+        return { messages: { ...state.messages, [key]: existing.filter((m) => m.id !== messageId) } }
+      })
+    },
+
+    clearMessages: (key) => {
+      set((state) => ({ messages: { ...state.messages, [key]: [] } }))
+    },
+
+    clearConversation: (conversationId) => {
+      set((state) => {
+        const messages = { ...state.messages }
+        for (const space of SPACES) messages[spaceKey(conversationId, space)] = []
+        return { messages }
+      })
+    },
+  }
+})

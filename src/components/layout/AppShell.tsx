@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { useChannelStore } from '@/stores/channelStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useStatusStore } from '@/stores/statusStore'
+import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChannelHeader } from '@/components/channels/ChannelHeader'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
 import { ChannelInfoPanel } from '@/components/chat/ChannelInfoPanel'
 import { MemberList } from '@/components/user/MemberList'
-import { CreateChannelModal } from '@/components/channels/CreateChannelModal'
+import { SpaceList } from '@/components/spaces/SpaceList'
 import { UserPanel } from '@/components/user/UserPanel'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
@@ -21,7 +24,11 @@ export function AppShell() {
   // (realtime channels, typing, pins) never run twice on the same device.
   const isDesktop = useMediaQuery('(min-width: 768px)')
   const { setEepMode, memberListOpen } = useUiStore()
-  const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
+  const userId = useAuthStore((s) => s.user?.id)
+  const conversation = useConversationStore((s) => s.conversation)
+  const conversationLoading = useConversationStore((s) => s.loading)
+  const activeSpace = useConversationStore((s) => s.activeSpace)
+  const loadConversation = useConversationStore((s) => s.load)
   const [mobileView, setMobileView] = useState<MobileView>('channels')
   const [keyboardOpen, setKeyboardOpen] = useState(false)
   const [channelInfoTab, setChannelInfoTab] = useState<InfoTab>('media')
@@ -33,9 +40,20 @@ export function AppShell() {
     setShowChannelInfo(true)
   }
 
+  // The conversation is loaded here only (App.tsx doesn't), and its realtime channel is joined once.
   useEffect(() => {
-    fetchChannels()
-  }, [fetchChannels])
+    if (userId) loadConversation(userId)
+  }, [userId, loadConversation])
+  useConversationRealtime()
+
+  // Shared status definitions: loaded and kept live once for the whole app.
+  useEffect(() => {
+    if (!userId) return
+    const { load, subscribe } = useStatusStore.getState()
+    const stop = subscribe()
+    void load()
+    return stop
+  }, [userId])
 
   useEffect(() => {
     const vv = window.visualViewport
@@ -46,19 +64,31 @@ export function AppShell() {
     return () => vv.removeEventListener('resize', onResize)
   }, [])
 
-  const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null
+  const conversationId = conversation?.id ?? null
 
-  // Reset reply and info panel when channel changes
+  // Reset reply and info panel when the space changes
   useEffect(() => {
     setReplyTo(null)
     setShowChannelInfo(false)
-  }, [activeChannelId])
+  }, [activeSpace, conversationId])
 
-  // Tapping a channel on mobile navigates straight to chat
-  const handleMobileChannelSelect = (channelId: string) => {
-    setActiveChannel(channelId)
-    setMobileView('chat')
-  }
+  // Tapping a space on mobile navigates straight to chat (SpaceList sets the active space)
+  const handleMobileSpaceSelect = () => setMobileView('chat')
+
+  const noConversation = (
+    <div className="flex flex-1 items-center justify-center">
+      <div className="text-center text-muted">
+        {conversationLoading ? (
+          <p className="text-sm">Loading...</p>
+        ) : (
+          <>
+            <p className="text-lg font-semibold">No conversation yet</p>
+            <p className="mt-1 text-sm">Nobody has added you to a conversation.</p>
+          </>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -73,19 +103,20 @@ export function AppShell() {
 
         {/* Chat area */}
         <main className="flex flex-1 flex-col overflow-hidden bg-primary">
-          {activeChannel ? (
+          {conversationId ? (
             <>
-              <ChannelHeader channel={activeChannel} onInfoOpen={openInfoPanel} />
-              <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
-              <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+              <ChannelHeader space={activeSpace} onInfoOpen={openInfoPanel} />
+              <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
+              <MessageInput
+                key={`input:${activeSpace}`}
+                conversationId={conversationId}
+                space={activeSpace}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+              />
             </>
           ) : (
-            <div className="flex flex-1 items-center justify-center">
-              <div className="text-center text-muted">
-                <p className="text-lg font-semibold">No channel selected</p>
-                <p className="mt-1 text-sm">Select a channel to start chatting.</p>
-              </div>
-            </div>
+            noConversation
           )}
         </main>
 
@@ -100,17 +131,17 @@ export function AppShell() {
       {/* ── Mobile layout: full-screen views + bottom tab bar ── */}
       {!isDesktop && (<div className="flex flex-1 flex-col overflow-hidden">
 
-        {/* Channels panel */}
+        {/* Spaces panel */}
         {mobileView === 'channels' && (
           <div className="flex h-full flex-col bg-secondary">
             <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
               <div className="pt-safe" />
               <div className="flex h-[var(--header-height)] items-center px-5">
-                <h2 className="text-[15px] font-semibold text-primary">Channels</h2>
+                <h2 className="text-[15px] font-semibold text-primary">Spaces</h2>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <MobileChannelList onSelect={handleMobileChannelSelect} />
+              <SpaceList variant="mobile" onSelect={handleMobileSpaceSelect} />
             </div>
             {/* User panel at bottom — gives access to status & settings on mobile */}
             <UserPanel />
@@ -120,20 +151,24 @@ export function AppShell() {
         {/* Chat panel */}
         {mobileView === 'chat' && (
           <main className="flex h-full flex-col overflow-hidden bg-primary">
-            {activeChannel ? (
+            {conversationId ? (
               <>
                 <ChannelHeader
-                  channel={activeChannel}
+                  space={activeSpace}
                   mobileBack={() => setMobileView('channels')}
                   onInfoOpen={openInfoPanel}
                 />
-                <MessageList channelId={activeChannel.id} onSetReply={setReplyTo} />
-                <MessageInput channel={activeChannel} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} />
+                <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
+                <MessageInput
+                  key={`input:${activeSpace}`}
+                  conversationId={conversationId}
+                  space={activeSpace}
+                  replyTo={replyTo}
+                  onCancelReply={() => setReplyTo(null)}
+                />
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center">
-                <p className="text-sm text-muted">Select a channel first.</p>
-              </div>
+              noConversation
             )}
           </main>
         )}
@@ -158,81 +193,23 @@ export function AppShell() {
           <MobileTabBar
             active={mobileView}
             onChange={setMobileView}
-            hasChannel={!!activeChannel}
+            hasChannel={!!conversationId}
             onEep={() => setEepMode(true)}
           />
         )}
       </div>)}
 
       {/* Channel info panel overlay — mobile + desktop */}
-      {showChannelInfo && activeChannel && (
+      {showChannelInfo && conversationId && (
         <ChannelInfoPanel
-          channel={activeChannel}
+          conversationId={conversationId}
+          space={activeSpace}
           initialTab={channelInfoTab}
           onClose={() => setShowChannelInfo(false)}
         />
       )}
 
       <EepShortcutListener onActivate={() => setEepMode(true)} />
-    </div>
-  )
-}
-
-// ── Mobile channel list ──
-function MobileChannelList({ onSelect }: { onSelect: (id: string) => void }) {
-  const { channels, activeChannelId } = useChannelStore()
-  const [showCreate, setShowCreate] = useState(false)
-
-  return (
-    <div className="px-3 py-3">
-      <div className="mb-1 flex items-center justify-between px-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Text Channels
-        </span>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="rounded text-muted transition-colors hover:text-interactive-hover"
-          title="Create Channel"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="space-y-0.5">
-        {channels.map((channel) => (
-          <button
-            key={channel.id}
-            onClick={() => onSelect(channel.id)}
-            className={`
-              flex w-full items-center gap-1.5 rounded-[4px] px-2.5 py-2.5 text-left transition-colors
-              ${activeChannelId === channel.id
-                ? 'bg-active text-interactive-active'
-                : 'text-interactive hover:bg-hover hover:text-interactive-hover'
-              }
-            `}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 opacity-60">
-              <line x1="4" y1="9" x2="20" y2="9" />
-              <line x1="4" y1="15" x2="20" y2="15" />
-              <line x1="10" y1="3" x2="8" y2="21" />
-              <line x1="16" y1="3" x2="14" y2="21" />
-            </svg>
-            <span className="flex-1 truncate text-[15px] leading-5">{channel.name}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 opacity-30">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-        ))}
-      </div>
-
-      {channels.length === 0 && (
-        <p className="px-2 py-4 text-center text-xs text-muted">No channels yet.</p>
-      )}
-
-      {showCreate && <CreateChannelModal onClose={() => setShowCreate(false)} />}
     </div>
   )
 }
@@ -253,7 +230,7 @@ function MobileTabBar({
     <nav className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
       <div className="flex">
         <TabButton
-          label="Channels"
+          label="Spaces"
           active={active === 'channels'}
           onClick={() => onChange('channels')}
           icon={

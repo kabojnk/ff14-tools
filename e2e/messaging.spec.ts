@@ -24,9 +24,41 @@ test('an unsent draft survives crossing the desktop breakpoint (e.g. rotating an
   const width = alice.page.viewportSize()!.width
   await alice.page.setViewportSize(width < 768 ? { width: 1280, height: 800 } : { width: 393, height: 852 })
 
-  // The mobile layout opens on the channel list; reopen the channel if needed.
-  if (!(await alice.composer.isVisible())) {
-    await alice.page.getByRole('button', { name: 'general', exact: true }).filter({ visible: true }).first().click()
-  }
+  // The mobile layout opens on the Spaces screen; reopen the space if needed.
+  if (!(await alice.composer.isVisible())) await alice.openSpace('Main')
   await expect(alice.composer).toHaveValue(draft)
+})
+
+test('the typing indicator clears as soon as the message is sent, and returns on the next keystroke', async ({ alice, bea }) => {
+  await alice.openChat()
+  await bea.openChat()
+  const typing = alice.page.getByText('Bea is typing')
+
+  const text = `on my way ${Date.now()}`
+  await bea.composer.pressSequentially(text)
+  await expect(typing).toBeVisible({ timeout: 5_000 })
+  await bea.composer.press('Enter')
+  await expect(alice.message(text)).toBeVisible({ timeout: 5_000 })
+  // Well inside the 5 s expiry, so it was the send that cleared it, not the timeout.
+  await expect(typing).toBeHidden({ timeout: 1_000 })
+
+  // Still inside the 3 s typing throttle: the next keystroke must announce again straight away.
+  await bea.composer.pressSequentially('and')
+  await expect(typing).toBeVisible({ timeout: 2_000 })
+
+  // Clearing the box counts as stopping.
+  await bea.composer.fill('')
+  await expect(typing).toBeHidden({ timeout: 1_000 })
+})
+
+test('a slash command does not leave a typing indicator behind', async ({ alice, bea }) => {
+  await alice.openChat()
+  await bea.openChat()
+  const typing = alice.page.getByText('Bea is typing')
+
+  await bea.composer.pressSequentially('/eep')
+  await expect(typing).toBeVisible({ timeout: 5_000 })
+  await bea.composer.press('Enter')
+  await expect(bea.eepHeading).toBeVisible()
+  await expect(typing).toBeHidden({ timeout: 1_000 })
 })

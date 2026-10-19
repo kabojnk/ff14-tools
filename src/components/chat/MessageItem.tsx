@@ -14,7 +14,8 @@ interface MessageItemProps {
   message: Message
   author: Profile | null
   showHeader: boolean
-  channelId: string
+  /** spaceKey(conversationId, space) of the list this message is in. */
+  spaceKey: string
   isPinned?: boolean
   onBroadcastEdit: (message: Message) => void
   onBroadcastDelete: (messageId: string) => void
@@ -27,7 +28,7 @@ export function MessageItem({
   message,
   author,
   showHeader,
-  channelId,
+  spaceKey,
   isPinned = false,
   onBroadcastDelete,
   onPin,
@@ -75,7 +76,6 @@ export function MessageItem({
   const authorPresence = author ? onlineUsers[author.id] : null
   const authorStatus = authorPresence?.status ?? author?.status ?? 'offline'
   const authorCustomText = authorPresence?.custom_status_text ?? author?.custom_status_text ?? null
-  const authorCustomEmoji = authorPresence?.custom_status_emoji ?? author?.custom_status_emoji ?? null
 
   const openProfile = (e: React.MouseEvent) => {
     if (!author) return
@@ -167,12 +167,12 @@ export function MessageItem({
       setIsEditing(false)
       return
     }
-    await editMessage(message.id, editContent, channelId)
+    await editMessage(message.id, editContent, spaceKey)
     setIsEditing(false)
   }
 
   const handleDelete = async () => {
-    await deleteMessage(message.id, channelId)
+    await deleteMessage(message.id, spaceKey)
     onBroadcastDelete(message.id)
     setShowDeleteConfirm(false)
   }
@@ -310,7 +310,7 @@ export function MessageItem({
             profile={author}
             status={authorStatus}
             customText={authorCustomText}
-            customEmoji={authorCustomEmoji}
+            statusId={author.status_id ?? null}
             anchorRect={profileAnchor}
             onClose={() => setProfileAnchor(null)}
           />

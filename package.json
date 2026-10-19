@@ -14,6 +14,8 @@
     "db:start": "npx --yes supabase@2 start -x edge-runtime,studio,imgproxy,logflare,vector,supavisor",
     "db:stop": "npx --yes supabase@2 stop",
     "db:reset": "npx --yes supabase@2 db reset",
+    "test:db": "bash scripts/test-db.sh",
+    "test:migration": "bash scripts/test-migration.sh",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui"
   },

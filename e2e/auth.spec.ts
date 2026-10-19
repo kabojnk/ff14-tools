@@ -13,5 +13,5 @@ test('logged-out visitors see the FF14 tool and can log in to the chat', async (
   await page.getByRole('button', { name: 'Sign In' }).click()
 
   await expect(page.getByRole('heading', { name: EEP_HEADING })).toBeHidden()
-  await expect(page.getByRole('button', { name: 'general', exact: true }).filter({ visible: true }).first()).toBeVisible()
+  await expect(page.locator('[data-space="main"]').filter({ visible: true }).first()).toBeVisible()
 })

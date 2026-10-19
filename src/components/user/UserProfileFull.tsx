@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
 import { Portal } from '@/components/ui/Portal'
-import { statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
+import { CustomStatus } from '@/components/user/CustomStatus'
 import type { Profile, UserStatus } from '@/types'
 
 interface UserProfileFullProps {
   profile: Profile
   status: UserStatus
   customText: string | null
-  customEmoji: string | null
+  statusId: string | null
   onClose: () => void
 }
 
-export function UserProfileFull({ profile, status, customText, customEmoji, onClose }: UserProfileFullProps) {
+export function UserProfileFull({ profile, status, customText, statusId, onClose }: UserProfileFullProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
@@ -68,7 +69,7 @@ export function UserProfileFull({ profile, status, customText, customEmoji, onCl
               )}
               <div
                 className="absolute bottom-1 right-0.5 h-5 w-5 rounded-full border-[3px] border-[hsl(var(--color-bg-floating))]"
-                style={{ backgroundColor: statusColor(status) }}
+                style={{ backgroundColor: presenceColor(presenceOf(status)) }}
               />
             </div>
 
@@ -77,17 +78,12 @@ export function UserProfileFull({ profile, status, customText, customEmoji, onCl
 
             {/* Status */}
             <div className="mt-1.5 flex items-center gap-2">
-              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: statusColor(status) }} />
-              <span className="text-sm text-muted">{statusLabel(status)}</span>
+              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: presenceColor(presenceOf(status)) }} />
+              <span className="text-sm text-muted">{presenceLabel(presenceOf(status))}</span>
             </div>
 
             {/* Custom status */}
-            {(customEmoji || customText) && (
-              <div className="mt-1.5 flex items-center gap-2">
-                {customEmoji && <span className="text-base leading-none">{customEmoji}</span>}
-                {customText && <span className="text-sm text-muted">{customText}</span>}
-              </div>
-            )}
+            <CustomStatus statusId={statusId} text={customText} className="mt-1.5 text-sm" />
 
             <div className="my-4 border-t border-[hsl(var(--color-input-border))]" />
 

@@ -1,44 +1,57 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
-import { useChannelStore } from '@/stores/channelStore'
+import { useConversationStore, type OutgoingMessage } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTyping } from '@/hooks/useTyping'
-import { broadcastNewMessage } from '@/hooks/useMessages'
+import { sendMessageEvent } from '@/lib/conversationRealtime'
+import { SPACE_LABEL, spaceKey } from '@/lib/spaces'
 import { uploadFile, getFileType } from '@/lib/bunny'
 import { EmojiPicker } from '@/components/chat/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
-import type { Channel, Attachment, Message } from '@/types'
+import type { Attachment, Message, Space } from '@/types'
 import type { TenorGif } from '@/lib/tenor'
 
 interface MessageInputProps {
-  channel: Channel
+  conversationId: string
+  space: Space
   replyTo?: Message | null
   onCancelReply?: () => void
 }
 
-// Unsent drafts by channel. They outlive MessageInput, which remounts when the layout crosses the
-// desktop breakpoint (e.g. rotating an iPhone), so a half-typed message isn't lost.
+// Unsent drafts by space (spaceKey). They outlive MessageInput, which remounts when the layout crosses the
+// desktop breakpoint (e.g. rotating an iPhone) or the space changes, so a half-typed message isn't lost.
+// A drag of the lake leaves them alone.
 const drafts = new Map<string, { content: string; attachments: Attachment[] }>()
 
-export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputProps) {
+/** Sends a message and shows it here at once; the other screens hear about it over realtime. */
+async function postMessage(m: OutgoingMessage) {
+  const conv = useConversationStore.getState()
+  const data = await conv.sendMessage(m)
+  if (!data) return
+  useMessageStore.getState().addMessage(spaceKey(data.conversation_id, data.space), data)
+  conv.noteMessage(data)
+  sendMessageEvent('new', data)
+}
+
+export function MessageInput({ conversationId, space, replyTo, onCancelReply }: MessageInputProps) {
   const { user } = useAuthStore()
-  const { getOrCreateSession, dragTheLake } = useChannelStore()
+  const dragTheLake = useConversationStore((s) => s.dragTheLake)
   const { setEepMode } = useUiStore()
-  const { sendTyping } = useTyping(channel.id)
-  const [content, setContent] = useState(() => drafts.get(channel.id)?.content ?? '')
+  const { sendTyping, stopTyping } = useTyping(space)
+  const draftKey = spaceKey(conversationId, space)
+  const [content, setContent] = useState(() => drafts.get(draftKey)?.content ?? '')
   const [showEmoji, setShowEmoji] = useState(false)
   const [showGif, setShowGif] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [pendingAttachments, setPendingAttachments] = useState<Attachment[]>(
-    () => drafts.get(channel.id)?.attachments ?? [],
+    () => drafts.get(draftKey)?.attachments ?? [],
   )
 
   useEffect(() => {
-    if (content || pendingAttachments.length > 0) drafts.set(channel.id, { content, attachments: pendingAttachments })
-    else drafts.delete(channel.id)
-  }, [channel.id, content, pendingAttachments])
+    if (content || pendingAttachments.length > 0) drafts.set(draftKey, { content, attachments: pendingAttachments })
+    else drafts.delete(draftKey)
+  }, [draftKey, content, pendingAttachments])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const gifButtonRef = useRef<HTMLButtonElement>(null)
@@ -46,12 +59,13 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
   const handleSend = useCallback(async () => {
     const trimmed = content.trim()
     if ((!trimmed && pendingAttachments.length === 0) || !user) return
+    stopTyping()
 
     // Handle slash commands
     if (trimmed.startsWith('/') && pendingAttachments.length === 0) {
       const command = trimmed.toLowerCase()
       if (command === '/drag') {
-        dragTheLake(channel.id)
+        void dragTheLake()
         setContent('')
         return
       }
@@ -62,33 +76,13 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
       }
     }
 
-    // Get existing session or create one if channel has none yet
-    const session = await getOrCreateSession(channel.id)
-    if (!session) return
-
     const attachmentsToSend = pendingAttachments
     setContent('')
     setPendingAttachments([])
     onCancelReply?.()
 
-    // Send the message with attachments
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        channel_id: channel.id,
-        session_id: session.id,
-        author_id: user.id,
-        content: trimmed || null,
-        attachments: attachmentsToSend,
-        type: 'text',
-      })
-      .select()
-      .single()
-
-    if (!error && data) {
-      useMessageStore.getState().addMessage(channel.id, data)
-      broadcastNewMessage(channel.id, data as Message)
-    }
+    // Send the message with attachments (into the newest visible session, created if needed)
+    await postMessage({ authorId: user.id, space, content: trimmed || null, attachments: attachmentsToSend, type: 'text' })
 
     // Re-focus input
     textareaRef.current?.focus()
@@ -96,7 +90,7 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, pendingAttachments, user, channel.id, getOrCreateSession, dragTheLake, setEepMode])
+  }, [content, pendingAttachments, user, space, dragTheLake, setEepMode, onCancelReply, stopTyping])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -107,7 +101,9 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value)
-    sendTyping()
+    // Clearing the box counts as stopping; anything else is typing.
+    if (e.target.value.trim()) sendTyping()
+    else stopTyping()
 
     // Auto-resize textarea
     const textarea = textareaRef.current
@@ -123,7 +119,7 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
 
     for (const file of Array.from(files)) {
       try {
-        const result = await uploadFile(file, `messages/${channel.id}`)
+        const result = await uploadFile(file, `messages/${conversationId}`)
         const attachment: Attachment = {
           url: result.url,
           type: getFileType(result.type),
@@ -143,33 +139,14 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
   const handleGifSelect = async (gif: TenorGif) => {
     if (!user) return
 
-    const session = await getOrCreateSession(channel.id)
-    if (!session) return
-
     // Send GIF as a message immediately
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        channel_id: channel.id,
-        session_id: session.id,
-        author_id: user.id,
-        content: null,
-        attachments: [{
-          url: gif.url,
-          type: 'gif' as const,
-          filename: gif.title || 'gif',
-          size: 0,
-          spoiler: false,
-        }],
-        type: 'gif',
-      })
-      .select()
-      .single()
-
-    if (!error && data) {
-      useMessageStore.getState().addMessage(channel.id, data)
-      broadcastNewMessage(channel.id, data as Message)
-    }
+    await postMessage({
+      authorId: user.id,
+      space,
+      content: null,
+      attachments: [{ url: gif.url, type: 'gif', filename: gif.title || 'gif', size: 0, spoiler: false }],
+      type: 'gif',
+    })
   }
 
   const handleEmojiSelect = (emoji: string) => {
@@ -305,7 +282,7 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder={uploading ? 'Uploading...' : `Message #${channel.name}`}
+          placeholder={uploading ? 'Uploading...' : `Message #${SPACE_LABEL[space]}`}
           className="max-h-[200px] min-h-[24px] flex-1 resize-none bg-transparent py-2.5 text-[15px] text-primary outline-none placeholder:text-muted"
           rows={1}
           autoComplete="off"

@@ -1,24 +1,35 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMessages } from '@/hooks/useMessages'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { useAuthStore } from '@/stores/authStore'
+import { useConversationStore } from '@/stores/conversationStore'
+import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
+import { createReadScheduler } from '@/lib/readScheduler'
+import { spaceKey } from '@/lib/spaces'
 import { MessageItem } from '@/components/chat/MessageItem'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
-import type { Message, Profile } from '@/types'
+import type { Message, Profile, Space } from '@/types'
 
 interface MessageListProps {
-  channelId: string
+  conversationId: string
+  space: Space
   onSetReply?: (message: Message) => void
 }
+
+/** How close to the bottom (px) counts as having seen the newest message. */
+const AT_BOTTOM_PX = 150
 
 // Cache profiles in memory to avoid re-fetching
 const profileCache: Record<string, Profile> = {}
 
-export function MessageList({ channelId, onSetReply }: MessageListProps) {
-  const { messages, loading, realtimeStatus, broadcastEditMessage, broadcastDeleteMessage } = useMessages(channelId)
-  const { pinnedIds, pinMessage, unpinMessage } = usePinnedMessages(channelId)
+export function MessageList({ conversationId, space, onSetReply }: MessageListProps) {
+  const { messages, loading, realtimeStatus, broadcastEditMessage, broadcastDeleteMessage } = useMessages(conversationId, space)
+  const { pinnedIds, pinMessage, unpinMessage } = usePinnedMessages(conversationId)
   const { profile } = useAuthStore()
+  const eepMode = useUiStore((s) => s.eepMode)
+  const key = spaceKey(conversationId, space)
+  const showLoading = loading && messages.length === 0
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -39,23 +50,75 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
     }
   }
 
-  // Reset state whenever the channel changes
+  // Reset state whenever the space changes
   useEffect(() => {
     initialLoadDoneRef.current = false
     userScrolledUpRef.current = false
-  }, [channelId])
+  }, [key])
 
-  // Track manual upward scrolling so the ResizeObserver doesn't override it
+  // ── Mark read ──
+  // One debounced, forward-only scheduler per mounted list. On unmount (e.g. back to the list on
+  // mobile) a pending mark is flushed before the scheduler is disposed.
+  const schedulerRef = useRef<ReturnType<typeof createReadScheduler> | null>(null)
+  useEffect(() => {
+    const scheduler = createReadScheduler(async (sp, at) => {
+      const { error } = await supabase.rpc('mark_read', { p_conversation: conversationId, p_space: sp, p_at: at })
+      if (error) throw error
+    })
+    schedulerRef.current = scheduler
+    const onPageHide = () => void scheduler.flush()
+    window.addEventListener('pagehide', onPageHide)
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      if (schedulerRef.current === scheduler) schedulerRef.current = null
+      void scheduler.flush()
+      scheduler.dispose()
+    }
+  }, [conversationId])
+
+  // The newest message counts as read only while the list is at the bottom, the app is in the
+  // foreground and not disguised (AppShell stays mounted behind Eep mode).
+  const checkRead = useCallback(() => {
+    const container = containerRef.current
+    const newest = messages[messages.length - 1]
+    if (!container || !newest) return
+    if (container.scrollHeight - container.scrollTop - container.clientHeight > AT_BOTTOM_PX) return
+    if (document.visibilityState !== 'visible') return
+    if (useUiStore.getState().eepMode) return
+    useConversationStore.getState().markReadLocal(space, newest.created_at)
+    schedulerRef.current?.schedule(space, newest.created_at)
+  }, [messages, space])
+  const checkReadRef = useRef(checkRead)
+  checkReadRef.current = checkRead
+
+  useEffect(() => {
+    checkRead()
+  }, [checkRead])
+
+  useEffect(() => {
+    const onVisibility = () => checkReadRef.current()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
+  // Unlocking (leaving Eep mode) shows the list again.
+  useEffect(() => {
+    if (!eepMode) checkReadRef.current()
+  }, [eepMode])
+
+  // Track manual upward scrolling so the ResizeObserver doesn't override it.
+  // The container remounts after the loading state, hence the dependency.
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
     const onScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = container
-      userScrolledUpRef.current = scrollHeight - scrollTop - clientHeight > 150
+      userScrolledUpRef.current = scrollHeight - scrollTop - clientHeight > AT_BOTTOM_PX
+      checkReadRef.current()
     }
     container.addEventListener('scroll', onScroll, { passive: true })
     return () => container.removeEventListener('scroll', onScroll)
-  }, [])
+  }, [showLoading])
 
   // Scroll to bottom when messages arrive
   useEffect(() => {
@@ -75,7 +138,6 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
     if (!userScrolledUpRef.current) {
       scrollToBottom('smooth')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length])
 
   // Also scroll when content height grows (reactions, image load-in, etc.),
@@ -93,7 +155,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
 
     observer.observe(content)
     return () => observer.disconnect()
-  }, [])
+  }, [showLoading])
 
   // Store the current user's profile in cache and trigger re-render so
   // display name changes appear immediately in existing message headers.
@@ -160,7 +222,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
     return gap > 5 * 60 * 1000 // 5 minutes
   }
 
-  if (loading && messages.length === 0) {
+  if (showLoading) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-muted">Loading messages...</div>
@@ -175,7 +237,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
 
       {messages.length === 0 && !loading && (
         <div className="px-4 py-8 text-center">
-          <p className="text-lg font-semibold text-primary">Welcome to the channel!</p>
+          <p className="text-lg font-semibold text-primary">Welcome to the space!</p>
           <p className="mt-1 text-sm text-muted">This is the start of the conversation.</p>
         </div>
       )}
@@ -187,7 +249,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
             message={message}
             author={message.author ?? getAuthor(message.author_id)}
             showHeader={shouldShowHeader(i)}
-            channelId={channelId}
+            spaceKey={key}
             isPinned={pinnedIds.has(message.id)}
             onBroadcastEdit={broadcastEditMessage}
             onBroadcastDelete={broadcastDeleteMessage}
@@ -198,7 +260,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
         ))}
 
         {/* Typing indicator */}
-        <TypingIndicator channelId={channelId} />
+        <TypingIndicator space={space} />
 
         <div ref={bottomRef} className="h-1" />
       </div>

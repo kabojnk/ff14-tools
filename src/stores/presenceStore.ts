@@ -7,37 +7,31 @@ interface PresenceUser {
   user_id: string
   status: UserStatus
   custom_status_text: string | null
-  custom_status_emoji: string | null
 }
 
 interface PresenceState {
   onlineUsers: Record<string, PresenceUser>
-  typingUsers: Record<string, string[]> // channelId -> user_ids
   presenceChannel: RealtimeChannel | null
   currentUserId: string | null
   // When the user explicitly picks a status, idle detection won't override it
   manualStatus: UserStatus | null
 
-  initPresence: (userId: string, status: UserStatus, customText: string | null, customEmoji: string | null) => void
-  updatePresence: (status: UserStatus, customText: string | null, customEmoji: string | null, manual?: boolean) => void
+  initPresence: (userId: string, status: UserStatus, customText: string | null) => void
+  updatePresence: (status: UserStatus, customText: string | null, manual?: boolean) => void
   cleanupPresence: () => void
-
-  startTyping: (channelId: string, userId: string, nickname: string) => void
-  subscribeTyping: (channelId: string, onTyping: (userId: string, nickname: string) => void) => RealtimeChannel
 }
 
 export const usePresenceStore = create<PresenceState>((set, get) => ({
   onlineUsers: {},
-  typingUsers: {},
   presenceChannel: null,
   currentUserId: null,
   manualStatus: null,
 
-  initPresence: (userId, status, customText, customEmoji) => {
+  initPresence: (userId, status, customText) => {
     // If already initialized for this user, just update presence payload — don't re-subscribe
     const existing = get()
     if (existing.presenceChannel && existing.currentUserId === userId) {
-      existing.updatePresence(status, customText, customEmoji)
+      existing.updatePresence(status, customText)
       return
     }
 
@@ -73,7 +67,6 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
             user_id: userId,
             status,
             custom_status_text: customText,
-            custom_status_emoji: customEmoji,
           })
         }
       })
@@ -85,12 +78,12 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       currentUserId: userId,
       onlineUsers: {
         ...state.onlineUsers,
-        [userId]: { user_id: userId, status, custom_status_text: customText, custom_status_emoji: customEmoji },
+        [userId]: { user_id: userId, status, custom_status_text: customText },
       },
     }))
   },
 
-  updatePresence: async (status, customText, customEmoji, manual = false) => {
+  updatePresence: async (status, customText, manual = false) => {
     const { presenceChannel, currentUserId } = get()
     if (manual) {
       set({ manualStatus: status })
@@ -105,7 +98,6 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
             user_id: currentUserId,
             status,
             custom_status_text: customText,
-            custom_status_emoji: customEmoji,
           },
         },
       }))
@@ -115,7 +107,6 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
         user_id: currentUserId,
         status,
         custom_status_text: customText,
-        custom_status_emoji: customEmoji,
       })
     }
   },
@@ -126,25 +117,5 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       supabase.removeChannel(presenceChannel)
     }
     set({ presenceChannel: null, currentUserId: null, onlineUsers: {}, manualStatus: null })
-  },
-
-  startTyping: (channelId, userId, nickname) => {
-    const channel = supabase.channel(`typing:${channelId}`)
-    channel.send({
-      type: 'broadcast',
-      event: 'typing_start',
-      payload: { user_id: userId, nickname },
-    })
-  },
-
-  subscribeTyping: (channelId, onTyping) => {
-    const channel = supabase
-      .channel(`typing:${channelId}`)
-      .on('broadcast', { event: 'typing_start' }, ({ payload }) => {
-        onTyping(payload.user_id, payload.nickname)
-      })
-      .subscribe()
-
-    return channel
   },
 }))

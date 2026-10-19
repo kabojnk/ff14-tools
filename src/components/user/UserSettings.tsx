@@ -6,6 +6,7 @@ import { uploadFile } from '@/lib/bunny'
 import { AvatarUpload } from '@/components/user/AvatarUpload'
 import { BannerCrop } from '@/components/user/BannerCrop'
 import { PinPad } from '@/components/pin/PinPad'
+import { LakeSettings } from '@/components/user/LakeSettings'
 import { Portal } from '@/components/ui/Portal'
 import type { ThemePreset } from '@/types'
 
@@ -45,7 +46,7 @@ function GearIcon() {
 
 export function UserSettings({ onClose }: UserSettingsProps) {
   const { profile, fetchProfile } = useAuthStore()
-  const { theme, setTheme, pinCode, pinLength, setPinCode } = useUiStore()
+  const { theme, setTheme, pinLength, setPin, clearPinRemote, verifyPin } = useUiStore()
   const [nickname, setNickname] = useState(profile?.nickname ?? '')
   const [profileMessage, setProfileMessage] = useState(profile?.profile_message ?? '')
   const [saving, setSaving] = useState(false)
@@ -73,25 +74,23 @@ export function UserSettings({ onClose }: UserSettingsProps) {
     pinSuccessTimerRef.current = setTimeout(() => setPinSuccess(null), 2500)
   }
 
-  const verifyCurrentPin = async (pin: string) => pin === pinCode
-
   // Errors propagate to PinPad, which stays open and shows "Couldn't save. Try again."
   const handlePinSuccess = async (pin: string) => {
     if (!profile) throw new Error('Not signed in')
     switch (pinStep) {
       case 'set':
-        await setPinCode(profile.id, pin)
+        await setPin(pin)
         finishPinWizard('PIN set successfully')
         break
       case 'change-verify':
         setPinStep('change-set')
         break
       case 'change-set':
-        await setPinCode(profile.id, pin)
+        await setPin(pin)
         finishPinWizard('PIN changed successfully')
         break
       case 'remove-verify':
-        await setPinCode(profile.id, null)
+        await clearPinRemote()
         finishPinWizard('PIN removed')
         break
     }
@@ -245,44 +244,48 @@ export function UserSettings({ onClose }: UserSettingsProps) {
   )
 
   const securityContent = (
-    <div className="mb-2">
-      <label className="mb-1 block text-xs font-bold uppercase text-secondary">App Lock PIN</label>
-      <p className="mb-4 text-sm text-muted">
-        {pinCode
-          ? 'A 4–6 digit PIN is required to unlock the app after it goes to the background.'
-          : 'Set a 4–6 digit PIN to lock the app when it loses focus.'}
-      </p>
+    <>
+      <div className="mb-2">
+        <label className="mb-1 block text-xs font-bold uppercase text-secondary">App Lock PIN</label>
+        <p className="mb-4 text-sm text-muted">
+          {pinLength !== null
+            ? 'A 4–6 digit PIN is required to unlock the app after it goes to the background.'
+            : 'Set a 4–6 digit PIN to lock the app when it loses focus.'}
+        </p>
 
-      {pinSuccess && (
-        <p className="mb-4 text-sm font-medium text-green-400">{pinSuccess}</p>
-      )}
+        {pinSuccess && (
+          <p className="mb-4 text-sm font-medium text-green-400">{pinSuccess}</p>
+        )}
 
-      <div className="flex gap-3">
-        {!pinCode ? (
-          <button
-            onClick={() => setPinStep('set')}
-            className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
-          >
-            Set PIN
-          </button>
-        ) : (
-          <>
+        <div className="flex gap-3">
+          {pinLength === null ? (
             <button
-              onClick={() => setPinStep('change-verify')}
+              onClick={() => setPinStep('set')}
               className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
             >
-              Change PIN
+              Set PIN
             </button>
-            <button
-              onClick={() => setPinStep('remove-verify')}
-              className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
-            >
-              Remove PIN
-            </button>
-          </>
-        )}
+          ) : (
+            <>
+              <button
+                onClick={() => setPinStep('change-verify')}
+                className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+              >
+                Change PIN
+              </button>
+              <button
+                onClick={() => setPinStep('remove-verify')}
+                className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
+              >
+                Remove PIN
+              </button>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+      <div className="my-8 border-t border-[hsl(var(--color-bg-tertiary))]" />
+      <LakeSettings />
+    </>
   )
 
   const mobileTitles: Record<MobileScreen, string> = {
@@ -454,7 +457,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           mode="unlock"
           length={pinLength}
           title="Enter Current Passcode"
-          verify={verifyCurrentPin}
+          verify={verifyPin}
           onSuccess={handlePinSuccess}
           onCancel={resetPinWizard}
         />

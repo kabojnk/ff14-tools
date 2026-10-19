@@ -1,11 +1,12 @@
 import { useTyping } from '@/hooks/useTyping'
+import type { Space } from '@/types'
 
 interface TypingIndicatorProps {
-  channelId: string
+  space: Space
 }
 
-export function TypingIndicator({ channelId }: TypingIndicatorProps) {
-  const { typingUsers } = useTyping(channelId)
+export function TypingIndicator({ space }: TypingIndicatorProps) {
+  const { typingUsers } = useTyping(space)
 
   if (typingUsers.length === 0) return <div className="h-6" />
 

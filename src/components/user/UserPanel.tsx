@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useUiStore } from '@/stores/uiStore'
-import { StatusPicker, statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { StatusPicker } from '@/components/user/StatusPicker'
+import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import { UserSettings } from '@/components/user/UserSettings'
+import { CustomStatus } from '@/components/user/CustomStatus'
+import { useStatusStore } from '@/stores/statusStore'
 
 export function UserPanel() {
   const { profile } = useAuthStore()
@@ -16,7 +19,8 @@ export function UserPanel() {
   const presence = profile ? onlineUsers[profile.id] : null
   const effectiveStatus = presence?.status ?? 'offline'
   const effectiveCustomText = presence ? presence.custom_status_text : (profile?.custom_status_text ?? null)
-  const effectiveCustomEmoji = presence ? presence.custom_status_emoji : (profile?.custom_status_emoji ?? null)
+  const statusId = profile?.status_id ?? null
+  const hasCustomStatus = useStatusStore((s) => !!statusId && s.definitions.some((d) => d.id === statusId))
 
   return (
     <>
@@ -40,7 +44,7 @@ export function UserPanel() {
           )}
           <div
             className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[hsl(var(--color-bg-tertiary))]"
-            style={{ backgroundColor: statusColor(effectiveStatus) }}
+            style={{ backgroundColor: presenceColor(presenceOf(effectiveStatus)) }}
           />
         </button>
 
@@ -49,10 +53,11 @@ export function UserPanel() {
           <p className="truncate text-sm font-medium leading-tight text-primary">
             {profile?.nickname ?? 'User'}
           </p>
-          <p className="truncate text-[11px] leading-tight text-muted">
-            {effectiveCustomEmoji && `${effectiveCustomEmoji} `}
-            {effectiveCustomText || statusLabel(effectiveStatus)}
-          </p>
+          {hasCustomStatus || effectiveCustomText ? (
+            <CustomStatus statusId={statusId} text={effectiveCustomText} className="truncate text-[11px] leading-tight" />
+          ) : (
+            <p className="truncate text-[11px] leading-tight text-muted">{presenceLabel(presenceOf(effectiveStatus))}</p>
+          )}
         </div>
 
         {/* Settings button */}

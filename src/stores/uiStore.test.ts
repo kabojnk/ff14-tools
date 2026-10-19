@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockSingle, mockUpdateEq } = vi.hoisted(() => ({
+const { mockSingle, mockSelect, mockRpc } = vi.hoisted(() => ({
   mockSingle: vi.fn(),
-  mockUpdateEq: vi.fn(),
+  mockSelect: vi.fn(),
+  mockRpc: vi.fn(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => ({
-      select: () => ({ eq: () => ({ single: mockSingle }) }),
-      update: () => ({ eq: mockUpdateEq }),
+      select: (cols: string) => {
+        mockSelect(cols)
+        return { eq: () => ({ single: mockSingle }) }
+      },
     }),
+    rpc: mockRpc,
   },
 }))
 
@@ -21,7 +25,8 @@ const initialState = useUiStore.getState()
 beforeEach(() => {
   useUiStore.setState(initialState, true)
   mockSingle.mockReset()
-  mockUpdateEq.mockReset().mockResolvedValue({ error: null })
+  mockSelect.mockReset()
+  mockRpc.mockReset().mockResolvedValue({ data: null, error: null })
 })
 
 describe('uiStore eep mode', () => {
@@ -49,47 +54,76 @@ describe('uiStore eep mode', () => {
 })
 
 describe('uiStore PIN', () => {
-  it('loadPin stores the PIN and its length', async () => {
-    mockSingle.mockResolvedValue({ data: { lock_pin: '567890' }, error: null })
+  it('loadPin reads only lock_pin_length, never lock_pin', async () => {
+    mockSingle.mockResolvedValue({ data: { lock_pin_length: 6 }, error: null })
     await useUiStore.getState().loadPin('user-1')
-    expect(useUiStore.getState()).toMatchObject({ pinCode: '567890', pinLength: 6 })
+    expect(mockSelect).toHaveBeenCalledWith('lock_pin_length')
+    for (const [cols] of mockSelect.mock.calls) expect(String(cols)).not.toMatch(/\block_pin\b/)
+    expect(useUiStore.getState().pinLength).toBe(6)
+    expect(useUiStore.getState()).not.toHaveProperty('pinCode')
   })
 
   it('loadPin with no PIN leaves pinLength null', async () => {
-    mockSingle.mockResolvedValue({ data: { lock_pin: null }, error: null })
+    mockSingle.mockResolvedValue({ data: { lock_pin_length: null }, error: null })
     await useUiStore.getState().loadPin('user-1')
-    expect(useUiStore.getState()).toMatchObject({ pinCode: null, pinLength: null })
+    expect(useUiStore.getState().pinLength).toBeNull()
   })
 
-  it('loadPin with no row clears any previous PIN', async () => {
-    useUiStore.setState({ pinCode: '1234', pinLength: 4 })
+  it('loadPin with no row clears any previous PIN length', async () => {
+    useUiStore.setState({ pinLength: 4 })
     mockSingle.mockResolvedValue({ data: null, error: { message: 'not found' } })
     await useUiStore.getState().loadPin('user-2')
-    expect(useUiStore.getState()).toMatchObject({ pinCode: null, pinLength: null })
+    expect(useUiStore.getState().pinLength).toBeNull()
   })
 
-  it('setPinCode writes the PIN for that user and updates pinLength', async () => {
-    await useUiStore.getState().setPinCode('user-1', '12345')
-    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'user-1')
-    expect(useUiStore.getState()).toMatchObject({ pinCode: '12345', pinLength: 5 })
+  it('setPin calls set_pin and stores the new length', async () => {
+    await useUiStore.getState().setPin('12345')
+    expect(mockRpc).toHaveBeenCalledWith('set_pin', { p_pin: '12345' })
+    expect(useUiStore.getState().pinLength).toBe(5)
   })
 
-  it('setPinCode(null) clears the PIN', async () => {
-    await useUiStore.getState().setPinCode('user-1', '1234')
-    await useUiStore.getState().setPinCode('user-1', null)
-    expect(useUiStore.getState()).toMatchObject({ pinCode: null, pinLength: null })
+  it('setPin rejects and keeps the old length when the RPC fails', async () => {
+    useUiStore.setState({ pinLength: 4 })
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'permission denied' } })
+    await expect(useUiStore.getState().setPin('999999')).rejects.toThrow('permission denied')
+    expect(useUiStore.getState().pinLength).toBe(4)
   })
 
-  it('setPinCode rejects and keeps the old PIN when the write fails', async () => {
-    useUiStore.setState({ pinCode: '1234', pinLength: 4 })
-    mockUpdateEq.mockResolvedValue({ error: { message: 'permission denied' } })
-    await expect(useUiStore.getState().setPinCode('user-1', '999999')).rejects.toThrow('permission denied')
-    expect(useUiStore.getState()).toMatchObject({ pinCode: '1234', pinLength: 4 })
+  it('clearPinRemote calls clear_pin and forgets the length', async () => {
+    useUiStore.setState({ pinLength: 4 })
+    await useUiStore.getState().clearPinRemote()
+    expect(mockRpc).toHaveBeenCalledWith('clear_pin')
+    expect(useUiStore.getState().pinLength).toBeNull()
   })
 
-  it('clearPin forgets the PIN and any lock (used on logout)', () => {
-    useUiStore.setState({ pinCode: '1234', pinLength: 4, pinLocked: true })
+  it('clearPinRemote rejects and keeps the length when the RPC fails', async () => {
+    useUiStore.setState({ pinLength: 4 })
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'offline' } })
+    await expect(useUiStore.getState().clearPinRemote()).rejects.toThrow('offline')
+    expect(useUiStore.getState().pinLength).toBe(4)
+  })
+
+  it('verifyPin returns the RPC result', async () => {
+    mockRpc.mockResolvedValue({ data: true, error: null })
+    await expect(useUiStore.getState().verifyPin('1234')).resolves.toBe(true)
+    expect(mockRpc).toHaveBeenCalledWith('verify_pin', { p_pin: '1234' })
+    mockRpc.mockResolvedValue({ data: false, error: null })
+    await expect(useUiStore.getState().verifyPin('9999')).resolves.toBe(false)
+  })
+
+  it('verifyPin throws on an RPC error (fails closed)', async () => {
+    mockRpc.mockResolvedValue({ data: null, error: { message: 'Failed to fetch' } })
+    await expect(useUiStore.getState().verifyPin('1234')).rejects.toThrow('Failed to fetch')
+  })
+
+  it('verifyPin throws when the RPC itself rejects', async () => {
+    mockRpc.mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(useUiStore.getState().verifyPin('1234')).rejects.toThrow()
+  })
+
+  it('clearPin forgets the PIN length and any lock (used on logout)', () => {
+    useUiStore.setState({ pinLength: 4, pinLocked: true })
     useUiStore.getState().clearPin()
-    expect(useUiStore.getState()).toMatchObject({ pinCode: null, pinLength: null, pinLocked: false })
+    expect(useUiStore.getState()).toMatchObject({ pinLength: null, pinLocked: false })
   })
 })

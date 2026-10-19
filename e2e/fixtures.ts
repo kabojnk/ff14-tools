@@ -2,6 +2,9 @@ import { test as base, expect, type Page, type TestInfo, type Browser } from '@p
 import { EEP_HEADING, USERS, type SeedUser, type UserKey } from './users'
 import { stubExternalServices } from './stubs'
 
+export type SpaceName = 'Main' | 'Schist'
+export type InfoTabName = 'Media' | 'Pins' | 'Search'
+
 export class ChatUser {
   constructor(
     readonly page: Page,
@@ -24,13 +27,107 @@ export class ChatUser {
     return this.page.getByText(text, { exact: true })
   }
 
-  /** Opens the chat on the seeded `general` channel and waits for its realtime channel to join. */
-  async openChat() {
+  /** The Main or Schist entry in the space list (sidebar on desktop, the Spaces screen on mobile). */
+  spaceButton(name: SpaceName) {
+    return this.page.locator(`[data-space="${name.toLowerCase()}"]`).filter({ visible: true }).first()
+  }
+
+  /** Loads the app and opens a space (Main by default), waiting for the realtime channel to join. */
+  async openChat(space: SpaceName = 'Main') {
     await this.page.goto('/')
-    // Mobile opens on the channel list; on desktop the button is in the sidebar. Either way, select it.
-    await this.page.getByRole('button', { name: 'general', exact: true }).filter({ visible: true }).first().click()
-    await expect(this.composer).toBeVisible()
+    await this.openSpace(space)
+  }
+
+  /** Switches to a space without reloading. On mobile it goes back to the Spaces screen first. */
+  async openSpace(name: SpaceName) {
+    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
+    if (!(await this.spaceButton(name).isVisible()) && (await back.count()) > 0) await back.first().click()
+    await this.spaceButton(name).click()
+    await expect(this.page.getByPlaceholder(`Message #${name}`)).toBeVisible()
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
+  }
+
+  /** Makes the space list visible: a no-op on desktop (the sidebar); on mobile, back to the Spaces screen. */
+  async showSpaces() {
+    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
+    if (!(await this.spaceButton('Main').isVisible()) && (await back.count()) > 0) await back.first().click()
+    await expect(this.spaceButton('Main')).toBeVisible()
+  }
+
+  /** "<name> is typing" under the open space's messages. */
+  typing(nickname: string) {
+    return this.page.getByText(`${nickname} is typing`, { exact: true }).filter({ visible: true })
+  }
+
+  /** Opens User Settings from the user panel (on mobile, from the Spaces screen). */
+  async openSettings() {
+    const settings = this.page.getByTitle('User settings').filter({ visible: true })
+    if ((await settings.count()) === 0) {
+      await this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true }).first().click()
+    }
+    await settings.first().click()
+  }
+
+  /** Opens User Settings on the Security tab (desktop) or screen (mobile: gear → Security). */
+  async openSecurity() {
+    await this.openSettings()
+    const gear = this.page.getByTitle('Settings', { exact: true }).filter({ visible: true })
+    if ((await gear.count()) > 0) await gear.first().click()
+    await this.page.getByRole('button', { name: 'Security', exact: true }).filter({ visible: true }).first().click()
+    await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
+  }
+
+  /** Opens the info panel of the current space on a tab. */
+  async openInfoPanel(tab: InfoTabName) {
+    const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }
+    const direct = this.page.getByTitle(titles[tab], { exact: true }).filter({ visible: true })
+    if ((await direct.count()) > 0) {
+      await direct.first().click()
+    } else {
+      // Mobile: tapping the space name opens the panel; then pick the tab.
+      await this.page.locator('h3').filter({ visible: true }).first().click()
+      await this.page.getByRole('button', { name: tab, exact: true }).filter({ visible: true }).first().click()
+    }
+    await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
+  }
+
+  /** The member list row for a person (the right panel on desktop, the Members screen on mobile). */
+  member(nickname: string) {
+    return this.page.locator(`[data-member="${nickname}"]`).filter({ visible: true }).first()
+  }
+
+  /** Shows the member list: always open on desktop; the Members tab on mobile. */
+  async openMembers() {
+    if ((await this.page.locator('[data-member]').filter({ visible: true }).count()) > 0) return
+    await this.page.getByRole('button', { name: 'Members', exact: true }).filter({ visible: true }).first().click()
+    await expect(this.page.locator('[data-member]').filter({ visible: true }).first()).toBeVisible()
+  }
+
+  /** Opens the status picker from the user panel (on mobile, from the Spaces screen). */
+  async openStatusPicker() {
+    const button = this.page.getByTitle('Set status').filter({ visible: true })
+    if ((await button.count()) === 0) {
+      await this.page.getByRole('button', { name: 'Spaces', exact: true }).filter({ visible: true }).first().click()
+    }
+    await button.first().click()
+    await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
+  }
+
+  /** Drag the Lake from the header's More actions menu. */
+  async dragTheLake() {
+    await this.page.getByTitle('More actions').filter({ visible: true }).first().click()
+    await this.page.getByRole('button', { name: 'Drag the Lake' }).filter({ visible: true }).first().click()
+  }
+
+  /** Fill the Lake from Settings → Security (open it first with openSecurity). */
+  async fillTheLake(password: string) {
+    await this.page.getByLabel('Lake password', { exact: true }).filter({ visible: true }).fill(password)
+    await this.page.getByRole('button', { name: 'Fill the Lake' }).filter({ visible: true }).click()
+  }
+
+  /** Items in the info panel's media tab (thumbnails, file rows and link rows). */
+  get mediaItems() {
+    return this.page.locator('[data-media-item]').filter({ visible: true })
   }
 
   async send(text: string) {
@@ -102,6 +199,8 @@ async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
 }
 
 type Fixtures = {
+  /** Tasks run after every device of the test has closed. Register them with `afterDevicesClose`. */
+  afterDevices: (() => Promise<void>)[]
   alice: ChatUser
   bea: ChatUser
   /** Opens another device (context) for the same user. For multi-device tests in sub-project 3. */
@@ -109,17 +208,27 @@ type Fixtures = {
 }
 
 export const test = base.extend<Fixtures>({
-  alice: async ({ browser }, use, testInfo) => {
+  // The device fixtures depend on this one, so it is torn down after every context has closed.
+  // eslint-disable-next-line no-empty-pattern -- Playwright fixtures must destructure their first argument
+  afterDevices: async ({}, use) => {
+    const tasks: (() => Promise<void>)[] = []
+    await use(tasks)
+    for (const task of tasks) await task()
+  },
+  alice: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const { context, user } = await openUser(browser, testInfo, 'alice')
     await use(user)
     await context.close()
   },
-  bea: async ({ browser }, use, testInfo) => {
+  bea: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const { context, user } = await openUser(browser, testInfo, 'bea')
     await use(user)
     await context.close()
   },
-  secondDevice: async ({ browser }, use, testInfo) => {
+  secondDevice: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const contexts: { close: () => Promise<void> }[] = []
     await use(async (key) => {
       const { context, user } = await openUser(browser, testInfo, key)
@@ -129,5 +238,16 @@ export const test = base.extend<Fixtures>({
     await Promise.all(contexts.map((c) => c.close()))
   },
 })
+
+/**
+ * Runs `fn` after each test of the file, once all of the test's devices have closed. Restoring the seed
+ * while devices are still open fans every write out as realtime events to each of them, which can trip
+ * local Realtime's per-second limit and drop the next test's postgres_changes; test.afterEach runs too early.
+ */
+export function afterDevicesClose(fn: () => Promise<void>) {
+  test.beforeEach(({ afterDevices }) => {
+    afterDevices.push(fn)
+  })
+}
 
 export { expect }
