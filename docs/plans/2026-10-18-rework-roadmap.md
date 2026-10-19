@@ -19,8 +19,8 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 |---|---|---|---|
 | 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild (**built 2026-10-19**) | — | `2026-10-18-test-foundation-design.md` |
 | 2 | Data model: channels → conversations (**built 2026-10-19**; expand only, contract pending) | 1 | `2026-10-19-conversations-data-model-design.md`, plan `2026-10-19-conversations-data-model-plan.md` |
-| 3 | Chat UX rebuild (Messenger-style, polished, mobile-first) | 1, 2 | not yet written |
-| 4 | iOS native research (Capacitor vs React Native, distribution without the App Store) | — (runs alongside) | not yet written |
+| 3 | Chat UX rebuild (Messenger-style, polished, mobile-first): look approved; built as 3a (core chat) then 3b (profile, gallery, emoji, settings) | 1, 2 | `2026-10-19-redesign-design.md` |
+| 4 | iOS: research done; **decided: Capacitor wrapper + TestFlight internal testing**, built after 3a | — | `2026-10-19-ios-native-research.md` |
 
 ## Requirements captured for later sub-projects
 
