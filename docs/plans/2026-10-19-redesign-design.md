@@ -110,7 +110,7 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
   - **red ! with Retry:** failed
 
   When either person has read receipts off, a sent message stays at single ✓. That follows from the database rule (RLS) that hides read positions.
-- **Replies.** The existing reply feature is kept. A reply shows a quoted strip (author plus a one-line snippet) at the top of the bubble, and tapping it scrolls to the original and flashes it.
+- **Replies.** The existing reply action is kept, and **replies are now stored** (a new `messages.reply_to` column, same conversation only). Today the reply bar is shown while typing, but the link is lost on send. A reply shows a quoted strip (author plus a one-line snippet) at the top of the bubble, and tapping it scrolls to the original and flashes it.
 - **Media.**
   - **Images and video:** rounded to the bubble, with the time overlaid on a scrim. A run of several images forms a grid of up to 4 with "+N".
   - **GIFs:** autoplay muted, honouring reduced motion.
