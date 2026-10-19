@@ -1,0 +1,64 @@
+/*
+ * Code colours for Discord markdown. Every colour comes from the theme's
+ * --code-* tokens (themes.css); the fallbacks are a readable dark palette for
+ * any screen rendered before a theme is applied.
+ */
+.md-code {
+  background: var(--code-bg, #1e1e2e);
+  color: var(--code-fg, #cdd6f4);
+}
+
+.md-code .hljs-keyword,
+.md-code .hljs-selector-tag,
+.md-code .hljs-type,
+.md-code .hljs-built_in,
+.md-code .hljs-meta .hljs-keyword,
+.md-code .hljs-doctag {
+  color: var(--code-keyword, #cba6f7);
+}
+
+.md-code .hljs-string,
+.md-code .hljs-regexp,
+.md-code .hljs-template-tag,
+.md-code .hljs-symbol,
+.md-code .hljs-bullet,
+.md-code .hljs-addition,
+.md-code .hljs-meta .hljs-string {
+  color: var(--code-string, #a6e3a1);
+}
+
+.md-code .hljs-number,
+.md-code .hljs-literal,
+.md-code .hljs-variable.constant_,
+.md-code .hljs-selector-attr,
+.md-code .hljs-selector-pseudo {
+  color: var(--code-number, #fab387);
+}
+
+.md-code .hljs-title,
+.md-code .hljs-section,
+.md-code .hljs-name,
+.md-code .hljs-attr,
+.md-code .hljs-attribute,
+.md-code .hljs-selector-id,
+.md-code .hljs-selector-class,
+.md-code .hljs-property {
+  color: var(--code-title, #89b4fa);
+}
+
+.md-code .hljs-comment,
+.md-code .hljs-quote,
+.md-code .hljs-meta,
+.md-code .hljs-deletion {
+  color: var(--code-comment, #9399b2);
+}
+
+.md-code .hljs-comment,
+.md-code .hljs-quote,
+.md-code .hljs-emphasis {
+  font-style: italic;
+}
+
+.md-code .hljs-strong {
+  font-weight: 700;
+}
