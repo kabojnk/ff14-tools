@@ -1,7 +1,7 @@
 -- Old-app (channel-based) ↔ new-app (conversation-based) compatibility triggers.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 -- Fixture (idempotent; the Task 8 seed provides the same rows): one conversation, Alice + Bea, general (main) + schist channels.
 insert into public.conversations (id, created_by, created_at)
@@ -122,6 +122,20 @@ select throws_like(
     ('d0000000-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001',
      '11111111-1111-4111-8111-111111111111', 'no space')$$,
   '%messages_space_required%', 'a message with a conversation but no space is rejected');
+
+-- Old app as a real user: RLS WITH CHECK runs after the BEFORE trigger, so a channel_id-only insert passes.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}';
+select lives_ok(
+  $$insert into public.messages (id, channel_id, session_id, author_id, content) values
+    ('f0000000-0000-4000-8000-000000000004', 'aaaaaaaa-0000-4000-8000-000000000002',
+     'bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'old app as Alice')$$,
+  'an old-app insert as Alice with only channel_id passes RLS');
+reset role;
+select results_eq(
+  $$select conversation_id, space from public.messages where id = 'f0000000-0000-4000-8000-000000000004'$$,
+  $$values ('d0000000-0000-4000-8000-000000000001'::uuid, 'schist'::text)$$,
+  'and lands in Schist');
 
 select * from finish();
 rollback;
