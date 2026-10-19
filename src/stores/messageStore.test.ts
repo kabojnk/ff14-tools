@@ -25,6 +25,7 @@ function msg(id: string, space: Space, created_at = '2026-10-19T10:00:00Z'): Mes
     type: 'text',
     edited_at: null,
     deleted: false,
+    reply_to: null,
     created_at,
   }
 }

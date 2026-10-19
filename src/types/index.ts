@@ -22,6 +22,9 @@ export interface Profile {
   status_id: string | null
   read_receipts: boolean
   lock_pin_length: number | null
+  /** Manual presence choice; null follows the devices. */
+  presence_override: 'away' | 'invisible' | null
+  last_seen_at: string | null
   created_at: string
   updated_at: string
 }
@@ -63,6 +66,7 @@ export interface MediaItem {
   filename: string | null
   extension: string | null
   size: number | null
+  spoiler: boolean
   created_at: string
 }
 
@@ -95,6 +99,7 @@ export interface Message {
   type: 'text' | 'gif' | 'system'
   edited_at: string | null
   deleted: boolean
+  reply_to: string | null
   created_at: string
   // Joined fields
   author?: Profile

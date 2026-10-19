@@ -56,6 +56,13 @@ begin
   if not exists (select 1 from public.message_media where extension = 'pmp' and filename = 'raid.PMP') then raise exception 'raid.PMP must index as pmp'; end if;
   if exists (select 1 from public.message_media where message_id = 'e0000000-0000-4000-8000-000000000005') then raise exception 'deleted message must have no media'; end if;
   if not exists (select 1 from public.message_media where kind = 'link' and url = 'https://Example.com/b' and filename = 'example.com') then raise exception 'trailing dot must be trimmed; host lowercased'; end if;
+  -- spoiler flag backfilled in place (only rock.png was posted as a spoiler)
+  select count(*) into n from public.message_media where spoiler; if n <> 1 then raise exception 'spoilers: expected 1, got %', n; end if;
+  if not (select spoiler from public.message_media where url = 'https://cdn.example/m/rock.png') then raise exception 'rock.png must be a spoiler'; end if;
+
+  -- 3a columns start empty
+  if exists (select 1 from public.messages where reply_to is not null) then raise exception 'legacy messages have no reply links'; end if;
+  if exists (select 1 from public.profiles where presence_override is not null or last_seen_at is not null) then raise exception 'presence columns must start empty'; end if;
 end $$;
 
 -- What a member actually sees (RLS + invoker RPCs)

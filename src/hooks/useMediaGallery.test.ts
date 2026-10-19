@@ -19,6 +19,7 @@ function item(n: number, kind: MediaItem['kind'] = 'image'): MediaItem {
     filename: null,
     extension: null,
     size: null,
+    spoiler: false,
     created_at: `2026-10-19T10:${String(n % 60).padStart(2, '0')}:00Z`,
   }
 }

@@ -56,6 +56,7 @@ function msg(id: string, space: Space, created_at: string, author_id = 'bea'): M
     type: 'text',
     edited_at: null,
     deleted: false,
+    reply_to: null,
     created_at,
   }
 }

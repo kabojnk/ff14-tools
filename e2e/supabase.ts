@@ -53,17 +53,17 @@ export async function restoreStatuses() {
     'alice status',
     (await svc
       .from('profiles')
-      .update({ status: 'offline', status_id: foundOutId, custom_status_text: null })
+      .update({ status: 'offline', status_id: foundOutId, custom_status_text: null, presence_override: null })
       .eq('id', IDS.users.alice)
-      .or(`status.neq.offline,status_id.is.null,status_id.neq.${foundOutId},custom_status_text.not.is.null`)).error,
+      .or(`status.neq.offline,status_id.is.null,status_id.neq.${foundOutId},custom_status_text.not.is.null,presence_override.not.is.null`)).error,
   )
   check(
     'bea status',
     (await svc
       .from('profiles')
-      .update({ status: 'offline', status_id: null, custom_status_text: null })
+      .update({ status: 'offline', status_id: null, custom_status_text: null, presence_override: null })
       .eq('id', IDS.users.bea)
-      .or('status.neq.offline,status_id.not.is.null,custom_status_text.not.is.null')).error,
+      .or('status.neq.offline,status_id.not.is.null,custom_status_text.not.is.null,presence_override.not.is.null')).error,
   )
 }
 
