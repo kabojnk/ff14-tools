@@ -19,7 +19,6 @@ export interface Profile {
   profile_message: string | null
   status: UserStatus
   custom_status_text: string | null
-  custom_status_emoji: string | null
   status_id: string | null
   read_receipts: boolean
   lock_pin_length: number | null

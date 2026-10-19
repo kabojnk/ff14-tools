@@ -76,7 +76,6 @@ export function MessageItem({
   const authorPresence = author ? onlineUsers[author.id] : null
   const authorStatus = authorPresence?.status ?? author?.status ?? 'offline'
   const authorCustomText = authorPresence?.custom_status_text ?? author?.custom_status_text ?? null
-  const authorCustomEmoji = authorPresence?.custom_status_emoji ?? author?.custom_status_emoji ?? null
 
   const openProfile = (e: React.MouseEvent) => {
     if (!author) return
@@ -311,7 +310,7 @@ export function MessageItem({
             profile={author}
             status={authorStatus}
             customText={authorCustomText}
-            customEmoji={authorCustomEmoji}
+            statusId={author.status_id ?? null}
             anchorRect={profileAnchor}
             onClose={() => setProfileAnchor(null)}
           />

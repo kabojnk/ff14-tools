@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useStatusStore } from '@/stores/statusStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChannelHeader } from '@/components/channels/ChannelHeader'
@@ -44,6 +45,15 @@ export function AppShell() {
     if (userId) loadConversation(userId)
   }, [userId, loadConversation])
   useConversationRealtime()
+
+  // Shared status definitions: loaded and kept live once for the whole app.
+  useEffect(() => {
+    if (!userId) return
+    const { load, subscribe } = useStatusStore.getState()
+    const stop = subscribe()
+    void load()
+    return stop
+  }, [userId])
 
   useEffect(() => {
     const vv = window.visualViewport

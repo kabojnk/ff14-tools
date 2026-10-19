@@ -18,12 +18,7 @@ export function usePresence() {
     const initialStatus: UserStatus = profile.status ?? 'online'
     savedStatusRef.current = initialStatus
 
-    initPresence(
-      user.id,
-      initialStatus,
-      profile.custom_status_text,
-      profile.custom_status_emoji
-    )
+    initPresence(user.id, initialStatus, profile.custom_status_text)
 
     const showPrivacyScreen = () => {
       const el = document.getElementById('privacy-screen')
@@ -46,7 +41,7 @@ export function usePresence() {
       const p = useAuthStore.getState().profile
       // Prefer an explicitly-chosen manual status over the auto-saved ref
       const statusToRestore = ps.manualStatus ?? savedStatusRef.current
-      updatePresence(statusToRestore, p?.custom_status_text ?? null, p?.custom_status_emoji ?? null)
+      updatePresence(statusToRestore, p?.custom_status_text ?? null)
     }
 
     const handlePageShow = () => {
@@ -62,7 +57,7 @@ export function usePresence() {
         showPrivacyScreen()
         const live = usePresenceStore.getState().onlineUsers[userId]?.status
         if (live && live !== 'offline') savedStatusRef.current = live
-        updatePresence('offline', null, null)
+        updatePresence('offline', null)
         useUiStore.getState().setEepMode(true)
       } else {
         hidePrivacyScreen()

@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { Portal } from '@/components/ui/Portal'
 import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import { UserProfileFull } from '@/components/user/UserProfileFull'
+import { CustomStatus } from '@/components/user/CustomStatus'
 import type { Profile, UserStatus } from '@/types'
 
 interface UserProfileProps {
   profile: Profile
   status: UserStatus
   customText: string | null
-  customEmoji: string | null
+  statusId: string | null
   anchorRect: DOMRect
   onClose: () => void
 }
@@ -38,7 +39,7 @@ function calcPosition(anchor: DOMRect) {
   return { left, top }
 }
 
-export function UserProfile({ profile, status, customText, customEmoji, anchorRect, onClose }: UserProfileProps) {
+export function UserProfile({ profile, status, customText, statusId, anchorRect, onClose }: UserProfileProps) {
   const cardRef = useRef<HTMLDivElement>(null)
   const [showFull, setShowFull] = useState(false)
   const { left, top } = calcPosition(anchorRect)
@@ -100,13 +101,8 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
             <span className="text-xs text-muted">{presenceLabel(presenceOf(status))}</span>
           </div>
 
-          {/* Custom status — emoji inline with text */}
-          {(customEmoji || customText) && (
-            <div className="mt-1.5 flex items-center gap-1.5">
-              {customEmoji && <span className="text-sm leading-none">{customEmoji}</span>}
-              {customText && <span className="text-xs text-muted">{customText}</span>}
-            </div>
-          )}
+          {/* Custom status: label in its colour, then the message */}
+          <CustomStatus statusId={statusId} text={customText} className="mt-1.5 text-xs" />
 
           {/* About Me — truncated preview */}
           {profile.profile_message && (
@@ -134,7 +130,7 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
           profile={profile}
           status={status}
           customText={customText}
-          customEmoji={customEmoji}
+          statusId={statusId}
           onClose={() => { setShowFull(false); onClose() }}
         />
       )}

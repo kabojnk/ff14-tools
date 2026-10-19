@@ -1,17 +1,18 @@
 import { useEffect } from 'react'
 import { Portal } from '@/components/ui/Portal'
 import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
+import { CustomStatus } from '@/components/user/CustomStatus'
 import type { Profile, UserStatus } from '@/types'
 
 interface UserProfileFullProps {
   profile: Profile
   status: UserStatus
   customText: string | null
-  customEmoji: string | null
+  statusId: string | null
   onClose: () => void
 }
 
-export function UserProfileFull({ profile, status, customText, customEmoji, onClose }: UserProfileFullProps) {
+export function UserProfileFull({ profile, status, customText, statusId, onClose }: UserProfileFullProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
@@ -82,12 +83,7 @@ export function UserProfileFull({ profile, status, customText, customEmoji, onCl
             </div>
 
             {/* Custom status */}
-            {(customEmoji || customText) && (
-              <div className="mt-1.5 flex items-center gap-2">
-                {customEmoji && <span className="text-base leading-none">{customEmoji}</span>}
-                {customText && <span className="text-sm text-muted">{customText}</span>}
-              </div>
-            )}
+            <CustomStatus statusId={statusId} text={customText} className="mt-1.5 text-sm" />
 
             <div className="my-4 border-t border-[hsl(var(--color-input-border))]" />
 

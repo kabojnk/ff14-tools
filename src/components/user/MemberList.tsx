@@ -2,23 +2,28 @@ import { useEffect, useState } from 'react'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
-import { presenceColor, presenceOf } from '@/lib/status'
+import { useStatusStore } from '@/stores/statusStore'
+import { groupMembers, presenceColor, presenceOf } from '@/lib/status'
 import { UserProfile } from '@/components/user/UserProfile'
-import type { Profile, UserStatus } from '@/types'
+import { CustomStatus } from '@/components/user/CustomStatus'
+import type { Presence, Profile, UserStatus } from '@/types'
 
-interface SelectedProfile {
+interface MemberEntry {
   profile: Profile
   status: UserStatus
+  presence: Presence
+  statusId: string | null
   customText: string | null
-  customEmoji: string | null
-  anchorRect: DOMRect
 }
 
-const ALERT_STATUSES: UserStatus[] = ['under_close_watch', 'found_out', 'you_can_call', 'potential_eep']
+interface SelectedProfile extends MemberEntry {
+  anchorRect: DOMRect
+}
 
 export function MemberList() {
   const { onlineUsers } = usePresenceStore()
   const { user } = useAuthStore()
+  const definitions = useStatusStore((s) => s.definitions)
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
   const [selectedProfile, setSelectedProfile] = useState<SelectedProfile | null>(null)
 
@@ -50,43 +55,40 @@ export function MemberList() {
     return () => { supabase.removeChannel(channel) }
   }, [])
 
-  // Merge presence data onto profiles
-  const members = allProfiles.map((profile) => {
-    const presence = onlineUsers[profile.id]
+  // Merge presence data onto profiles. The custom status comes from the live profile row.
+  const members: MemberEntry[] = allProfiles.map((profile) => {
+    const live = onlineUsers[profile.id]
+    const status: UserStatus = live?.status ?? 'offline'
     return {
       profile,
-      status: presence?.status ?? 'offline',
-      customText: presence?.custom_status_text ?? profile.custom_status_text,
-      customEmoji: presence?.custom_status_emoji ?? profile.custom_status_emoji,
+      status,
+      presence: presenceOf(status),
+      statusId: profile.status_id,
+      customText: live?.custom_status_text ?? profile.custom_status_text,
     }
   })
 
-  const alerts  = members.filter((m) => ALERT_STATUSES.includes(m.status))
-  const online  = members.filter((m) => m.status === 'online')
-  const away    = members.filter((m) => m.status === 'away')
-  const offline = members.filter((m) => m.status === 'offline')
+  const groups = groupMembers(members, definitions)
 
-  const handleMemberClick = (entry: typeof members[number], rect: DOMRect) => {
-    setSelectedProfile({
-      profile: entry.profile,
-      status: entry.status,
-      customText: entry.customText,
-      customEmoji: entry.customEmoji,
-      anchorRect: rect,
-    })
+  const handleMemberClick = (entry: MemberEntry, rect: DOMRect) => {
+    setSelectedProfile({ ...entry, anchorRect: rect })
   }
 
   return (
     <>
       <aside className="flex w-[var(--member-list-width)] flex-shrink-0 flex-col overflow-y-auto bg-secondary py-4">
-        {alerts.length > 0 && (
-          <MemberSection label="Alert" count={alerts.length} members={alerts} currentUserId={user?.id} onMemberClick={handleMemberClick} />
-        )}
-        <MemberSection label="Online" count={online.length} members={online} currentUserId={user?.id} onMemberClick={handleMemberClick} />
-        {away.length > 0 && (
-          <MemberSection label="Away" count={away.length} members={away} currentUserId={user?.id} onMemberClick={handleMemberClick} />
-        )}
-        <MemberSection label="Offline" count={offline.length} members={offline} currentUserId={user?.id} dim onMemberClick={handleMemberClick} />
+        {groups.map((g) => (
+          <MemberSection
+            key={g.key}
+            label={g.label}
+            color={g.color}
+            count={g.members.length}
+            members={g.members}
+            currentUserId={user?.id}
+            dim={g.presence === 'offline'}
+            onMemberClick={handleMemberClick}
+          />
+        ))}
       </aside>
 
       {selectedProfile && (
@@ -94,7 +96,7 @@ export function MemberList() {
           profile={selectedProfile.profile}
           status={selectedProfile.status}
           customText={selectedProfile.customText}
-          customEmoji={selectedProfile.customEmoji}
+          statusId={selectedProfile.statusId}
           anchorRect={selectedProfile.anchorRect}
           onClose={() => setSelectedProfile(null)}
         />
@@ -103,17 +105,11 @@ export function MemberList() {
   )
 }
 
-interface MemberEntry {
-  profile: Profile
-  status: UserStatus
-  customText: string | null
-  customEmoji: string | null
-}
-
 function MemberSection({
-  label, count, members, currentUserId, dim = false, onMemberClick,
+  label, color, count, members, currentUserId, dim = false, onMemberClick,
 }: {
   label: string
+  color?: string
   count: number
   members: MemberEntry[]
   currentUserId?: string
@@ -124,7 +120,7 @@ function MemberSection({
 
   return (
     <div className="mb-4 px-3">
-      <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+      <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wide text-muted" style={color ? { color } : undefined}>
         {label} — {count}
       </p>
       <div className="space-y-0.5">
@@ -134,7 +130,7 @@ function MemberSection({
             profile={entry.profile}
             status={entry.status}
             customText={entry.customText}
-            customEmoji={entry.customEmoji}
+            statusId={entry.statusId}
             isYou={entry.profile.id === currentUserId}
             dim={dim}
             onClick={(rect) => onMemberClick(entry, rect)}
@@ -149,7 +145,7 @@ function MemberRow({
   profile,
   status,
   customText,
-  customEmoji,
+  statusId,
   isYou,
   dim,
   onClick,
@@ -157,7 +153,7 @@ function MemberRow({
   profile: Profile
   status: UserStatus
   customText: string | null
-  customEmoji: string | null
+  statusId: string | null
   isYou: boolean
   dim: boolean
   onClick: (rect: DOMRect) => void
@@ -166,6 +162,7 @@ function MemberRow({
     <button
       className={`flex w-full items-center gap-2.5 rounded-[4px] px-2 py-1.5 text-left transition-colors hover:bg-hover ${dim ? 'opacity-50' : ''}`}
       title={isYou ? `${profile.nickname} (you)` : profile.nickname}
+      data-member={profile.nickname}
       onClick={(e) => onClick((e.currentTarget as HTMLElement).getBoundingClientRect())}
     >
       {/* Avatar with status dot */}
@@ -192,12 +189,7 @@ function MemberRow({
         <p className={`truncate text-sm font-medium leading-tight ${dim ? 'text-muted' : 'text-interactive-hover'}`}>
           {profile.nickname}{isYou && <span className="ml-1 text-[10px] text-muted font-normal">(you)</span>}
         </p>
-        {(customText || customEmoji) && (
-          <p className="flex items-center gap-1 truncate text-[11px] leading-tight text-muted">
-            {customEmoji && <span className="text-xs leading-none">{customEmoji}</span>}
-            {customText && <span className="truncate">{customText}</span>}
-          </p>
-        )}
+        <CustomStatus statusId={statusId} text={customText} className="truncate text-[11px] leading-tight" />
       </div>
     </button>
   )

@@ -79,6 +79,28 @@ export class ChatUser {
     await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
   }
 
+  /** The member list row for a person (the right panel on desktop, the Members screen on mobile). */
+  member(nickname: string) {
+    return this.page.locator(`[data-member="${nickname}"]`).filter({ visible: true }).first()
+  }
+
+  /** Shows the member list: always open on desktop; the Members tab on mobile. */
+  async openMembers() {
+    if ((await this.page.locator('[data-member]').filter({ visible: true }).count()) > 0) return
+    await this.page.getByRole('button', { name: 'Members', exact: true }).filter({ visible: true }).first().click()
+    await expect(this.page.locator('[data-member]').filter({ visible: true }).first()).toBeVisible()
+  }
+
+  /** Opens the status picker from the user panel (on mobile, from the Spaces screen). */
+  async openStatusPicker() {
+    const button = this.page.getByTitle('Set status').filter({ visible: true })
+    if ((await button.count()) === 0) {
+      await this.page.getByRole('button', { name: 'Spaces', exact: true }).filter({ visible: true }).first().click()
+    }
+    await button.first().click()
+    await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
+  }
+
   async send(text: string) {
     await this.composer.fill(text)
     await this.composer.press('Enter')

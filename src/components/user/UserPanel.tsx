@@ -5,6 +5,8 @@ import { useUiStore } from '@/stores/uiStore'
 import { StatusPicker } from '@/components/user/StatusPicker'
 import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import { UserSettings } from '@/components/user/UserSettings'
+import { CustomStatus } from '@/components/user/CustomStatus'
+import { useStatusStore } from '@/stores/statusStore'
 
 export function UserPanel() {
   const { profile } = useAuthStore()
@@ -17,7 +19,8 @@ export function UserPanel() {
   const presence = profile ? onlineUsers[profile.id] : null
   const effectiveStatus = presence?.status ?? 'offline'
   const effectiveCustomText = presence ? presence.custom_status_text : (profile?.custom_status_text ?? null)
-  const effectiveCustomEmoji = presence ? presence.custom_status_emoji : (profile?.custom_status_emoji ?? null)
+  const statusId = profile?.status_id ?? null
+  const hasCustomStatus = useStatusStore((s) => !!statusId && s.definitions.some((d) => d.id === statusId))
 
   return (
     <>
@@ -50,10 +53,11 @@ export function UserPanel() {
           <p className="truncate text-sm font-medium leading-tight text-primary">
             {profile?.nickname ?? 'User'}
           </p>
-          <p className="truncate text-[11px] leading-tight text-muted">
-            {effectiveCustomEmoji && `${effectiveCustomEmoji} `}
-            {effectiveCustomText || presenceLabel(presenceOf(effectiveStatus))}
-          </p>
+          {hasCustomStatus || effectiveCustomText ? (
+            <CustomStatus statusId={statusId} text={effectiveCustomText} className="truncate text-[11px] leading-tight" />
+          ) : (
+            <p className="truncate text-[11px] leading-tight text-muted">{presenceLabel(presenceOf(effectiveStatus))}</p>
+          )}
         </div>
 
         {/* Settings button */}
