@@ -4,6 +4,17 @@ import { useMessageStore } from '@/stores/messageStore'
 import type { Message } from '@/types'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
+// Joined broadcast channels by app channel id, so the composer can announce new messages.
+const broadcastChannels = new Map<string, RealtimeChannel>()
+
+export function broadcastNewMessage(channelId: string, message: Message) {
+  broadcastChannels.get(channelId)?.send({
+    type: 'broadcast',
+    event: 'new_message',
+    payload: message,
+  })
+}
+
 export function useMessages(channelId: string) {
   const { messages, loading, fetchMessages, addMessage, updateMessage, removeMessage } = useMessageStore()
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -38,24 +49,17 @@ export function useMessages(channelId: string) {
       })
 
     channelRef.current = broadcastChannel
+    broadcastChannels.set(channelId, broadcastChannel)
 
     return () => {
       active = false
       if (channelRef.current) {
+        if (broadcastChannels.get(channelId) === channelRef.current) broadcastChannels.delete(channelId)
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
     }
   }, [channelId, fetchMessages, addMessage, updateMessage, removeMessage])
-
-  // Function to broadcast after sending
-  const broadcastNewMessage = (message: Message) => {
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'new_message',
-      payload: message,
-    })
-  }
 
   const broadcastEditMessage = (message: Message) => {
     channelRef.current?.send({
@@ -77,7 +81,6 @@ export function useMessages(channelId: string) {
     messages: messages[channelId] ?? [],
     loading,
     realtimeStatus,
-    broadcastNewMessage,
     broadcastEditMessage,
     broadcastDeleteMessage,
   }

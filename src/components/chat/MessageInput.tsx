@@ -5,6 +5,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { useChannelStore } from '@/stores/channelStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTyping } from '@/hooks/useTyping'
+import { broadcastNewMessage } from '@/hooks/useMessages'
 import { uploadFile, getFileType } from '@/lib/bunny'
 import { EmojiPicker } from '@/components/chat/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
@@ -75,6 +76,7 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
 
     if (!error && data) {
       useMessageStore.getState().addMessage(channel.id, data)
+      broadcastNewMessage(channel.id, data as Message)
     }
 
     // Re-focus input
@@ -155,6 +157,7 @@ export function MessageInput({ channel, replyTo, onCancelReply }: MessageInputPr
 
     if (!error && data) {
       useMessageStore.getState().addMessage(channel.id, data)
+      broadcastNewMessage(channel.id, data as Message)
     }
   }
 

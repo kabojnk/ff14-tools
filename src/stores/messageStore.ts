@@ -7,7 +7,6 @@ interface MessageState {
   loading: boolean
 
   fetchMessages: (channelId: string) => Promise<void>
-  sendMessage: (channelId: string, sessionId: string, content: string, authorId: string) => Promise<void>
   editMessage: (messageId: string, newContent: string, channelId: string) => Promise<void>
   deleteMessage: (messageId: string, channelId: string) => Promise<void>
   addMessage: (channelId: string, message: Message) => void
@@ -38,26 +37,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       }))
     } else {
       set({ loading: false })
-    }
-  },
-
-  sendMessage: async (channelId, sessionId, content, authorId) => {
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        channel_id: channelId,
-        session_id: sessionId,
-        author_id: authorId,
-        content,
-        type: 'text',
-      })
-      .select()
-      .single()
-
-    if (!error && data) {
-      // Broadcast will handle adding to the store
-      // But add optimistically for the sender
-      get().addMessage(channelId, data as Message)
     }
   },
 
