@@ -6,18 +6,8 @@ test.afterEach(async () => {
   await restore()
 })
 
-async function dragTheLake(user: ChatUser) {
-  await user.page.getByTitle('More actions').filter({ visible: true }).first().click()
-  await user.page.getByRole('button', { name: 'Drag the Lake' }).filter({ visible: true }).first().click()
-}
-
 function field(user: ChatUser, label: string) {
   return user.page.getByLabel(label, { exact: true }).filter({ visible: true })
-}
-
-async function fill(user: ChatUser, password: string) {
-  await field(user, 'Lake password').fill(password)
-  await user.page.getByRole('button', { name: 'Fill the Lake' }).filter({ visible: true }).click()
 }
 
 function notice(user: ChatUser, text: string) {
@@ -42,7 +32,7 @@ test.describe('Lake', () => {
     const draft = `after the drag ${Date.now()}`
     await bea.composer.fill(draft)
 
-    await dragTheLake(alice)
+    await alice.dragTheLake()
     await expect(alice.message('Seed: hi Bea')).toHaveCount(0)
     await expect(bea.message('Seed: hi Bea')).toHaveCount(0, { timeout: 5_000 })
     await expect(beaSchist.message('Seed: schist hello')).toHaveCount(0, { timeout: 5_000 })
@@ -61,7 +51,7 @@ test.describe('Lake', () => {
 
     await alice.openChat()
     await alice.openSecurity()
-    await fill(alice, 'wrong')
+    await alice.fillTheLake('wrong')
     await expect(notice(alice, 'Wrong password.')).toBeVisible()
     await expect(field(alice, 'Lake password')).toHaveValue('wrong')
 
@@ -76,7 +66,7 @@ test.describe('Lake', () => {
 
     await alice.openChat()
     await alice.openSecurity()
-    await fill(alice, LAKE_PASSWORD)
+    await alice.fillTheLake(LAKE_PASSWORD)
     await expect(notice(alice, 'Lake filled.')).toBeVisible()
     await expect(field(alice, 'Lake password')).toHaveValue('')
 
@@ -97,9 +87,9 @@ test.describe('Lake', () => {
     await alice.page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).click()
     await expect(notice(alice, 'Lake password changed.')).toBeVisible()
 
-    await fill(alice, LAKE_PASSWORD)
+    await alice.fillTheLake(LAKE_PASSWORD)
     await expect(notice(alice, 'Wrong password.')).toBeVisible()
-    await fill(alice, next)
+    await alice.fillTheLake(next)
     await expect(notice(alice, 'Lake filled.')).toBeVisible()
   })
 })

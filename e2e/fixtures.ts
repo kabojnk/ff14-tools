@@ -101,6 +101,23 @@ export class ChatUser {
     await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
   }
 
+  /** Drag the Lake from the header's More actions menu. */
+  async dragTheLake() {
+    await this.page.getByTitle('More actions').filter({ visible: true }).first().click()
+    await this.page.getByRole('button', { name: 'Drag the Lake' }).filter({ visible: true }).first().click()
+  }
+
+  /** Fill the Lake from Settings → Security (open it first with openSecurity). */
+  async fillTheLake(password: string) {
+    await this.page.getByLabel('Lake password', { exact: true }).filter({ visible: true }).fill(password)
+    await this.page.getByRole('button', { name: 'Fill the Lake' }).filter({ visible: true }).click()
+  }
+
+  /** Items in the info panel's media tab (thumbnails, file rows and link rows). */
+  get mediaItems() {
+    return this.page.locator('[data-media-item]').filter({ visible: true })
+  }
+
   async send(text: string) {
     await this.composer.fill(text)
     await this.composer.press('Enter')
