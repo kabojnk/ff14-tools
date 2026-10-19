@@ -3,7 +3,8 @@
 -- If a column here doesn't exist in your local auth schema (older CLI image), remove it from both lists.
 -- Fixed UUIDs so e2e tests can reference rows directly.
 
--- Users: alice@test.local / password123 (PIN 1234), bea@test.local / password123 (PIN 567890)
+-- Users: alice@test.local / password123 (PIN 1234), bea@test.local / password123 (PIN 567890),
+-- cleo@test.local / password123 (no PIN; not a member of any conversation)
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
@@ -15,18 +16,24 @@ insert into auth.users (
    '{"provider":"email","providers":["email"]}', '{"nickname":"Alice"}', now(), now(), '', '', '', '', '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '22222222-2222-4222-8222-222222222222', 'authenticated', 'authenticated',
    'bea@test.local', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"nickname":"Bea"}', now(), now(), '', '', '', '', '', '', '', '');
+   '{"provider":"email","providers":["email"]}', '{"nickname":"Bea"}', now(), now(), '', '', '', '', '', '', '', ''),
+  ('00000000-0000-0000-0000-000000000000', '33333333-3333-4333-8333-333333333333', 'authenticated', 'authenticated',
+   'cleo@test.local', extensions.crypt('password123', extensions.gen_salt('bf')), now(),
+   '{"provider":"email","providers":["email"]}', '{"nickname":"Cleo"}', now(), now(), '', '', '', '', '', '', '', '');
 
 insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values
   (gen_random_uuid(), '11111111-1111-4111-8111-111111111111', '11111111-1111-4111-8111-111111111111',
    '{"sub":"11111111-1111-4111-8111-111111111111","email":"alice@test.local"}', 'email', now(), now(), now()),
   (gen_random_uuid(), '22222222-2222-4222-8222-222222222222', '22222222-2222-4222-8222-222222222222',
-   '{"sub":"22222222-2222-4222-8222-222222222222","email":"bea@test.local"}', 'email', now(), now(), now());
+   '{"sub":"22222222-2222-4222-8222-222222222222","email":"bea@test.local"}', 'email', now(), now(), now()),
+  (gen_random_uuid(), '33333333-3333-4333-8333-333333333333', '33333333-3333-4333-8333-333333333333',
+   '{"sub":"33333333-3333-4333-8333-333333333333","email":"cleo@test.local"}', 'email', now(), now(), now());
 
 -- Profiles (upsert: works whether or not the signup trigger already created them)
 insert into public.profiles (id, nickname, status, lock_pin) values
   ('11111111-1111-4111-8111-111111111111', 'Alice', 'offline', '1234'),
-  ('22222222-2222-4222-8222-222222222222', 'Bea', 'offline', '567890')
+  ('22222222-2222-4222-8222-222222222222', 'Bea', 'offline', '567890'),
+  ('33333333-3333-4333-8333-333333333333', 'Cleo', 'offline', null)
 on conflict (id) do update set nickname = excluded.nickname, lock_pin = excluded.lock_pin;
 
 -- Channel + visible session
