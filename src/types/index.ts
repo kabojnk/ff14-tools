@@ -22,12 +22,10 @@ export interface Profile {
   status: UserStatus
   custom_status_text: string | null
   status_id: string | null
-  presence_override?: PresenceOverride | null
-  last_seen_at?: string | null
   read_receipts: boolean
   lock_pin_length: number | null
   /** Manual presence choice; null follows the devices. */
-  presence_override: 'away' | 'invisible' | null
+  presence_override: PresenceOverride | null
   last_seen_at: string | null
   created_at: string
   updated_at: string
