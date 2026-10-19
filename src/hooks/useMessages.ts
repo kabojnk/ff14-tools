@@ -1,87 +1,29 @@
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect } from 'react'
+import { sendMessageEvent } from '@/lib/conversationRealtime'
+import { spaceKey } from '@/lib/spaces'
+import { useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
-import type { Message } from '@/types'
-import type { RealtimeChannel } from '@supabase/supabase-js'
+import type { Message, Space } from '@/types'
 
-// Joined broadcast channels by app channel id, so the composer can announce new messages.
-const broadcastChannels = new Map<string, RealtimeChannel>()
+const NO_MESSAGES: Message[] = []
 
-export function broadcastNewMessage(channelId: string, message: Message) {
-  broadcastChannels.get(channelId)?.send({
-    type: 'broadcast',
-    event: 'new_message',
-    payload: message,
-  })
-}
-
-export function useMessages(channelId: string) {
-  const { messages, loading, fetchChannelMessages, addMessage, updateMessage, removeMessage } = useMessageStore()
-  const channelRef = useRef<RealtimeChannel | null>(null)
-  const [realtimeStatus, setRealtimeStatus] = useState<string>('CLOSED')
+/** Messages of one space. Live updates arrive through the conversation's realtime channel (AppShell). */
+export function useMessages(conversationId: string, space: Space) {
+  const key = spaceKey(conversationId, space)
+  const messages = useMessageStore((s) => s.messages[key]) ?? NO_MESSAGES
+  const loading = useMessageStore((s) => s.loading)
+  const fetchMessages = useMessageStore((s) => s.fetchMessages)
+  const realtimeStatus = useConversationStore((s) => s.realtimeStatus)
 
   useEffect(() => {
-    let active = true
-    let joinedBefore = false
-    setRealtimeStatus('JOINING')
-    fetchChannelMessages(channelId)
-
-    // Subscribe to broadcast for this channel
-    const broadcastChannel = supabase
-      .channel(`channel:${channelId}`)
-      .on('broadcast', { event: 'new_message' }, ({ payload }) => {
-        addMessage(channelId, payload as Message)
-      })
-      .on('broadcast', { event: 'edit_message' }, ({ payload }) => {
-        updateMessage(channelId, payload as Message)
-      })
-      .on('broadcast', { event: 'delete_message' }, ({ payload }) => {
-        removeMessage(channelId, payload.id)
-      })
-      .subscribe((status) => {
-        if (!active) return // late callback from a channel this effect already removed
-        setRealtimeStatus(status)
-        if (status === 'SUBSCRIBED') {
-          // A re-join means we may have missed broadcasts while disconnected; backfill.
-          if (joinedBefore) fetchChannelMessages(channelId)
-          joinedBefore = true
-        }
-      })
-
-    channelRef.current = broadcastChannel
-    broadcastChannels.set(channelId, broadcastChannel)
-
-    return () => {
-      active = false
-      if (channelRef.current) {
-        if (broadcastChannels.get(channelId) === channelRef.current) broadcastChannels.delete(channelId)
-        supabase.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
-    }
-  }, [channelId, fetchChannelMessages, addMessage, updateMessage, removeMessage])
-
-  const broadcastEditMessage = (message: Message) => {
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'edit_message',
-      payload: message,
-    })
-  }
-
-  const broadcastDeleteMessage = (messageId: string) => {
-    channelRef.current?.send({
-      type: 'broadcast',
-      event: 'delete_message',
-      payload: { id: messageId },
-    })
-  }
+    fetchMessages(conversationId, space)
+  }, [conversationId, space, fetchMessages])
 
   return {
-    messages: messages[channelId] ?? [],
+    messages,
     loading,
     realtimeStatus,
-    broadcastEditMessage,
-    broadcastDeleteMessage,
+    broadcastEditMessage: (message: Message) => sendMessageEvent('edit', message),
+    broadcastDeleteMessage: (messageId: string) => sendMessageEvent('delete', { id: messageId, space }),
   }
 }

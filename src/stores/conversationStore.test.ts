@@ -280,6 +280,51 @@ describe('conversationStore lake', () => {
   })
 })
 
+describe('conversationStore.sendMessage', () => {
+  const out = { authorId: 'alice', space: 'schist' as const, content: 'hi', attachments: [], type: 'text' as const }
+
+  it('inserts into the active session with the conversation and space, without a channel', async () => {
+    await useConversationStore.getState().load('alice')
+    h.tables.messages = () => ({ data: msg('new', 'schist', '2026-10-19T12:00:00Z', 'alice'), error: null })
+    const sent = await useConversationStore.getState().sendMessage(out)
+    expect(sent?.id).toBe('new')
+    const insert = h.queries.find((q) => q.table === 'messages')!
+    expect(insert.ops).toContainEqual([
+      'insert',
+      [{ conversation_id: 'conv-1', space: 'schist', session_id: 'sess-1', author_id: 'alice', content: 'hi', attachments: [], type: 'text' }],
+    ])
+  })
+
+  it('refetches the session once and retries when the session was just hidden (42501)', async () => {
+    await useConversationStore.getState().load('alice')
+    let calls = 0
+    h.tables.messages = () =>
+      ++calls === 1
+        ? { data: null, error: { code: '42501', message: 'new row violates row-level security policy' } }
+        : { data: msg('new', 'schist', '2026-10-19T12:00:00Z', 'alice'), error: null }
+    h.tables.sessions = () => ({ data: { ...SESSION, id: 'sess-after-drag' }, error: null })
+
+    const sent = await useConversationStore.getState().sendMessage(out)
+    expect(sent?.id).toBe('new')
+    const inserts = h.queries.filter((q) => q.table === 'messages')
+    expect(inserts).toHaveLength(2)
+    expect(inserts[1].ops[0][1]).toEqual([expect.objectContaining({ session_id: 'sess-after-drag' })])
+    expect(useConversationStore.getState().activeSession?.id).toBe('sess-after-drag')
+  })
+
+  it('gives up after one retry and on other errors', async () => {
+    await useConversationStore.getState().load('alice')
+    h.tables.messages = () => ({ data: null, error: { code: '42501', message: 'rls' } })
+    expect(await useConversationStore.getState().sendMessage(out)).toBeNull()
+    expect(h.queries.filter((q) => q.table === 'messages')).toHaveLength(2)
+
+    h.queries.length = 0
+    h.tables.messages = () => ({ data: null, error: { code: '23505', message: 'dup' } })
+    expect(await useConversationStore.getState().sendMessage(out)).toBeNull()
+    expect(h.queries.filter((q) => q.table === 'messages')).toHaveLength(1)
+  })
+})
+
 describe('conversationStore.reset', () => {
   it('forgets the conversation and the remembered space', async () => {
     await useConversationStore.getState().load('alice')

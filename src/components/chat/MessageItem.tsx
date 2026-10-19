@@ -14,7 +14,8 @@ interface MessageItemProps {
   message: Message
   author: Profile | null
   showHeader: boolean
-  channelId: string
+  /** spaceKey(conversationId, space) of the list this message is in. */
+  spaceKey: string
   isPinned?: boolean
   onBroadcastEdit: (message: Message) => void
   onBroadcastDelete: (messageId: string) => void
@@ -27,7 +28,7 @@ export function MessageItem({
   message,
   author,
   showHeader,
-  channelId,
+  spaceKey,
   isPinned = false,
   onBroadcastDelete,
   onPin,
@@ -167,12 +168,12 @@ export function MessageItem({
       setIsEditing(false)
       return
     }
-    await editMessage(message.id, editContent, channelId)
+    await editMessage(message.id, editContent, spaceKey)
     setIsEditing(false)
   }
 
   const handleDelete = async () => {
-    await deleteMessage(message.id, channelId)
+    await deleteMessage(message.id, spaceKey)
     onBroadcastDelete(message.id)
     setShowDeleteConfirm(false)
   }

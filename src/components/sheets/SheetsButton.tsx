@@ -1,14 +1,11 @@
-import { useChannelStore } from '@/stores/channelStore'
+import { useConversationStore } from '@/stores/conversationStore'
 
-interface SheetsButtonProps {
-  channelId: string
-}
-
-export function SheetsButton({ channelId }: SheetsButtonProps) {
-  const { dragTheLake } = useChannelStore()
+/** Drags the lake: hides both spaces of the conversation and starts a new clean session. */
+export function SheetsButton() {
+  const dragTheLake = useConversationStore((s) => s.dragTheLake)
 
   const handleClick = () => {
-    dragTheLake(channelId)
+    void dragTheLake()
   }
 
   return (

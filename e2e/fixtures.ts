@@ -2,6 +2,9 @@ import { test as base, expect, type Page, type TestInfo, type Browser } from '@p
 import { EEP_HEADING, USERS, type SeedUser, type UserKey } from './users'
 import { stubExternalServices } from './stubs'
 
+export type SpaceName = 'Main' | 'Schist'
+export type InfoTabName = 'Media' | 'Pins' | 'Search'
+
 export class ChatUser {
   constructor(
     readonly page: Page,
@@ -24,13 +27,47 @@ export class ChatUser {
     return this.page.getByText(text, { exact: true })
   }
 
-  /** Opens the chat on the seeded `general` channel and waits for its realtime channel to join. */
-  async openChat() {
+  /** The Main or Schist entry in the space list (sidebar on desktop, the Spaces screen on mobile). */
+  spaceButton(name: SpaceName) {
+    return this.page.locator(`[data-space="${name.toLowerCase()}"]`).filter({ visible: true }).first()
+  }
+
+  /** Loads the app and opens a space (Main by default), waiting for the realtime channel to join. */
+  async openChat(space: SpaceName = 'Main') {
     await this.page.goto('/')
-    // Mobile opens on the channel list; on desktop the button is in the sidebar. Either way, select it.
-    await this.page.getByRole('button', { name: 'general', exact: true }).filter({ visible: true }).first().click()
-    await expect(this.composer).toBeVisible()
+    await this.openSpace(space)
+  }
+
+  /** Switches to a space without reloading. On mobile it goes back to the Spaces screen first. */
+  async openSpace(name: SpaceName) {
+    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
+    if (!(await this.spaceButton(name).isVisible()) && (await back.count()) > 0) await back.first().click()
+    await this.spaceButton(name).click()
+    await expect(this.page.getByPlaceholder(`Message #${name}`)).toBeVisible()
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
+  }
+
+  /** Opens User Settings from the user panel (on mobile, from the Spaces screen). */
+  async openSettings() {
+    const settings = this.page.getByTitle('User settings').filter({ visible: true })
+    if ((await settings.count()) === 0) {
+      await this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true }).first().click()
+    }
+    await settings.first().click()
+  }
+
+  /** Opens the info panel of the current space on a tab. */
+  async openInfoPanel(tab: InfoTabName) {
+    const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }
+    const direct = this.page.getByTitle(titles[tab], { exact: true }).filter({ visible: true })
+    if ((await direct.count()) > 0) {
+      await direct.first().click()
+    } else {
+      // Mobile: tapping the space name opens the panel; then pick the tab.
+      await this.page.locator('h3').filter({ visible: true }).first().click()
+      await this.page.getByRole('button', { name: tab, exact: true }).filter({ visible: true }).first().click()
+    }
+    await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
   }
 
   async send(text: string) {

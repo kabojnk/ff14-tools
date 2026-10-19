@@ -67,16 +67,6 @@ export interface MediaItem {
   created_at: string
 }
 
-export interface Channel {
-  id: string
-  name: string
-  description: string | null
-  archived: boolean
-  position: number
-  created_by: string
-  created_at: string
-}
-
 export interface Session {
   id: string
   conversation_id: string

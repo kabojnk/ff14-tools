@@ -3,19 +3,22 @@ import { supabase } from '@/lib/supabase'
 import { MediaViewer } from '@/components/chat/MediaViewer'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { Portal } from '@/components/ui/Portal'
-import type { Attachment, Channel, Message } from '@/types'
+import { usePinnedMessages } from '@/hooks/usePinnedMessages'
+import { SPACE_LABEL } from '@/lib/spaces'
+import type { Attachment, Message, Space } from '@/types'
 
 export type InfoTab = 'media' | 'pins' | 'search'
 
 interface ChannelInfoPanelProps {
-  channel: Channel
+  conversationId: string
+  space: Space
   initialTab?: InfoTab
   onClose: () => void
 }
 
 type MediaItem = { attachment: Attachment; message: Message }
 
-export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
+export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<InfoTab>(initialTab)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
@@ -25,12 +28,15 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
   const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video' } | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch media on mount
+  const { pinnedIds, unpinMessage } = usePinnedMessages(conversationId)
+
+  // Fetch media on mount (temporary: Task 16 moves this to get_media)
   useEffect(() => {
     supabase
       .from('messages')
       .select('*')
-      .eq('channel_id', channel.id)
+      .eq('conversation_id', conversationId)
+      .eq('space', space)
       .eq('deleted', false)
       .order('created_at', { ascending: false })
       .limit(300)
@@ -46,45 +52,34 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
         }
         setMediaItems(items)
       })
-  }, [channel.id])
+  }, [conversationId, space])
 
-  // Fetch pinned messages with content
-  const fetchPins = async () => {
-    const { data: pins } = await supabase
-      .from('pinned_messages')
-      .select('message_id')
-      .eq('channel_id', channel.id)
-      .order('pinned_at', { ascending: false })
-
-    if (!pins || pins.length === 0) {
+  // Pinned messages of this space, newest pin first. Pins belong to the conversation; the space comes from the message.
+  useEffect(() => {
+    const ids = [...pinnedIds]
+    if (ids.length === 0) {
       setPinnedMessages([])
       return
     }
-
-    const ids = pins.map((p: { message_id: string }) => p.message_id)
-    const { data: messages } = await supabase
+    let active = true
+    supabase
       .from('messages')
       .select('*')
       .in('id', ids)
+      .eq('space', space)
       .eq('deleted', false)
-
-    if (messages) {
-      const byId = Object.fromEntries((messages as Message[]).map((m) => [m.id, m]))
-      setPinnedMessages(ids.map((id: string) => byId[id]).filter(Boolean))
+      .then(({ data }) => {
+        if (!active || !data) return
+        const byId = Object.fromEntries((data as Message[]).map((m) => [m.id, m]))
+        setPinnedMessages(ids.map((id) => byId[id]).filter(Boolean))
+      })
+    return () => {
+      active = false
     }
-  }
+  }, [pinnedIds, space])
 
-  useEffect(() => {
-    fetchPins()
-  }, [channel.id])
-
-  const handleUnpin = async (messageId: string) => {
-    await supabase
-      .from('pinned_messages')
-      .delete()
-      .eq('channel_id', channel.id)
-      .eq('message_id', messageId)
-    fetchPins()
+  const handleUnpin = (messageId: string) => {
+    void unpinMessage(messageId)
   }
 
   const handleSearch = async () => {
@@ -94,7 +89,8 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
     const { data } = await supabase
       .from('messages')
       .select('*')
-      .eq('channel_id', channel.id)
+      .eq('conversation_id', conversationId)
+      .eq('space', space)
       .eq('deleted', false)
       .ilike('content', `%${q}%`)
       .order('created_at', { ascending: false })
@@ -131,7 +127,7 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
               Back
             </button>
             <h1 className="flex-1 text-center text-base font-semibold text-primary">
-              #{channel.name}
+              {SPACE_LABEL[space]}
             </h1>
             <div className="w-16" />
           </div>
@@ -159,7 +155,7 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
           {/* ── Media tab ── */}
           {activeTab === 'media' && (
             mediaItems.length === 0 ? (
-              <EmptyState label="No media in this channel yet." />
+              <EmptyState label="No media in this space yet." />
             ) : (
               <div className="grid grid-cols-3 gap-0.5 p-0.5">
                 {mediaItems.map(({ attachment, message }, i) => (
@@ -191,7 +187,7 @@ export function ChannelInfoPanel({ channel, initialTab = 'media', onClose }: Cha
           {/* ── Pins tab ── */}
           {activeTab === 'pins' && (
             pinnedMessages.length === 0 ? (
-              <EmptyState label="No pinned messages in this channel." />
+              <EmptyState label="No pinned messages in this space." />
             ) : (
               <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
                 {pinnedMessages.map((msg) => (

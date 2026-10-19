@@ -1,5 +1,9 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
+import { leaveConversation } from '@/lib/conversationRealtime'
+import { useConversationStore } from '@/stores/conversationStore'
+import { useMessageStore } from '@/stores/messageStore'
+import { useTypingStore } from '@/stores/typingStore'
 import type { Profile } from '@/types'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -79,6 +83,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
+    // Leave the private conversation channel and forget its data before the token goes.
+    leaveConversation()
+    const conversationId = useConversationStore.getState().conversation?.id
+    if (conversationId) useMessageStore.getState().clearConversation(conversationId)
+    useConversationStore.getState().reset()
+    useTypingStore.getState().clear()
     await supabase.auth.signOut()
     set({ user: null, session: null, profile: null })
   },

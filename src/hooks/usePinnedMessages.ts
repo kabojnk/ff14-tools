@@ -2,51 +2,53 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 
-export function usePinnedMessages(channelId: string) {
+// realtime-js shares channels by topic, so each hook instance gets its own topic.
+let instance = 0
+
+/** Pinned message IDs for the whole conversation (callers filter by space). */
+export function usePinnedMessages(conversationId: string) {
   const { user } = useAuthStore()
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (!channelId) return
+    if (!conversationId) return
+    let active = true
 
     supabase
       .from('pinned_messages')
       .select('message_id')
-      .eq('channel_id', channelId)
+      .eq('conversation_id', conversationId)
+      .order('pinned_at', { ascending: false })
       .then(({ data }) => {
-        if (data) setPinnedIds(new Set(data.map((p: { message_id: string }) => p.message_id)))
+        if (active && data) setPinnedIds(new Set(data.map((p: { message_id: string }) => p.message_id)))
       })
 
+    const filter = `conversation_id=eq.${conversationId}`
     const ch = supabase
-      .channel(`pins:${channelId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'pinned_messages', filter: `channel_id=eq.${channelId}` },
-        (payload) => {
-          setPinnedIds((prev) => new Set([...prev, (payload.new as { message_id: string }).message_id]))
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'pinned_messages', filter: `channel_id=eq.${channelId}` },
-        (payload) => {
-          setPinnedIds((prev) => {
-            const next = new Set(prev)
-            next.delete((payload.old as { message_id: string }).message_id)
-            return next
-          })
-        },
-      )
+      .channel(`pins:${conversationId}:${++instance}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pinned_messages', filter }, (payload) => {
+        setPinnedIds((prev) => new Set([...prev, (payload.new as { message_id: string }).message_id]))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'pinned_messages', filter }, (payload) => {
+        setPinnedIds((prev) => {
+          const next = new Set(prev)
+          next.delete((payload.old as { message_id: string }).message_id)
+          return next
+        })
+      })
       .subscribe()
 
-    return () => { supabase.removeChannel(ch) }
-  }, [channelId])
+    return () => {
+      active = false
+      supabase.removeChannel(ch)
+    }
+  }, [conversationId])
 
   const pinMessage = async (messageId: string) => {
     if (!user) return
     setPinnedIds((prev) => new Set([...prev, messageId]))
     await supabase.from('pinned_messages').insert({
-      channel_id: channelId,
+      conversation_id: conversationId,
       message_id: messageId,
       pinned_by: user.id,
     })
@@ -58,11 +60,7 @@ export function usePinnedMessages(channelId: string) {
       next.delete(messageId)
       return next
     })
-    await supabase
-      .from('pinned_messages')
-      .delete()
-      .eq('channel_id', channelId)
-      .eq('message_id', messageId)
+    await supabase.from('pinned_messages').delete().eq('conversation_id', conversationId).eq('message_id', messageId)
   }
 
   return { pinnedIds, pinMessage, unpinMessage }

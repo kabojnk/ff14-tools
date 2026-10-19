@@ -24,9 +24,7 @@ test('an unsent draft survives crossing the desktop breakpoint (e.g. rotating an
   const width = alice.page.viewportSize()!.width
   await alice.page.setViewportSize(width < 768 ? { width: 1280, height: 800 } : { width: 393, height: 852 })
 
-  // The mobile layout opens on the channel list; reopen the channel if needed.
-  if (!(await alice.composer.isVisible())) {
-    await alice.page.getByRole('button', { name: 'general', exact: true }).filter({ visible: true }).first().click()
-  }
+  // The mobile layout opens on the Spaces screen; reopen the space if needed.
+  if (!(await alice.composer.isVisible())) await alice.openSpace('Main')
   await expect(alice.composer).toHaveValue(draft)
 })

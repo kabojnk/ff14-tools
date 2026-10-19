@@ -2,7 +2,17 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { SPACES } from '@/lib/spaces'
 import { useMessageStore } from '@/stores/messageStore'
-import type { Conversation, Message, ReadPosition, Session, Space } from '@/types'
+import type { Attachment, Conversation, Message, ReadPosition, Session, Space } from '@/types'
+
+import type { RealtimeStatus } from '@/lib/conversationRealtime'
+
+export interface OutgoingMessage {
+  authorId: string
+  space: Space
+  content: string | null
+  attachments: Attachment[]
+  type: Message['type']
+}
 
 type Latest = { at: string; authorId: string } | null
 
@@ -14,12 +24,20 @@ interface ConversationState {
   readAt: Record<Space, string | null> // my read positions
   latest: Record<Space, Latest>
   loading: boolean
+  /** Status of the conversation's realtime channel (rendered as data-realtime). */
+  realtimeStatus: RealtimeStatus
 
   /** First non-archived conversation visible to me (RLS), its members, newest visible session, my read positions, latest per space. */
   load: (myId: string) => Promise<void>
   setActiveSpace: (space: Space) => void
   /** Newest visible session, else insert one for the conversation. */
   getOrCreateSession: () => Promise<Session | null>
+  /**
+   * Inserts a message into the newest visible session. If the session was hidden in the meantime
+   * (a drag on another screen: RLS answers 42501), refetches the session once and retries.
+   */
+  sendMessage: (m: OutgoingMessage) => Promise<Message | null>
+  setRealtimeStatus: (s: RealtimeStatus) => void
   /** Optimistically clears both spaces, then hides every session on the server. */
   dragTheLake: () => Promise<void>
   fillTheLake: (password: string) => Promise<'filled' | 'wrong' | 'error'>
@@ -70,6 +88,7 @@ const initial = () => ({
   readAt: emptyBySpace<string | null>(null),
   latest: emptyBySpace<Latest>(null),
   loading: false,
+  realtimeStatus: 'CLOSED' as RealtimeStatus,
 })
 
 async function fetchNewestSession(conversationId: string): Promise<Session | null> {
@@ -156,6 +175,36 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     set({ activeSession: created as Session })
     return created as Session
   },
+
+  sendMessage: async (m) => {
+    const insert = async () => {
+      const { conversation } = get()
+      const session = await get().getOrCreateSession()
+      if (!conversation || !session) return { data: null, error: null }
+      return supabase
+        .from('messages')
+        .insert({
+          conversation_id: conversation.id,
+          space: m.space,
+          session_id: session.id,
+          author_id: m.authorId,
+          content: m.content,
+          attachments: m.attachments,
+          type: m.type,
+        })
+        .select()
+        .single()
+    }
+
+    let { data, error } = await insert()
+    if ((error as { code?: string } | null)?.code === '42501') {
+      set({ activeSession: null })
+      ;({ data, error } = await insert())
+    }
+    return !error && data ? (data as Message) : null
+  },
+
+  setRealtimeStatus: (realtimeStatus) => set({ realtimeStatus }),
 
   dragTheLake: async () => {
     const { conversation } = get()

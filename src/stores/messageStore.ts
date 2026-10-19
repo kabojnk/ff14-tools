@@ -8,8 +8,6 @@ interface MessageState {
   loading: boolean
 
   fetchMessages: (conversationId: string, space: Space) => Promise<void>
-  /** @deprecated Legacy channel path; removed in Task 12 when the UI moves to spaces. */
-  fetchChannelMessages: (channelId: string) => Promise<void>
   editMessage: (messageId: string, newContent: string, key: string) => Promise<void>
   deleteMessage: (messageId: string, key: string) => Promise<void>
   addMessage: (key: string, message: Message) => void
@@ -17,7 +15,6 @@ interface MessageState {
   removeMessage: (key: string, messageId: string) => void
   clearMessages: (key: string) => void
   clearConversation: (conversationId: string) => void
-  clearAllMessages: () => void
 }
 
 export const useMessageStore = create<MessageState>((set, get) => {
@@ -42,9 +39,6 @@ export const useMessageStore = create<MessageState>((set, get) => {
         spaceKey(conversationId, space),
         supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: 50 }),
       ),
-
-    fetchChannelMessages: (channelId) =>
-      load(channelId, supabase.rpc('get_channel_messages', { p_channel_id: channelId, p_limit: 50 })),
 
     editMessage: async (messageId, newContent, key) => {
       const { data, error } = await supabase
@@ -101,7 +95,5 @@ export const useMessageStore = create<MessageState>((set, get) => {
         return { messages }
       })
     },
-
-    clearAllMessages: () => set({ messages: {} }),
   }
 })

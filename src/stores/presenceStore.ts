@@ -12,7 +12,6 @@ interface PresenceUser {
 
 interface PresenceState {
   onlineUsers: Record<string, PresenceUser>
-  typingUsers: Record<string, string[]> // channelId -> user_ids
   presenceChannel: RealtimeChannel | null
   currentUserId: string | null
   // When the user explicitly picks a status, idle detection won't override it
@@ -21,14 +20,10 @@ interface PresenceState {
   initPresence: (userId: string, status: UserStatus, customText: string | null, customEmoji: string | null) => void
   updatePresence: (status: UserStatus, customText: string | null, customEmoji: string | null, manual?: boolean) => void
   cleanupPresence: () => void
-
-  startTyping: (channelId: string, userId: string, nickname: string) => void
-  subscribeTyping: (channelId: string, onTyping: (userId: string, nickname: string) => void) => RealtimeChannel
 }
 
 export const usePresenceStore = create<PresenceState>((set, get) => ({
   onlineUsers: {},
-  typingUsers: {},
   presenceChannel: null,
   currentUserId: null,
   manualStatus: null,
@@ -126,25 +121,5 @@ export const usePresenceStore = create<PresenceState>((set, get) => ({
       supabase.removeChannel(presenceChannel)
     }
     set({ presenceChannel: null, currentUserId: null, onlineUsers: {}, manualStatus: null })
-  },
-
-  startTyping: (channelId, userId, nickname) => {
-    const channel = supabase.channel(`typing:${channelId}`)
-    channel.send({
-      type: 'broadcast',
-      event: 'typing_start',
-      payload: { user_id: userId, nickname },
-    })
-  },
-
-  subscribeTyping: (channelId, onTyping) => {
-    const channel = supabase
-      .channel(`typing:${channelId}`)
-      .on('broadcast', { event: 'typing_start' }, ({ payload }) => {
-        onTyping(payload.user_id, payload.nickname)
-      })
-      .subscribe()
-
-    return channel
   },
 }))
