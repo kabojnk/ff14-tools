@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main] # PR branches are covered by pull_request; pushing both ran everything twice
   pull_request:
     branches: [main]
 
@@ -28,7 +28,7 @@ jobs:
   e2e:
     needs: check
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,11 +47,17 @@ jobs:
       - name: Start local Supabase (applies migrations + seed)
         run: npm run db:start
 
+      - name: Database tests (pgTAP)
+        run: npm run test:db
+
+      - name: Migration test (old-shape history → conversations)
+        run: npm run test:migration # ends with a db reset, so the seed is back for e2e
+
       - name: Run e2e
         run: npm run e2e
         env:
           CI: 'true'
-          E2E_SKIP_RESET: '1' # db:start already applied migrations + seed
+          E2E_SKIP_RESET: '1' # test:migration's final reset re-applied migrations + seed
 
       - uses: actions/upload-artifact@v4
         if: failure()

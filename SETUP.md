@@ -182,13 +182,23 @@ Requires Docker.
 | `npm run db:reset` | Rebuild the local database from migrations + seed |
 | `npm run db:stop` | Stop local Supabase |
 | `npm test` | Unit/component tests (Vitest) |
+| `npm run test:db` | Database tests (pgTAP, `supabase/tests/database`): schema, old-app compatibility, RLS, read receipts, media, RPCs. Each file runs in a rolled-back transaction, so it works on a database the e2e suite has used. |
+| `npm run test:migration` | Migration test: loads old-shape, multi-channel history onto the baseline schema, applies the conversations migrations, checks exact counts and that re-running them changes nothing. Ends with `db:reset`. |
 | `npm run e2e` | Two-user end-to-end tests (Playwright: desktop Chromium + iPhone WebKit). Resets the DB first; set `E2E_SKIP_RESET=1` to skip. |
 | `npm run e2e:ui` | Playwright UI mode for debugging |
 
-Seeded accounts: `alice@test.local` / `bea@test.local`, password `password123`, PINs `1234` / `567890`,
-Eep passphrase `test-passphrase`. These are local-only values.
+Seeded accounts (password `password123` for all):
 
-CI (`.github/workflows/ci.yml`) runs lint, type-check, unit tests and the full e2e suite on every push.
+| Account | Nickname | PIN | Notes |
+|---|---|---|---|
+| `alice@test.local` | Alice | `1234` | Member of the conversation |
+| `bea@test.local` | Bea | `567890` | Member of the conversation |
+| `cleo@test.local` | Cleo | none | **Not a member** of any conversation (for RLS tests) |
+
+Eep passphrase `test-passphrase`, lake password `test-lake-password`. These are local-only values.
+
+CI (`.github/workflows/ci.yml`) runs lint, type-check and unit tests, then the database tests, the migration
+test and the full e2e suite, on pull requests to `main` and pushes to `main`.
 
 Bug-fix policy: every fix starts with a failing test at the lowest layer that can reproduce it.
 Before each milestone, run `docs/testing/iphone-checklist.md` on a real device.

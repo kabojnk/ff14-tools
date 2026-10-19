@@ -9,6 +9,10 @@ insert into public.messages (conversation_id, space, session_id, author_id, cont
   ('d0000000-0000-4000-8000-000000000001', 'main',   'bbbbbbbb-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'rpc main'),
   ('d0000000-0000-4000-8000-000000000001', 'schist', 'bbbbbbbb-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222', 'rpc schist');
 insert into public.channels (id, name, position) values ('aaaaaaaa-0000-4000-8000-0000000000f3', 'old-raids', 3);
+-- Start without read positions for Alice: the app (or an e2e run) may have stored newer ones, and
+-- mark_read never moves backwards. Rolled back with the rest of the test.
+delete from public.read_positions
+ where conversation_id = 'd0000000-0000-4000-8000-000000000001' and user_id = '11111111-1111-4111-8111-111111111111';
 
 -- Alice
 set local role authenticated;

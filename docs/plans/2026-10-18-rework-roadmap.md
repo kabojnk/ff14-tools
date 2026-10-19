@@ -1,7 +1,7 @@
 # Chat Rework — Roadmap
 
 **Date:** 2026-10-18
-**Status:** Active. Sub-project 1 in design.
+**Status:** Active. Sub-projects 1 and 2 built; sub-project 3 next.
 
 ## Goal
 
@@ -18,13 +18,30 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 | # | Sub-project | Depends on | Spec |
 |---|---|---|---|
 | 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild (**built 2026-10-19**) | — | `2026-10-18-test-foundation-design.md` |
-| 2 | Data model: channels → conversations | 1 | not yet written |
+| 2 | Data model: channels → conversations (**built 2026-10-19**; expand only, contract pending) | 1 | `2026-10-19-conversations-data-model-design.md`, plan `2026-10-19-conversations-data-model-plan.md` |
 | 3 | Chat UX rebuild (Messenger-style, polished, mobile-first) | 1, 2 | not yet written |
 | 4 | iOS native research (Capacitor vs React Native, distribution without the App Store) | — (runs alongside) | not yet written |
 
 ## Requirements captured for later sub-projects
 
-### Sub-project 2: data
+### Sub-project 2: data (built)
+
+Built as one conversation with two fixed spaces (Main, Schist), shared status definitions, a media index, a hashed PIN and lake password, and compatibility triggers so a cached old app keeps working. The requirements below are kept for reference. Release steps: `docs/testing/release-rehearsal.md`.
+
+**Contract checklist** (a separate migration, run once both phones are on the new app after the production release):
+- [ ] Drop `channels`, `messages.channel_id`, `sessions.channel_id`, `pinned_messages.channel_id`.
+- [ ] Drop `profiles.lock_pin` (plain text), `profiles.status` (the custom values), `profiles.custom_status_emoji`, `status_definitions.legacy_key`.
+- [ ] Drop `change_sheets`, `get_channel_messages` and the compatibility triggers and functions.
+- [ ] Make `conversation_id` and `space` NOT NULL.
+
+**Known open issues** (accepted; details in the plan):
+- The plain-text `lock_pin` stays readable by members until contract, because old apps check it locally.
+- `lock_pin_length` is visible to other members (reveals PIN length only).
+- Reaction delete events under RLS carry only the primary key, so a filtered DELETE subscription can miss them. Reactions are redesigned in sub-project 3.
+- A cached old app doesn't receive live messages from the new app (it only listens to public broadcasts nothing sends any more); it catches up on refetch. Only matters during the release window.
+- No attempt limit on `verify_pin` / `fill_the_lake`.
+
+Original requirements:
 - `conversations` with n participants (usually 2) replace `channels`. Existing channels are merged into one conversation, or kept as tabs (to be decided in the sub-project 2 design).
 - `sessions` (Drag the Lake), `messages`, `reactions`, and `pinned_messages` re-pointed to conversations.
 - Shared **status definitions** table: custom statuses with a label and colour that anyone can create or edit. It replaces the hardcoded `profiles_status_check` values (`under_close_watch`, `found_out`, `you_can_call`, `potential_eep`).
@@ -35,6 +52,11 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 - Production `reactions` lacks `REPLICA IDENTITY FULL` (the old `00009` migration was never applied), so reaction-removal events may not carry the row. Decide whether to add it as a migration.
 
 ### Sub-project 3: UX
+- **Carried over from sub-project 2:**
+  - Seen marker: show where the other person has read up to (read receipts are stored and respect the `read_receipts` setting; nothing displays them yet).
+  - Status pill: show the shared coloured status next to names consistently.
+  - Main | Schist toggle design (today they are two entries in the space list).
+  - Reaction delete events under RLS (see sub-project 2's open issues): redesign reactions so removals arrive live, e.g. one conversation-level subscription or broadcasts instead of a channel per message.
 - Messenger/WhatsApp layout: conversation list (or tabs) plus the conversation view; not Discord-style.
 - Polished typing experience. Native autocorrect and predictive text must work on iOS (no interference from controlled inputs, `autocorrect`/`autocapitalize`/`spellcheck` set correctly).
 - Reliable auto-scroll to the newest message, reliable live delivery of new messages, and unread indicators.
