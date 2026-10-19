@@ -177,12 +177,12 @@ function MemberRow({
             className="h-8 w-8 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-on-accent">
             {profile.nickname.charAt(0).toUpperCase()}
           </div>
         )}
         <div
-          className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[hsl(var(--color-bg-secondary))]"
+          className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[color:var(--bar)]"
           style={{ backgroundColor: presenceColor(presenceOf(status)) }}
         />
       </div>

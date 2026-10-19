@@ -32,7 +32,7 @@ const chipClass = (active: boolean) =>
 
 export function MediaFilters({ kind, onKindChange, extension, onExtensionChange, scope, onScopeChange }: MediaFiltersProps) {
   return (
-    <div className="border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary">
+    <div className="border-b border-[color:var(--line)] bg-secondary">
       <div className="flex overflow-x-auto px-1">
         {CHIPS.map((c) => (
           <button key={c.value} onClick={() => onKindChange(c.value)} aria-pressed={kind === c.value} className={chipClass(kind === c.value)}>
@@ -70,7 +70,7 @@ export function MediaFilters({ kind, onKindChange, extension, onExtensionChange,
               onClick={() => onScopeChange(s.value)}
               aria-pressed={scope === s.value}
               className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                scope === s.value ? 'bg-brand text-white' : 'text-interactive hover:text-interactive-hover'
+                scope === s.value ? 'bg-brand text-on-accent' : 'text-interactive hover:text-interactive-hover'
               }`}
             >
               {s.label}

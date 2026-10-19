@@ -10,7 +10,7 @@ export function presenceOf(status: string | null | undefined): Presence {
 }
 
 export function presenceColor(p: Presence): string {
-  return `hsl(var(--color-status-${p}))`
+  return `var(--presence-${p})`
 }
 
 const PRESENCE_LABEL: Record<Presence, string> = { online: 'Online', away: 'Away', offline: 'Offline' }

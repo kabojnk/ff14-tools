@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockSingle, mockSelect, mockRpc } = vi.hoisted(() => ({
   mockSingle: vi.fn(),
@@ -19,6 +19,7 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import { useUiStore } from '@/stores/uiStore'
+import { THEME_IDS } from '@/lib/themes'
 
 const initialState = useUiStore.getState()
 
@@ -125,5 +126,57 @@ describe('uiStore PIN', () => {
     useUiStore.setState({ pinLength: 4, pinLocked: true })
     useUiStore.getState().clearPin()
     expect(useUiStore.getState()).toMatchObject({ pinLength: null, pinLocked: false })
+  })
+})
+
+describe('uiStore theme', () => {
+  // The initial theme is read when the module loads, so each case loads a fresh copy.
+  async function freshStore(stored: string | null, prefersDark: boolean) {
+    vi.resetModules()
+    if (stored !== null) localStorage.setItem('theme', stored)
+    vi.stubGlobal('matchMedia', vi.fn((q: string) => ({ matches: q === '(prefers-color-scheme: dark)' && prefersDark })))
+    const mod = await import('@/stores/uiStore')
+    return mod.useUiStore
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    [true, 'dark'],
+    [false, 'light'],
+  ])('with nothing stored, follows the OS (prefers dark: %s → %s)', async (prefersDark, expected) => {
+    const store = await freshStore(null, prefersDark)
+    expect(store.getState().theme).toBe(expected)
+  })
+
+  it.each(['solarized', 'Dark', ''])('an unknown stored id (%j) falls back to the OS default', async (stored) => {
+    const store = await freshStore(stored, false)
+    expect(store.getState().theme).toBe('light')
+  })
+
+  it.each(THEME_IDS)('%s round-trips through localStorage', async (id) => {
+    const first = await freshStore(null, true)
+    first.getState().setTheme(id)
+    expect(localStorage.getItem('theme')).toBe(id)
+    const second = await freshStore(null, true)
+    expect(second.getState().theme).toBe(id)
+  })
+
+  it('survives localStorage throwing (private mode)', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied') })
+    const store = await freshStore(null, true)
+    expect(store.getState().theme).toBe('dark')
+    expect(() => store.getState().setTheme('nord')).not.toThrow()
+    expect(store.getState().theme).toBe('nord')
+  })
+
+  it('falls back to dark without matchMedia', async () => {
+    vi.resetModules()
+    vi.stubGlobal('matchMedia', undefined)
+    const { useUiStore: store } = await import('@/stores/uiStore')
+    expect(store.getState().theme).toBe('dark')
   })
 })

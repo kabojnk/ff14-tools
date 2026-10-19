@@ -7,7 +7,7 @@ type Result = { tone: 'ok' | 'error'; text: string } | null
 
 const inputClass = 'w-full rounded-[3px] bg-input px-3 py-2 text-sm text-primary outline-none'
 const buttonClass =
-  'rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50'
+  'rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-brand-hover disabled:opacity-50'
 const headingClass = 'mb-1 block text-xs font-bold uppercase text-secondary'
 
 function ResultLine({ result }: { result: Result }) {
@@ -153,7 +153,7 @@ function ReadReceipts() {
           aria-labelledby={labelId}
           onClick={toggle}
           className={`relative h-6 w-10 flex-shrink-0 rounded-full transition-colors ${
-            on ? 'bg-brand' : 'bg-[hsl(var(--color-input-border))]'
+            on ? 'bg-brand' : 'bg-[color:var(--muted)]'
           }`}
         >
           <span

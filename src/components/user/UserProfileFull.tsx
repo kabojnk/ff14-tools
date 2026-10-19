@@ -49,7 +49,7 @@ export function UserProfileFull({ profile, status, customText, statusId, onClose
           {profile.banner_url ? (
             <img src={profile.banner_url} alt="" className="h-24 w-full object-cover" />
           ) : (
-            <div className="h-24 bg-[hsl(var(--color-brand)/.6)]" />
+            <div className="h-24 bg-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]" />
           )}
 
           {/* Body */}
@@ -60,15 +60,15 @@ export function UserProfileFull({ profile, status, customText, statusId, onClose
                 <img
                   src={profile.avatar_url}
                   alt={profile.nickname}
-                  className="h-20 w-20 rounded-full object-cover ring-4 ring-[hsl(var(--color-bg-floating))]"
+                  className="h-20 w-20 rounded-full object-cover ring-4 ring-[color:var(--bar)]"
                 />
               ) : (
-                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand text-2xl font-bold text-white ring-4 ring-[hsl(var(--color-bg-floating))]">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand text-2xl font-bold text-on-accent ring-4 ring-[color:var(--bar)]">
                   {profile.nickname.charAt(0).toUpperCase()}
                 </div>
               )}
               <div
-                className="absolute bottom-1 right-0.5 h-5 w-5 rounded-full border-[3px] border-[hsl(var(--color-bg-floating))]"
+                className="absolute bottom-1 right-0.5 h-5 w-5 rounded-full border-[3px] border-[color:var(--bar)]"
                 style={{ backgroundColor: presenceColor(presenceOf(status)) }}
               />
             </div>
@@ -85,7 +85,7 @@ export function UserProfileFull({ profile, status, customText, statusId, onClose
             {/* Custom status */}
             <CustomStatus statusId={statusId} text={customText} className="mt-1.5 text-sm" />
 
-            <div className="my-4 border-t border-[hsl(var(--color-input-border))]" />
+            <div className="my-4 border-t border-[color:var(--line)]" />
 
             {/* About Me */}
             {profile.profile_message ? (

@@ -22,7 +22,7 @@ export function ReactionPicker({ onAdd, onClose }: ReactionPickerProps) {
   }, [onClose])
 
   return (
-    <div ref={ref} className="flex rounded bg-floating p-1 shadow-lg border border-[hsl(var(--color-input-border))]">
+    <div ref={ref} className="flex rounded bg-floating p-1 shadow-lg border border-[color:var(--line)]">
       {QUICK_REACTIONS.map((emoji) => (
         <button
           key={emoji}
@@ -65,8 +65,8 @@ export function ReactionDisplay({ reactions, onAdd, onRemove }: ReactionDisplayP
           onClick={() => hasOwn ? onRemove(emoji) : onAdd(emoji)}
           className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
             hasOwn
-              ? 'border-[hsl(var(--color-brand))] bg-[hsl(var(--color-brand)/.15)]'
-              : 'border-[hsl(var(--color-input-border))] bg-secondary hover:border-[hsl(var(--color-interactive-normal))]'
+              ? 'border-[color:var(--accent)] bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)]'
+              : 'border-[color:var(--line)] bg-secondary hover:border-[color:var(--muted)]'
           }`}
         >
           <span className="text-sm">{emoji}</span>

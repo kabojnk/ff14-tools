@@ -5,6 +5,7 @@ import { usePresence } from '@/hooks/usePresence'
 import { LoginPage } from '@/components/auth/LoginPage'
 import { AppShell } from '@/components/layout/AppShell'
 import { EepMode } from '@/components/eep/EepMode'
+import { LOADING_BG, statusBarColor } from '@/lib/themes'
 
 // Stays mounted for the entire logged-in session, including during Eep mode,
 // so presence and passphrase survive the AppShell ↔ EepMode swap.
@@ -31,28 +32,48 @@ function AuthenticatedApp() {
   )
 }
 
+function setThemeColor(color: string) {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    document.head.appendChild(meta)
+  }
+  meta.content = color
+}
+
 export default function App() {
   const { initialized, user, initialize } = useAuthStore()
-  const { theme } = useUiStore()
+  const { theme, eepMode } = useUiStore()
   const [showLogin, setShowLogin] = useState(false)
 
   useEffect(() => {
     initialize()
   }, [initialize])
 
+  // index.html already set data-theme before the first paint; this keeps it in step with the picker.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
+
+  // The status bar follows the theme's bar in the chat, and the fixed disguise colour otherwise.
+  useEffect(() => {
+    const bar = getComputedStyle(document.documentElement).getPropertyValue('--bar')
+    setThemeColor(statusBarColor({ initialized, signedIn: !!user, eepMode, bar }))
+  }, [theme, initialized, user, eepMode])
 
   // Collapse login overlay whenever auth resolves (successful login or init)
   useEffect(() => {
     if (user) setShowLogin(false)
   }, [user])
 
+  // Before auth resolves: the disguise if it's up, otherwise a neutral fixed-colour screen.
+  // Never theme colours, which would hint at the chat.
   if (!initialized) {
+    if (eepMode) return <EepMode />
     return (
-      <div className="flex h-full items-center justify-center bg-primary">
-        <div className="text-secondary">Loading...</div>
+      <div className="flex h-full items-center justify-center" style={{ background: LOADING_BG }}>
+        <div style={{ color: '#a4aab2' }}>Loading...</div>
       </div>
     )
   }

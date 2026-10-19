@@ -29,19 +29,19 @@ function SegmentRenderer({ segment }: { segment: MarkdownSegment }) {
       return <span className="line-through">{segment.content}</span>
     case 'code':
       return (
-        <code className="rounded-[3px] bg-[hsl(var(--color-bg-tertiary))] px-1 py-0.5 font-mono text-[0.875em] text-[#e88388]">
+        <code className="rounded-[3px] bg-[color:var(--code-bg)] px-1 py-0.5 font-mono text-[0.875em] text-[#e88388]">
           {segment.content}
         </code>
       )
     case 'codeblock':
       return (
-        <pre className="my-1 overflow-x-auto rounded bg-[hsl(var(--color-bg-tertiary))] p-3 text-sm">
+        <pre className="my-1 overflow-x-auto rounded bg-[color:var(--code-bg)] p-3 text-sm">
           <code className="font-mono text-secondary">{segment.content}</code>
         </pre>
       )
     case 'quote':
       return (
-        <div className="my-0.5 border-l-[3px] border-[hsl(var(--color-interactive-normal))] pl-3">
+        <div className="my-0.5 border-l-[3px] border-[color:var(--muted)] pl-3">
           <span className="text-secondary">{segment.content}</span>
         </div>
       )
@@ -63,8 +63,8 @@ function SpoilerText({ content }: { content: string }) {
       className={`
         cursor-pointer rounded-[3px] px-0.5 transition-all
         ${revealed
-          ? 'bg-[hsl(var(--color-spoiler-bg))]'
-          : 'bg-[hsl(var(--color-spoiler-hidden))] text-transparent hover:opacity-80'
+          ? 'bg-[color:var(--seg)]'
+          : 'bg-[color:var(--muted)] text-transparent hover:opacity-80'
         }
       `}
     >

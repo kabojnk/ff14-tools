@@ -97,7 +97,7 @@ export function AppShell() {
       {isDesktop && (<div className="flex flex-1 overflow-hidden">
 
         {/* Left sidebar — always visible on md+ */}
-        <div className="w-[var(--sidebar-width)] flex-shrink-0 border-r border-[hsl(var(--color-bg-tertiary))]">
+        <div className="w-[var(--sidebar-width)] flex-shrink-0 border-r border-[color:var(--line)]">
           <Sidebar />
         </div>
 
@@ -122,7 +122,7 @@ export function AppShell() {
 
         {/* Right member list — toggled via header button */}
         {memberListOpen && (
-          <div className="border-l border-[hsl(var(--color-bg-tertiary))]">
+          <div className="border-l border-[color:var(--line)]">
             <MemberList />
           </div>
         )}
@@ -134,7 +134,7 @@ export function AppShell() {
         {/* Spaces panel */}
         {mobileView === 'channels' && (
           <div className="flex h-full flex-col bg-secondary">
-            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
+            <div className="flex-shrink-0 border-b border-[color:var(--line)] bg-secondary shadow-sm">
               <div className="pt-safe" />
               <div className="flex h-[var(--header-height)] items-center px-5">
                 <h2 className="text-[15px] font-semibold text-primary">Spaces</h2>
@@ -176,7 +176,7 @@ export function AppShell() {
         {/* Members panel */}
         {mobileView === 'members' && (
           <div className="flex h-full flex-col bg-secondary">
-            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
+            <div className="flex-shrink-0 border-b border-[color:var(--line)] bg-secondary shadow-sm">
               <div className="pt-safe" />
               <div className="flex h-[var(--header-height)] items-center px-5">
                 <h2 className="text-[15px] font-semibold text-primary">Members</h2>
@@ -227,7 +227,7 @@ function MobileTabBar({
   onEep: () => void
 }) {
   return (
-    <nav className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
+    <nav className="flex-shrink-0 border-t border-[color:var(--line)] bg-secondary">
       <div className="flex">
         <TabButton
           label="Spaces"

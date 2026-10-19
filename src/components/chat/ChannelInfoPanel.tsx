@@ -91,7 +91,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
       <div className="fixed inset-0 z-40 flex flex-col bg-primary">
         {/* Header */}
         <div className="flex-shrink-0 bg-secondary pt-safe">
-          <div className="flex h-12 items-center border-b border-[hsl(var(--color-bg-tertiary))] px-4">
+          <div className="flex h-12 items-center border-b border-[color:var(--line)] px-4">
             <button
               onClick={onClose}
               className="flex items-center gap-1 text-sm font-medium text-brand"
@@ -108,7 +108,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-[hsl(var(--color-bg-tertiary))]">
+          <div className="flex border-b border-[color:var(--line)]">
             {tabs.map((t) => (
               <button
                 key={t.value}
@@ -135,7 +135,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
             pinnedMessages.length === 0 ? (
               <EmptyState label="No pinned messages in this space." />
             ) : (
-              <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+              <div className="divide-y divide-[color:var(--line)]">
                 {pinnedMessages.map((msg) => (
                   <PinnedMessageCard
                     key={msg.id}
@@ -151,7 +151,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           {activeTab === 'search' && (
             <div className="flex flex-col gap-0">
               {/* Search bar */}
-              <div className="sticky top-0 z-10 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary p-3">
+              <div className="sticky top-0 z-10 border-b border-[color:var(--line)] bg-secondary p-3">
                 <div className="flex items-center gap-2 rounded-lg bg-input px-3 py-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted">
                     <circle cx="11" cy="11" r="8" />
@@ -185,7 +185,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
                 <EmptyState label={`No messages matching "${searchQuery}"`} />
               )}
               {!searchLoading && searchResults.length > 0 && (
-                <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+                <div className="divide-y divide-[color:var(--line)]">
                   {searchResults.map((msg) => (
                     <SearchResultCard key={msg.id} message={msg} query={searchQuery} />
                   ))}
@@ -261,7 +261,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
           )}
 
           {files.length > 0 && (
-            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+            <div className="divide-y divide-[color:var(--line)]">
               {files.map((item) => (
                 <a
                   key={item.id}
@@ -284,7 +284,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
           )}
 
           {links.length > 0 && (
-            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+            <div className="divide-y divide-[color:var(--line)]">
               {links.map((item) => (
                 <a
                   key={item.id}
@@ -375,7 +375,7 @@ function SearchResultCard({ message, query }: { message: Message; query: string 
     const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="rounded bg-brand/30 px-0.5 text-primary not-italic">{part}</mark>
+        ? <mark key={i} className="rounded bg-[color:color-mix(in_srgb,var(--accent)_30%,transparent)] px-0.5 text-primary not-italic">{part}</mark>
         : part,
     )
   }

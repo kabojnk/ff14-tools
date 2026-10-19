@@ -86,7 +86,7 @@ export function MessageContextMenu({
                 onClick={action.onClick}
                 className={`flex w-full items-center gap-2.5 rounded-[3px] px-3 py-1.5 text-left text-sm transition-colors ${
                   action.danger
-                    ? 'text-danger hover:bg-danger hover:text-white'
+                    ? 'text-danger hover:bg-danger hover:text-on-danger'
                     : 'text-interactive hover:bg-hover hover:text-interactive-hover'
                 }`}
               >
@@ -116,7 +116,7 @@ export function MessageContextMenu({
             </button>
           ))}
         </div>
-        <div className="mx-4 border-t border-[hsl(var(--color-bg-tertiary))]" />
+        <div className="mx-4 border-t border-[color:var(--line)]" />
         {/* Actions */}
         <div className="py-2">
           {actions.map((action) => (

@@ -37,12 +37,12 @@ export function UserPanel() {
               className="h-8 w-8 rounded-full object-cover"
             />
           ) : (
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-xs font-semibold text-on-accent">
               {profile?.nickname?.charAt(0).toUpperCase() ?? '?'}
             </div>
           )}
           <div
-            className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[hsl(var(--color-bg-tertiary))]"
+            className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[color:var(--line)]"
             style={{ backgroundColor: presenceColor(presenceOf(effectiveStatus)) }}
           />
         </button>

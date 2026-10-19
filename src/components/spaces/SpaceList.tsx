@@ -65,7 +65,7 @@ export function SpaceList({ variant = 'sidebar', onSelect }: SpaceListProps) {
                 {unread && (
                   <span
                     aria-label="Unread messages"
-                    className="h-2 w-2 flex-shrink-0 rounded-full bg-[hsl(var(--color-text-primary))]"
+                    className="h-2 w-2 flex-shrink-0 rounded-full bg-[color:var(--fg)]"
                   />
                 )}
                 {mobile && (

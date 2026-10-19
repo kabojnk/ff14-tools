@@ -1,6 +1,39 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { ThemePreset } from '@/types'
+import { defaultTheme, isThemeId } from '@/lib/themes'
+
+// Storage can throw (Safari private mode, blocked site data); never let that break the app.
+function readStorage(storage: () => Storage, key: string): string | null {
+  try {
+    return storage().getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeStorage(storage: () => Storage, key: string, value: string): void {
+  try {
+    storage().setItem(key, value)
+  } catch {
+    // Not persisted; the in-memory state still applies.
+  }
+}
+
+const local = () => localStorage
+const session = () => sessionStorage
+
+function prefersDark(): boolean {
+  return typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches
+    : true
+}
+
+/** The stored theme if it's a known id; otherwise the OS default. `index.html` mirrors this for the first paint. */
+function initialTheme(): ThemePreset {
+  const stored = readStorage(local, 'theme')
+  return isThemeId(stored) ? stored : defaultTheme(prefersDark())
+}
 
 interface UiState {
   eepMode: boolean
@@ -27,22 +60,22 @@ interface UiState {
 }
 
 export const useUiStore = create<UiState>((set) => ({
-  eepMode: sessionStorage.getItem('eepMode') === 'true',
+  eepMode: readStorage(session, 'eepMode') === 'true',
   eepPassphrase: null,
   pinLength: null,
   pinLocked: false,
   sidebarOpen: true,
-  memberListOpen: localStorage.getItem('memberListOpen') !== 'false',
-  theme: (localStorage.getItem('theme') as ThemePreset) || 'dark',
+  memberListOpen: readStorage(local, 'memberListOpen') !== 'false',
+  theme: initialTheme(),
 
   setEepMode: (active) => {
-    sessionStorage.setItem('eepMode', String(active))
+    writeStorage(session, 'eepMode', String(active))
     set({ eepMode: active })
     document.title = active ? 'FF14 Random Content Picker' : 'XIV Tools'
   },
 
   lockApp: () => {
-    sessionStorage.setItem('eepMode', 'true')
+    writeStorage(session, 'eepMode', 'true')
     set({ eepMode: true, pinLocked: true })
     document.title = 'FF14 Random Content Picker'
   },
@@ -95,12 +128,12 @@ export const useUiStore = create<UiState>((set) => ({
 
   toggleMemberList: () => set((s) => {
     const next = !s.memberListOpen
-    localStorage.setItem('memberListOpen', String(next))
+    writeStorage(local, 'memberListOpen', String(next))
     return { memberListOpen: next }
   }),
 
   setTheme: (theme) => {
-    localStorage.setItem('theme', theme)
+    writeStorage(local, 'theme', theme)
     set({ theme })
   },
 }))

@@ -222,9 +222,9 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
       <div className={`rounded-lg bg-input ${pendingAttachments.length > 0 ? 'pt-3' : ''}`}>
         {/* Pending attachments preview */}
         {pendingAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 border-b border-[hsl(var(--color-input-border))] px-4 pb-3">
+          <div className="flex flex-wrap gap-2 border-b border-[color:var(--line)] px-4 pb-3">
             {pendingAttachments.map((att, i) => (
-              <div key={i} className="relative rounded border border-[hsl(var(--color-input-border))] bg-secondary p-2">
+              <div key={i} className="relative rounded border border-[color:var(--line)] bg-secondary p-2">
                 {(att.type === 'image' || att.type === 'gif') ? (
                   <img src={att.url} alt={att.filename} className="h-24 w-24 rounded object-cover" />
                 ) : (
@@ -235,7 +235,7 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
                 <div className="mt-1 flex gap-1">
                   <button
                     onClick={() => toggleSpoiler(i)}
-                    className={`rounded px-1 text-[10px] ${att.spoiler ? 'bg-brand text-white' : 'bg-hover text-muted'}`}
+                    className={`rounded px-1 text-[10px] ${att.spoiler ? 'bg-brand text-on-accent' : 'bg-hover text-muted'}`}
                   >
                     SPOILER
                   </button>

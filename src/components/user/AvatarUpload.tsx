@@ -40,7 +40,7 @@ export function AvatarUpload() {
             className="h-20 w-20 rounded-full object-cover"
           />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand text-2xl font-bold text-white">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand text-2xl font-bold text-on-accent">
             {profile?.nickname?.charAt(0).toUpperCase() ?? '?'}
           </div>
         )}
@@ -51,7 +51,7 @@ export function AvatarUpload() {
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="rounded-[3px] border border-[hsl(var(--color-brand))] px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-white disabled:opacity-50"
+          className="rounded-[3px] border border-[color:var(--accent)] px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-on-accent disabled:opacity-50"
         >
           {uploading ? 'Uploading...' : 'Change Avatar'}
         </button>

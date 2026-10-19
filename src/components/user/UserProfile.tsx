@@ -68,7 +68,7 @@ export function UserProfile({ profile, status, customText, statusId, anchorRect,
         {profile.banner_url ? (
           <img src={profile.banner_url} alt="" className="h-16 w-full object-cover" />
         ) : (
-          <div className="h-16 bg-[hsl(var(--color-brand)/.6)]" />
+          <div className="h-16 bg-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]" />
         )}
 
         {/* Body */}
@@ -79,15 +79,15 @@ export function UserProfile({ profile, status, customText, statusId, anchorRect,
               <img
                 src={profile.avatar_url}
                 alt={profile.nickname}
-                className="h-[72px] w-[72px] rounded-full object-cover ring-4 ring-[hsl(var(--color-bg-floating))]"
+                className="h-[72px] w-[72px] rounded-full object-cover ring-4 ring-[color:var(--bar)]"
               />
             ) : (
-              <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-brand text-2xl font-bold text-white ring-4 ring-[hsl(var(--color-bg-floating))]">
+              <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-brand text-2xl font-bold text-on-accent ring-4 ring-[color:var(--bar)]">
                 {profile.nickname.charAt(0).toUpperCase()}
               </div>
             )}
             <div
-              className="absolute bottom-1 right-0.5 h-4 w-4 rounded-full border-[3px] border-[hsl(var(--color-bg-floating))]"
+              className="absolute bottom-1 right-0.5 h-4 w-4 rounded-full border-[3px] border-[color:var(--bar)]"
               style={{ backgroundColor: presenceColor(presenceOf(status)) }}
             />
           </div>
@@ -107,17 +107,17 @@ export function UserProfile({ profile, status, customText, statusId, anchorRect,
           {/* About Me — truncated preview */}
           {profile.profile_message && (
             <>
-              <div className="my-3 border-t border-[hsl(var(--color-input-border))]" />
+              <div className="my-3 border-t border-[color:var(--line)]" />
               <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-secondary">About Me</p>
               <p className="line-clamp-3 text-xs text-muted">{profile.profile_message}</p>
             </>
           )}
 
           {/* View Profile button */}
-          <div className="mt-4 border-t border-[hsl(var(--color-input-border))] pt-3">
+          <div className="mt-4 border-t border-[color:var(--line)] pt-3">
             <button
               onClick={() => setShowFull(true)}
-              className="w-full rounded-[3px] bg-brand py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+              className="w-full rounded-[3px] bg-brand py-1.5 text-sm font-medium text-on-accent transition-colors hover:bg-brand-hover"
             >
               View Profile
             </button>

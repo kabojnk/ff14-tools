@@ -12,9 +12,9 @@ interface StatusPickerProps {
 }
 
 const PRESENCE_OPTIONS: { value: Presence; label: string; color: string }[] = [
-  { value: 'online',  label: 'Online',    color: 'hsl(var(--color-status-online))' },
-  { value: 'away',    label: 'Away',      color: 'hsl(var(--color-status-away))' },
-  { value: 'offline', label: 'Invisible', color: 'hsl(var(--color-status-offline))' },
+  { value: 'online',  label: 'Online',    color: 'var(--presence-online)' },
+  { value: 'away',    label: 'Away',      color: 'var(--presence-away)' },
+  { value: 'offline', label: 'Invisible', color: 'var(--presence-offline)' },
 ]
 
 const NEW_STATUS_COLOR = '#5865f2'
@@ -112,7 +112,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
         onClick={() => void saveDraft()}
         disabled={busy || !draft?.label.trim()}
         aria-label="Save status"
-        className="rounded-[3px] bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+        className="rounded-[3px] bg-brand px-2 py-1 text-xs font-medium text-on-accent hover:bg-brand-hover disabled:opacity-50"
       >
         Save
       </button>
@@ -149,7 +149,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
           <p className="mb-1 mt-3 px-3 text-[10px] font-semibold uppercase tracking-wide text-muted">Custom status</p>
           <div className="mb-1 space-y-0.5">
             <button onClick={() => setChosenId(null)} className={rowClass(statusId === null)}>
-              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full border border-[hsl(var(--color-input-border))]" />
+              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full border border-[color:var(--line)]" />
               <span className="text-primary">None</span>
             </button>
             {definitions.map((d) =>
@@ -199,7 +199,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
           {error && <p className="mb-2 px-3 text-xs text-danger">{error}</p>}
 
           {/* Status message */}
-          <div className="mt-3 border-t border-[hsl(var(--color-input-border))] pt-4">
+          <div className="mt-3 border-t border-[color:var(--line)] pt-4">
             <label htmlFor="status-message" className="mb-1 block text-xs font-bold uppercase text-secondary">
               Status message
             </label>
@@ -218,7 +218,7 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
               </button>
               <button
                 onClick={handleSave}
-                className="rounded-[3px] bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover"
+                className="rounded-[3px] bg-brand px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-brand-hover"
               >
                 Save
               </button>

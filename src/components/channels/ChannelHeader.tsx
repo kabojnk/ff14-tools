@@ -23,7 +23,7 @@ export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderPr
   }
 
   return (
-    <div className="relative flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-primary shadow-sm">
+    <div className="relative flex-shrink-0 border-b border-[color:var(--line)] bg-primary shadow-sm">
       <div className="pt-safe md:hidden" />
     <div className="flex h-[var(--header-height)] items-center gap-2 px-5">
       {/* Mobile nav button — back arrow when mobileBack provided, otherwise hamburger */}
@@ -134,7 +134,7 @@ export function ChannelHeader({ space, mobileBack, onInfoOpen }: ChannelHeaderPr
             <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-md bg-floating p-1 shadow-lg">
               <button
                 onClick={handleDragTheLake}
-                className="flex w-full items-center gap-2 rounded-[3px] px-2 py-1.5 text-left text-sm text-interactive transition-colors hover:bg-brand hover:text-white"
+                className="flex w-full items-center gap-2 rounded-[3px] px-2 py-1.5 text-left text-sm text-interactive transition-colors hover:bg-brand hover:text-on-accent"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18" />

@@ -216,7 +216,7 @@ export function MessageItem({
   return (
     <>
       <div
-        className={`group relative flex gap-4 px-5 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''} ${isPinned ? 'bg-brand/5' : ''}`}
+        className={`group relative flex gap-4 px-5 py-0.5 hover:bg-hover ${showHeader ? 'mt-[17px]' : ''} ${isPinned ? 'bg-[color:color-mix(in_srgb,var(--accent)_5%,transparent)]' : ''}`}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => { setShowActions(false); setShowDeleteConfirm(false) }}
         onTouchStart={handleTouchStart}
@@ -235,7 +235,7 @@ export function MessageItem({
                   className="mt-0.5 h-10 w-10 rounded-full object-cover transition-opacity hover:opacity-80"
                 />
               ) : (
-                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-white transition-opacity hover:opacity-80">
+                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-brand text-sm font-semibold text-on-accent transition-opacity hover:opacity-80">
                   {author?.nickname?.charAt(0).toUpperCase() ?? '?'}
                 </div>
               )}
@@ -318,7 +318,7 @@ export function MessageItem({
 
         {/* Message actions (desktop hover) */}
         {showActions && !isEditing && (
-          <div className="absolute -top-3 right-4 flex rounded border border-[hsl(var(--color-bg-tertiary))] bg-primary shadow-sm">
+          <div className="absolute -top-3 right-4 flex rounded border border-[color:var(--line)] bg-primary shadow-sm">
             {/* Reaction button */}
             <div className="relative">
               <button
@@ -351,7 +351,7 @@ export function MessageItem({
                     <span className="text-xs font-medium text-danger">Delete?</span>
                     <button
                       onClick={handleDelete}
-                      className="rounded bg-danger px-1.5 py-0.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                      className="rounded bg-danger px-1.5 py-0.5 text-xs font-medium text-on-danger transition-opacity hover:opacity-90"
                     >
                       Yes
                     </button>
@@ -500,7 +500,7 @@ function MediaEmbed({ attachment }: { attachment: Message['attachments'][number]
       href={attachment.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-2 rounded border border-[hsl(var(--color-input-border))] bg-secondary p-3 hover:bg-hover"
+      className="flex items-center gap-2 rounded border border-[color:var(--line)] bg-secondary p-3 hover:bg-hover"
     >
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-interactive">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />

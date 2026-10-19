@@ -129,7 +129,7 @@ export interface AppSettings {
   updated_at: string
 }
 
-export type ThemePreset = 'dark' | 'light' | 'midnight'
+export type { ThemeId as ThemePreset } from '@/lib/themes'
 
 export interface PinnedMessage {
   id: string
