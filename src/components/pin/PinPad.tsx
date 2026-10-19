@@ -140,15 +140,23 @@ export function PinPad({ mode, length = 6, verify, onSuccess, onCancel, title }:
     onCancel?.()
   }, [onCancel])
 
-  // Hardware keyboard support (desktop)
+  // Hardware keyboard support (desktop). Capture phase, so keys the pad handles never reach other
+  // window shortcuts (e.g. the double-Escape Eep shortcut); keys typed into a text field are left alone.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return
+
       if (/^[0-9]$/.test(e.key)) pressDigit(e.key)
       else if (e.key === 'Backspace') entryRef.current?.backspace()
       else if (e.key === 'Escape') cancel()
+      else return
+
+      e.preventDefault()
+      e.stopImmediatePropagation()
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [pressDigit, cancel])
 
   const chooseLength = (next: PinLength) => {

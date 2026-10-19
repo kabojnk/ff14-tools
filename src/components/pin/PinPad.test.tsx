@@ -126,6 +126,35 @@ describe('PinPad unlock controls', () => {
     expect(dots()).toHaveAttribute('data-filled', '1')
   })
 
+  it('ignores keys typed into a text field', () => {
+    const verify = vi.fn(() => new Promise<boolean>(() => {}))
+    render(
+      <>
+        <input aria-label="other field" />
+        <PinPad mode="unlock" length={4} verify={verify} onSuccess={vi.fn()} />
+      </>,
+    )
+    const field = screen.getByRole('textbox', { name: 'other field' })
+    for (const k of '1234') fireEvent.keyDown(field, { key: k })
+    expect(dots()).toHaveAttribute('data-filled', '0')
+    expect(verify).not.toHaveBeenCalled()
+  })
+
+  it('keeps the keys it handles from reaching other window listeners', () => {
+    const onCancel = vi.fn()
+    render(<PinPad mode="unlock" length={4} verify={vi.fn()} onSuccess={vi.fn()} onCancel={onCancel} />)
+    const other = vi.fn()
+    window.addEventListener('keydown', other)
+    try {
+      fireEvent.keyDown(window, { key: 'Escape' })
+      fireEvent.keyDown(window, { key: '7' })
+    } finally {
+      window.removeEventListener('keydown', other)
+    }
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(other).not.toHaveBeenCalled()
+  })
+
   it('uses a custom title when given', () => {
     render(<PinPad mode="unlock" length={4} title="Enter Current Passcode" verify={vi.fn()} onSuccess={vi.fn()} />)
     expect(screen.getByText('Enter Current Passcode')).toBeInTheDocument()
