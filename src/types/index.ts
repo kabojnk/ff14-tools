@@ -9,6 +9,8 @@ export type UserStatus =
 
 export type Space = 'main' | 'schist'
 export type Presence = 'online' | 'away' | 'offline'
+/** profiles.presence_override: a manual choice applied on every device. */
+export type PresenceOverride = 'away' | 'invisible'
 export type MediaKind = 'image' | 'video' | 'gif' | 'file' | 'audio' | 'link'
 
 export interface Profile {
@@ -20,6 +22,8 @@ export interface Profile {
   status: UserStatus
   custom_status_text: string | null
   status_id: string | null
+  presence_override?: PresenceOverride | null
+  last_seen_at?: string | null
   read_receipts: boolean
   lock_pin_length: number | null
   /** Manual presence choice; null follows the devices. */

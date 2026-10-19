@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { supabase } from '@/lib/supabase'
-import { presenceOf } from '@/lib/status'
+import { displayed, overrideFor } from '@/lib/presence'
 import { Portal } from '@/components/ui/Portal'
 import type { Presence } from '@/types'
 
@@ -31,9 +31,11 @@ const rowClass = (selected: boolean) =>
 
 export function StatusPicker({ onClose }: StatusPickerProps) {
   const { profile, fetchProfile } = useAuthStore()
-  const { updatePresence } = usePresenceStore()
+  const setOverride = usePresenceStore((s) => s.setOverride)
+  const currentOverride = usePresenceStore((s) => s.override)
   const { definitions, create, update, remove } = useStatusStore()
-  const [presence, setPresence] = useState<Presence>(presenceOf(profile?.status))
+  // The picker's choice is the manual override: none = Online, 'away' = Away, 'invisible' = Invisible.
+  const [presence, setPresence] = useState<Presence>(displayed({ presence: 'online' }, currentOverride))
   const [chosenId, setChosenId] = useState<string | null>(profile?.status_id ?? null)
   const [customText, setCustomText] = useState(profile?.custom_status_text ?? '')
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -46,11 +48,13 @@ export function StatusPicker({ onClose }: StatusPickerProps) {
   const handleSave = async () => {
     if (!profile) return
     const text = customText.trim() || null
+    const override = overrideFor(presence)
+    // presence_override is what every device reads; status is kept in step for old cached apps.
     await supabase
       .from('profiles')
-      .update({ status: presence, status_id: statusId, custom_status_text: text })
+      .update({ presence_override: override, status: presence, status_id: statusId, custom_status_text: text })
       .eq('id', profile.id)
-    updatePresence(presence, text, true)
+    void setOverride(override)
     await fetchProfile()
     onClose()
   }

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
 import { useStatusStore } from '@/stores/statusStore'
 import { groupMembers, presenceColor, presenceOf } from '@/lib/status'
+import { displayed } from '@/lib/presence'
 import { UserProfile } from '@/components/user/UserProfile'
 import { CustomStatus } from '@/components/user/CustomStatus'
 import type { Presence, Profile, UserStatus } from '@/types'
@@ -21,7 +22,8 @@ interface SelectedProfile extends MemberEntry {
 }
 
 export function MemberList() {
-  const { onlineUsers } = usePresenceStore()
+  const live = usePresenceStore((s) => s.users)
+  const myOverride = usePresenceStore((s) => s.override)
   const { user } = useAuthStore()
   const definitions = useStatusStore((s) => s.definitions)
   const [allProfiles, setAllProfiles] = useState<Profile[]>([])
@@ -57,14 +59,15 @@ export function MemberList() {
 
   // Merge presence data onto profiles. The custom status comes from the live profile row.
   const members: MemberEntry[] = allProfiles.map((profile) => {
-    const live = onlineUsers[profile.id]
-    const status: UserStatus = live?.status ?? 'offline'
+    // My own override applies at once; everyone else's arrives with their live profile row.
+    const override = profile.id === user?.id ? myOverride : profile.presence_override
+    const status: UserStatus = displayed(live[profile.id], override)
     return {
       profile,
       status,
       presence: presenceOf(status),
       statusId: profile.status_id,
-      customText: live?.custom_status_text ?? profile.custom_status_text,
+      customText: profile.custom_status_text,
     }
   })
 

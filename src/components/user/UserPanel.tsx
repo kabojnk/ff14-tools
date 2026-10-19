@@ -4,21 +4,20 @@ import { usePresenceStore } from '@/stores/presenceStore'
 import { useUiStore } from '@/stores/uiStore'
 import { StatusPicker } from '@/components/user/StatusPicker'
 import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
+import { displayed } from '@/lib/presence'
 import { UserSettings } from '@/components/user/UserSettings'
 import { CustomStatus } from '@/components/user/CustomStatus'
 import { useStatusStore } from '@/stores/statusStore'
 
 export function UserPanel() {
   const { profile } = useAuthStore()
-  const { onlineUsers } = usePresenceStore()
+  // My presence across devices, with my manual override applied at once
+  const effectiveStatus = usePresenceStore((s) => displayed(profile ? s.users[profile.id] : undefined, s.override))
   const { setEepMode } = useUiStore()
   const [showStatus, setShowStatus] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
 
-  // Use live presence data for the current user so UserPanel stays in sync with the member list
-  const presence = profile ? onlineUsers[profile.id] : null
-  const effectiveStatus = presence?.status ?? 'offline'
-  const effectiveCustomText = presence ? presence.custom_status_text : (profile?.custom_status_text ?? null)
+  const effectiveCustomText = profile?.custom_status_text ?? null
   const statusId = profile?.status_id ?? null
   const hasCustomStatus = useStatusStore((s) => !!statusId && s.definitions.some((d) => d.id === statusId))
 

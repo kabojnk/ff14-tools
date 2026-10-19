@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { supabase } from '@/lib/supabase'
+import { displayed } from '@/lib/presence'
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
 import { ReactionPicker, ReactionDisplay } from '@/components/chat/ReactionPicker'
 import { MessageContextMenu } from '@/components/chat/MessageContextMenu'
@@ -37,7 +38,7 @@ export function MessageItem({
 }: MessageItemProps) {
   const { user } = useAuthStore()
   const { editMessage, deleteMessage } = useMessageStore()
-  const { onlineUsers } = usePresenceStore()
+  const authorLive = usePresenceStore((s) => (author ? s.users[author.id] : undefined))
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(message.content ?? '')
   const [showActions, setShowActions] = useState(false)
@@ -73,9 +74,8 @@ export function MessageItem({
     }
   }
 
-  const authorPresence = author ? onlineUsers[author.id] : null
-  const authorStatus = authorPresence?.status ?? author?.status ?? 'offline'
-  const authorCustomText = authorPresence?.custom_status_text ?? author?.custom_status_text ?? null
+  const authorStatus = displayed(authorLive, author?.presence_override)
+  const authorCustomText = author?.custom_status_text ?? null
 
   const openProfile = (e: React.MouseEvent) => {
     if (!author) return
