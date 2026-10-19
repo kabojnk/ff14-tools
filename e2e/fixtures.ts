@@ -47,6 +47,18 @@ export class ChatUser {
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
   }
 
+  /** Makes the space list visible: a no-op on desktop (the sidebar); on mobile, back to the Spaces screen. */
+  async showSpaces() {
+    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
+    if (!(await this.spaceButton('Main').isVisible()) && (await back.count()) > 0) await back.first().click()
+    await expect(this.spaceButton('Main')).toBeVisible()
+  }
+
+  /** "<name> is typing" under the open space's messages. */
+  typing(nickname: string) {
+    return this.page.getByText(`${nickname} is typing`, { exact: true }).filter({ visible: true })
+  }
+
   /** Opens User Settings from the user panel (on mobile, from the Spaces screen). */
   async openSettings() {
     const settings = this.page.getByTitle('User settings').filter({ visible: true })
@@ -187,6 +199,8 @@ async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
 }
 
 type Fixtures = {
+  /** Tasks run after every device of the test has closed. Register them with `afterDevicesClose`. */
+  afterDevices: (() => Promise<void>)[]
   alice: ChatUser
   bea: ChatUser
   /** Opens another device (context) for the same user. For multi-device tests in sub-project 3. */
@@ -194,17 +208,27 @@ type Fixtures = {
 }
 
 export const test = base.extend<Fixtures>({
-  alice: async ({ browser }, use, testInfo) => {
+  // The device fixtures depend on this one, so it is torn down after every context has closed.
+  // eslint-disable-next-line no-empty-pattern -- Playwright fixtures must destructure their first argument
+  afterDevices: async ({}, use) => {
+    const tasks: (() => Promise<void>)[] = []
+    await use(tasks)
+    for (const task of tasks) await task()
+  },
+  alice: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const { context, user } = await openUser(browser, testInfo, 'alice')
     await use(user)
     await context.close()
   },
-  bea: async ({ browser }, use, testInfo) => {
+  bea: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const { context, user } = await openUser(browser, testInfo, 'bea')
     await use(user)
     await context.close()
   },
-  secondDevice: async ({ browser }, use, testInfo) => {
+  secondDevice: async ({ browser, afterDevices }, use, testInfo) => {
+    void afterDevices
     const contexts: { close: () => Promise<void> }[] = []
     await use(async (key) => {
       const { context, user } = await openUser(browser, testInfo, key)
@@ -214,5 +238,16 @@ export const test = base.extend<Fixtures>({
     await Promise.all(contexts.map((c) => c.close()))
   },
 })
+
+/**
+ * Runs `fn` after each test of the file, once all of the test's devices have closed. Restoring the seed
+ * while devices are still open fans every write out as realtime events to each of them, which can trip
+ * local Realtime's per-second limit and drop the next test's postgres_changes; test.afterEach runs too early.
+ */
+export function afterDevicesClose(fn: () => Promise<void>) {
+  test.beforeEach(({ afterDevices }) => {
+    afterDevices.push(fn)
+  })
+}
 
 export { expect }

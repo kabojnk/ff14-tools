@@ -1,8 +1,8 @@
-import { expect, test, type ChatUser } from './fixtures'
+import { afterDevicesClose, expect, test, type ChatUser } from './fixtures'
 import { restoreStatuses, serviceClient } from './supabase'
 import { IDS } from './users'
 
-test.afterEach(async () => {
+afterDevicesClose(async () => {
   await restoreStatuses()
 })
 

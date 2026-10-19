@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { expect, test, type ChatUser } from './fixtures'
+import { afterDevicesClose, expect, test, type ChatUser } from './fixtures'
 import { restore, serviceClient } from './supabase'
 import { IDS, LAKE_PASSWORD } from './users'
 
 const created: string[] = []
 
-test.afterEach(async () => {
+afterDevicesClose(async () => {
   if (created.length) {
     const { error } = await serviceClient().from('messages').delete().in('id', created.splice(0))
     if (error) throw new Error(error.message)
