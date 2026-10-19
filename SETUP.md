@@ -19,21 +19,20 @@ Complete instructions for setting up and running the chat system locally and in 
 1. Go to [supabase.com](https://supabase.com) and create a new project
 2. Note your **Project URL** and **Publishable key** from Settings > API (previously called the "anon public key" — same thing, just renamed)
 
-### Run database migrations
+### Database migrations
 
-Run each SQL file in order in the Supabase SQL Editor (Dashboard > SQL Editor > New Query):
+The schema is managed with the Supabase CLI. It isn't installed as a dependency; run it with `npx --yes supabase@2`.
+`supabase/migrations/` holds a baseline pulled from production (`*_remote_schema.sql`) plus any later timestamped migrations.
+The old hand-applied SQL files are kept in `supabase/migrations_archive/` for reference only.
 
-```
-supabase/migrations/00001_create_profiles.sql
-supabase/migrations/00002_create_channels.sql
-supabase/migrations/00003_create_sessions.sql
-supabase/migrations/00004_create_messages.sql
-supabase/migrations/00005_create_reactions.sql
-supabase/migrations/00006_create_custom_emoji.sql
-supabase/migrations/00007_create_settings.sql
-```
-
-These create all tables, RLS policies, indexes, triggers, RPC functions, and seed data.
+- **New project:** `npx --yes supabase@2 link --project-ref <ref>`, then push (see below), then insert your
+  `eep_passphrase` row into `settings` from the SQL editor (no secrets live in migrations).
+- **Schema change:** `npx --yes supabase@2 migration new <name>`, write the SQL, test it locally with
+  `npm run db:reset`, then push. Never paste schema changes into the SQL editor:
+  the repo and production drift apart.
+- **Pushing to production:** always run `npx --yes supabase@2 db push --dry-run` first and read the list of
+  pending migrations. Push only after you've reviewed each one. `npx --yes supabase@2 migration list` shows
+  what is applied locally and remotely.
 
 ### Configure Auth
 
@@ -45,7 +44,9 @@ These create all tables, RLS policies, indexes, triggers, RPC functions, and see
 
 1. Go to **Database > Publications**
 2. Click on **supabase_realtime**
-3. Toggle on `messages`, `reactions`, and `profiles`
+3. Toggle on `messages`, `reactions`, `profiles`, and `pinned_messages`
+
+(For new projects pushed from the baseline migration this is already done: the baseline includes the publication membership.)
 
 ### Deploy Edge Functions
 
@@ -168,3 +169,26 @@ The default passphrase is `the_epic_of_alexander`. To change it:
 |---------|--------|
 | `/sheets` | Change the Sheets (wipe visible chat in current channel) |
 | `/eep` | Activate Eep! mode |
+
+---
+
+## Testing
+
+Requires Docker.
+
+| Command | What it does |
+|---|---|
+| `npm run db:start` | Start local Supabase (Postgres, Auth, Realtime) and apply migrations + `supabase/seed.sql`. Edge functions aren't started; tests stub them. |
+| `npm run db:reset` | Rebuild the local database from migrations + seed |
+| `npm run db:stop` | Stop local Supabase |
+| `npm test` | Unit/component tests (Vitest) |
+| `npm run e2e` | Two-user end-to-end tests (Playwright: desktop Chromium + iPhone WebKit). Resets the DB first; set `E2E_SKIP_RESET=1` to skip. |
+| `npm run e2e:ui` | Playwright UI mode for debugging |
+
+Seeded accounts: `alice@test.local` / `bea@test.local`, password `password123`, PINs `1234` / `567890`,
+Eep passphrase `test-passphrase`. These are local-only values.
+
+CI (`.github/workflows/ci.yml`) runs lint, type-check, unit tests and the full e2e suite on every push.
+
+Bug-fix policy: every fix starts with a failing test at the lowest layer that can reproduce it.
+Before each milestone, run `docs/testing/iphone-checklist.md` on a real device.

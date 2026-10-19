@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
@@ -16,14 +16,7 @@ interface UserSettingsProps {
 type DesktopTab = 'profile' | 'appearance' | 'security'
 type MobileScreen = 'profile' | 'settings-menu' | 'appearance' | 'security'
 
-type PinStep =
-  | 'idle'
-  | 'set-new'
-  | 'set-confirm'
-  | 'change-verify'
-  | 'change-new'
-  | 'change-confirm'
-  | 'remove-verify'
+type PinStep = 'idle' | 'set' | 'change-verify' | 'change-set' | 'remove-verify'
 
 function ChevronLeft() {
   return (
@@ -52,7 +45,7 @@ function GearIcon() {
 
 export function UserSettings({ onClose }: UserSettingsProps) {
   const { profile, fetchProfile } = useAuthStore()
-  const { theme, setTheme, pinCode, setPinCode } = useUiStore()
+  const { theme, setTheme, pinCode, pinLength, setPinCode } = useUiStore()
   const [nickname, setNickname] = useState(profile?.nickname ?? '')
   const [profileMessage, setProfileMessage] = useState(profile?.profile_message ?? '')
   const [saving, setSaving] = useState(false)
@@ -62,87 +55,46 @@ export function UserSettings({ onClose }: UserSettingsProps) {
   const bannerInputRef = useRef<HTMLInputElement>(null)
 
   const [pinStep, setPinStep] = useState<PinStep>('idle')
-  const [pendingPin, setPendingPin] = useState<string | null>(null)
-  const [pinError, setPinError] = useState(false)
   const [pinSuccess, setPinSuccess] = useState<string | null>(null)
+  const pinSuccessTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  useEffect(() => () => clearTimeout(pinSuccessTimerRef.current), [])
 
   const resetPinWizard = () => {
+    clearTimeout(pinSuccessTimerRef.current)
     setPinStep('idle')
-    setPendingPin(null)
-    setPinError(false)
     setPinSuccess(null)
   }
 
-  const showPinError = () => {
-    setPinError(true)
-    setTimeout(() => setPinError(false), 700)
+  const finishPinWizard = (message: string) => {
+    clearTimeout(pinSuccessTimerRef.current)
+    setPinStep('idle')
+    setPinSuccess(message)
+    pinSuccessTimerRef.current = setTimeout(() => setPinSuccess(null), 2500)
   }
 
-  const handlePinComplete = async (pin: string) => {
-    if (!profile) return
+  const verifyCurrentPin = async (pin: string) => pin === pinCode
+
+  // Errors propagate to PinPad, which stays open and shows "Couldn't save. Try again."
+  const handlePinSuccess = async (pin: string) => {
+    if (!profile) throw new Error('Not signed in')
     switch (pinStep) {
-      case 'set-new':
-        setPendingPin(pin)
-        setPinStep('set-confirm')
-        break
-      case 'set-confirm':
-        if (pin === pendingPin) {
-          await setPinCode(profile.id, pin)
-          setPinSuccess('PIN set successfully')
-          setTimeout(resetPinWizard, 1500)
-        } else {
-          showPinError()
-          setPinStep('set-new')
-          setPendingPin(null)
-        }
+      case 'set':
+        await setPinCode(profile.id, pin)
+        finishPinWizard('PIN set successfully')
         break
       case 'change-verify':
-        if (pin === pinCode) {
-          setPinStep('change-new')
-        } else {
-          showPinError()
-        }
+        setPinStep('change-set')
         break
-      case 'change-new':
-        setPendingPin(pin)
-        setPinStep('change-confirm')
-        break
-      case 'change-confirm':
-        if (pin === pendingPin) {
-          await setPinCode(profile.id, pin)
-          setPinSuccess('PIN changed successfully')
-          setTimeout(resetPinWizard, 1500)
-        } else {
-          showPinError()
-          setPinStep('change-new')
-          setPendingPin(null)
-        }
+      case 'change-set':
+        await setPinCode(profile.id, pin)
+        finishPinWizard('PIN changed successfully')
         break
       case 'remove-verify':
-        if (pin === pinCode) {
-          await setPinCode(profile.id, null)
-          setPinSuccess('PIN removed')
-          setTimeout(resetPinWizard, 1500)
-        } else {
-          showPinError()
-        }
+        await setPinCode(profile.id, null)
+        finishPinWizard('PIN removed')
         break
     }
-  }
-
-  const pinPadTitle: Record<PinStep, string> = {
-    'idle': '',
-    'set-new': 'Choose a PIN',
-    'set-confirm': 'Confirm PIN',
-    'change-verify': 'Enter current PIN',
-    'change-new': 'Choose new PIN',
-    'change-confirm': 'Confirm new PIN',
-    'remove-verify': 'Enter current PIN',
-  }
-
-  const pinPadSubtitle: Partial<Record<PinStep, string>> = {
-    'set-confirm': 'Enter the same PIN again',
-    'change-new': 'Enter a different PIN',
   }
 
   const handleBannerFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -297,8 +249,8 @@ export function UserSettings({ onClose }: UserSettingsProps) {
       <label className="mb-1 block text-xs font-bold uppercase text-secondary">App Lock PIN</label>
       <p className="mb-4 text-sm text-muted">
         {pinCode
-          ? 'A 4-digit PIN is required to unlock the app after it goes to the background.'
-          : 'Set a 4-digit PIN to lock the app when it loses focus.'}
+          ? 'A 4–6 digit PIN is required to unlock the app after it goes to the background.'
+          : 'Set a 4–6 digit PIN to lock the app when it loses focus.'}
       </p>
 
       {pinSuccess && (
@@ -308,7 +260,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
       <div className="flex gap-3">
         {!pinCode ? (
           <button
-            onClick={() => setPinStep('set-new')}
+            onClick={() => setPinStep('set')}
             className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
           >
             Set PIN
@@ -492,18 +444,20 @@ export function UserSettings({ onClose }: UserSettingsProps) {
         />
       )}
 
-      {/* PIN entry modal — sits above both mobile and desktop layouts */}
-      {pinStep !== 'idle' && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80">
-          <PinPad
-            key={pinStep}
-            title={pinPadTitle[pinStep]}
-            subtitle={pinPadSubtitle[pinStep]}
-            error={pinError}
-            onComplete={handlePinComplete}
-            onCancel={resetPinWizard}
-          />
-        </div>
+      {/* PIN entry: PinPad is full-screen (z-70) above both mobile and desktop layouts */}
+      {(pinStep === 'set' || pinStep === 'change-set') && (
+        <PinPad key={pinStep} mode="set" onSuccess={handlePinSuccess} onCancel={resetPinWizard} />
+      )}
+      {(pinStep === 'change-verify' || pinStep === 'remove-verify') && pinLength !== null && (
+        <PinPad
+          key={pinStep}
+          mode="unlock"
+          length={pinLength}
+          title="Enter Current Passcode"
+          verify={verifyCurrentPin}
+          onSuccess={handlePinSuccess}
+          onCancel={resetPinWizard}
+        />
       )}
     </Portal>
   )

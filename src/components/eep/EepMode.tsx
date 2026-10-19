@@ -9,15 +9,15 @@ interface EepModeProps {
 }
 
 export function EepMode({ onLoginClick }: EepModeProps) {
-  const { setEepMode, eepPassphrase, pinCode, pinLocked, unlockPin } = useUiStore()
+  const { setEepMode, eepPassphrase, pinCode, pinLength, pinLocked, unlockPin, clearPin } = useUiStore()
   const { user, signOut } = useAuthStore()
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
   const [showPinPad, setShowPinPad] = useState(false)
-  const [pinError, setPinError] = useState(false)
 
   const handleLogout = async () => {
     await signOut()
+    clearPin()
     // Reset eepMode so the next login opens straight to chat, not eep
     setEepMode(false)
   }
@@ -36,16 +36,12 @@ export function EepMode({ onLoginClick }: EepModeProps) {
     setCustomRaid('')
   }
 
-  const handlePinComplete = (pin: string) => {
-    if (pin === pinCode) {
-      setPinError(false)
-      if (pinLocked) unlockPin()
-      setShowPinPad(false)
-      setEepMode(false)
-    } else {
-      setPinError(true)
-      setTimeout(() => setPinError(false), 700)
-    }
+  const verifyPin = async (pin: string) => pin === pinCode
+
+  const handlePinSuccess = () => {
+    if (pinLocked) unlockPin()
+    setShowPinPad(false)
+    setEepMode(false)
   }
 
   const overlayVisible = pinLocked || showPinPad
@@ -191,16 +187,16 @@ export function EepMode({ onLoginClick }: EepModeProps) {
         </div>
       </footer>}
 
-      {/* PIN overlay */}
-      {overlayVisible && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
-          <PinPad
-            title="Enter PIN"
-            error={pinError}
-            onComplete={handlePinComplete}
-            onCancel={pinLocked ? undefined : () => setShowPinPad(false)}
-          />
-        </div>
+      {/* PIN overlay: PinPad renders its own full-screen blurred backdrop.
+          pinLength is the stored PIN's actual length, so any stored PIN (including legacy ones) can be entered. */}
+      {overlayVisible && pinLength !== null && (
+        <PinPad
+          mode="unlock"
+          length={pinLength}
+          verify={verifyPin}
+          onSuccess={handlePinSuccess}
+          onCancel={pinLocked ? undefined : () => setShowPinPad(false)}
+        />
       )}
     </div>
   )

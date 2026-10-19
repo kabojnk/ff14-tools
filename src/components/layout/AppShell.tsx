@@ -9,6 +9,7 @@ import { ChannelInfoPanel } from '@/components/chat/ChannelInfoPanel'
 import { MemberList } from '@/components/user/MemberList'
 import { CreateChannelModal } from '@/components/channels/CreateChannelModal'
 import { UserPanel } from '@/components/user/UserPanel'
+import { useMediaQuery } from '@/hooks/useMediaQuery'
 import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
 import type { Message } from '@/types'
 
@@ -16,6 +17,9 @@ import type { Message } from '@/types'
 type MobileView = 'channels' | 'chat' | 'members'
 
 export function AppShell() {
+  // Tailwind's md breakpoint. Only one layout tree is mounted, so chat hooks
+  // (realtime channels, typing, pins) never run twice on the same device.
+  const isDesktop = useMediaQuery('(min-width: 768px)')
   const { setEepMode, memberListOpen } = useUiStore()
   const { fetchChannels, activeChannelId, channels, setActiveChannel } = useChannelStore()
   const [mobileView, setMobileView] = useState<MobileView>('channels')
@@ -60,7 +64,7 @@ export function AppShell() {
     <div className="flex h-full flex-col overflow-hidden">
 
       {/* ── md+ layout: sidebar | chat | member-list ── */}
-      <div className="hidden flex-1 overflow-hidden md:flex">
+      {isDesktop && (<div className="flex flex-1 overflow-hidden">
 
         {/* Left sidebar — always visible on md+ */}
         <div className="w-[var(--sidebar-width)] flex-shrink-0 border-r border-[hsl(var(--color-bg-tertiary))]">
@@ -91,10 +95,10 @@ export function AppShell() {
             <MemberList />
           </div>
         )}
-      </div>
+      </div>)}
 
       {/* ── Mobile layout: full-screen views + bottom tab bar ── */}
-      <div className="flex flex-1 flex-col overflow-hidden md:hidden">
+      {!isDesktop && (<div className="flex flex-1 flex-col overflow-hidden">
 
         {/* Channels panel */}
         {mobileView === 'channels' && (
@@ -134,15 +138,6 @@ export function AppShell() {
           </main>
         )}
 
-        {/* Channel info panel overlay — mobile + desktop */}
-        {showChannelInfo && activeChannel && (
-          <ChannelInfoPanel
-            channel={activeChannel}
-            initialTab={channelInfoTab}
-            onClose={() => setShowChannelInfo(false)}
-          />
-        )}
-
         {/* Members panel */}
         {mobileView === 'members' && (
           <div className="flex h-full flex-col bg-secondary">
@@ -167,7 +162,16 @@ export function AppShell() {
             onEep={() => setEepMode(true)}
           />
         )}
-      </div>
+      </div>)}
+
+      {/* Channel info panel overlay — mobile + desktop */}
+      {showChannelInfo && activeChannel && (
+        <ChannelInfoPanel
+          channel={activeChannel}
+          initialTab={channelInfoTab}
+          onClose={() => setShowChannelInfo(false)}
+        />
+      )}
 
       <EepShortcutListener onActivate={() => setEepMode(true)} />
     </div>

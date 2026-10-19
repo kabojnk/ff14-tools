@@ -6,6 +6,7 @@ interface UiState {
   eepMode: boolean
   eepPassphrase: string | null
   pinCode: string | null
+  pinLength: number | null
   pinLocked: boolean
   sidebarOpen: boolean
   memberListOpen: boolean
@@ -17,6 +18,7 @@ interface UiState {
   loadEepPassphrase: () => Promise<void>
   loadPin: (userId: string) => Promise<void>
   setPinCode: (userId: string, pin: string | null) => Promise<void>
+  clearPin: () => void
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   toggleMemberList: () => void
@@ -27,6 +29,7 @@ export const useUiStore = create<UiState>((set) => ({
   eepMode: sessionStorage.getItem('eepMode') === 'true',
   eepPassphrase: null,
   pinCode: null,
+  pinLength: null,
   pinLocked: false,
   sidebarOpen: true,
   memberListOpen: localStorage.getItem('memberListOpen') !== 'false',
@@ -61,16 +64,21 @@ export const useUiStore = create<UiState>((set) => ({
       .select('lock_pin')
       .eq('id', userId)
       .single()
-    if (data) set({ pinCode: data.lock_pin ?? null })
+    const pin: string | null = data?.lock_pin ?? null
+    set({ pinCode: pin, pinLength: pin?.length ?? null })
   },
 
+  // Throws if the write fails, so callers never show "saved" for a PIN that wasn't stored.
   setPinCode: async (userId: string, pin: string | null) => {
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ lock_pin: pin })
       .eq('id', userId)
-    set({ pinCode: pin })
+    if (error) throw new Error(error.message)
+    set({ pinCode: pin, pinLength: pin?.length ?? null })
   },
+
+  clearPin: () => set({ pinCode: null, pinLength: null, pinLocked: false }),
 
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),

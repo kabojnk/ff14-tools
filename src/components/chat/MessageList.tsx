@@ -16,7 +16,7 @@ interface MessageListProps {
 const profileCache: Record<string, Profile> = {}
 
 export function MessageList({ channelId, onSetReply }: MessageListProps) {
-  const { messages, loading, broadcastEditMessage, broadcastDeleteMessage } = useMessages(channelId)
+  const { messages, loading, realtimeStatus, broadcastEditMessage, broadcastDeleteMessage } = useMessages(channelId)
   const { pinnedIds, pinMessage, unpinMessage } = usePinnedMessages(channelId)
   const { profile } = useAuthStore()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -169,7 +169,7 @@ export function MessageList({ channelId, onSetReply }: MessageListProps) {
   }
 
   return (
-    <div ref={containerRef} className="flex flex-1 flex-col overflow-y-auto">
+    <div ref={containerRef} data-realtime={realtimeStatus} className="flex flex-1 flex-col overflow-y-auto">
       {/* Spacer to push content to bottom when there aren't many messages */}
       <div className="flex-1" />
 

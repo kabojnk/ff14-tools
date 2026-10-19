@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+e2e
+playwright-report
+test-results
+supabase
+docs
+.env
+.env.*
+.github
