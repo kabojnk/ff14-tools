@@ -119,7 +119,7 @@ export function MessageContextMenu({
         <div className="mx-4 border-t border-[hsl(var(--color-bg-tertiary))]" />
         {/* Actions */}
         <div className="py-2">
-          {actions.map((action, i) => (
+          {actions.map((action) => (
             <button
               key={action.label}
               onClick={action.disabled ? undefined : action.onClick}
