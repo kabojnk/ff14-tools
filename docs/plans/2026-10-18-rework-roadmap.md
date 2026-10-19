@@ -17,7 +17,7 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 
 | # | Sub-project | Depends on | Spec |
 |---|---|---|---|
-| 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild | — | `2026-10-18-test-foundation-design.md` |
+| 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild (**built 2026-10-19**) | — | `2026-10-18-test-foundation-design.md` |
 | 2 | Data model: channels → conversations | 1 | not yet written |
 | 3 | Chat UX rebuild (Messenger-style, polished, mobile-first) | 1, 2 | not yet written |
 | 4 | iOS native research (Capacitor vs React Native, distribution without the App Store) | — (runs alongside) | not yet written |
@@ -32,6 +32,7 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 - Media filtering by type (image / video / GIF / file) needs an efficient query path over `messages.attachments`.
 - **Security:** hash `profiles.lock_pin`, which is currently plain text and readable by every signed-in user. Add `lock_pin_length` and verify the PIN through a server-side RPC.
 - Presence is per device, not per user (see sub-project 3).
+- Production `reactions` lacks `REPLICA IDENTITY FULL` (the old `00009` migration was never applied), so reaction-removal events may not carry the row. Decide whether to add it as a migration.
 
 ### Sub-project 3: UX
 - Messenger/WhatsApp layout: conversation list (or tabs) plus the conversation view; not Discord-style.
