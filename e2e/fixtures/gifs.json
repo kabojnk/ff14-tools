@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "id": "gif-1",
+      "title": "Test GIF",
+      "url": "http://cdn.test.local/gifs/test.gif",
+      "preview": "http://cdn.test.local/gifs/test-preview.gif",
+      "width": 200,
+      "height": 150
+    }
+  ]
+}
