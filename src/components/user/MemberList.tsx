@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useAuthStore } from '@/stores/authStore'
 import { supabase } from '@/lib/supabase'
-import { statusColor } from '@/components/user/StatusPicker'
+import { presenceColor, presenceOf } from '@/lib/status'
 import { UserProfile } from '@/components/user/UserProfile'
 import type { Profile, UserStatus } from '@/types'
 
@@ -183,7 +183,7 @@ function MemberRow({
         )}
         <div
           className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[hsl(var(--color-bg-secondary))]"
-          style={{ backgroundColor: statusColor(status) }}
+          style={{ backgroundColor: presenceColor(presenceOf(status)) }}
         />
       </div>
 

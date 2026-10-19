@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useUiStore } from '@/stores/uiStore'
-import { StatusPicker, statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { StatusPicker } from '@/components/user/StatusPicker'
+import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import { UserSettings } from '@/components/user/UserSettings'
 
 export function UserPanel() {
@@ -40,7 +41,7 @@ export function UserPanel() {
           )}
           <div
             className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full border-[3px] border-[hsl(var(--color-bg-tertiary))]"
-            style={{ backgroundColor: statusColor(effectiveStatus) }}
+            style={{ backgroundColor: presenceColor(presenceOf(effectiveStatus)) }}
           />
         </button>
 
@@ -51,7 +52,7 @@ export function UserPanel() {
           </p>
           <p className="truncate text-[11px] leading-tight text-muted">
             {effectiveCustomEmoji && `${effectiveCustomEmoji} `}
-            {effectiveCustomText || statusLabel(effectiveStatus)}
+            {effectiveCustomText || presenceLabel(presenceOf(effectiveStatus))}
           </p>
         </div>
 

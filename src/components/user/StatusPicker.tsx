@@ -22,30 +22,6 @@ const ALERT_STATUSES: { value: UserStatus; label: string; color: string }[] = [
   { value: 'potential_eep',     label: 'Potential Eep',     color: '#14b8a6' },
 ]
 
-export function statusColor(status: UserStatus): string {
-  switch (status) {
-    case 'online':            return 'hsl(var(--color-status-online))'
-    case 'away':              return 'hsl(var(--color-status-away))'
-    case 'offline':           return 'hsl(var(--color-status-offline))'
-    case 'under_close_watch': return '#ef4444'
-    case 'found_out':         return '#a855f7'
-    case 'you_can_call':      return '#3b82f6'
-    case 'potential_eep':     return '#14b8a6'
-  }
-}
-
-export function statusLabel(status: UserStatus): string {
-  switch (status) {
-    case 'online':            return 'Online'
-    case 'away':              return 'Away'
-    case 'offline':           return 'Offline'
-    case 'under_close_watch': return 'Under Close Watch'
-    case 'found_out':         return 'Found Out'
-    case 'you_can_call':      return 'You can call me'
-    case 'potential_eep':     return 'Potential Eep'
-  }
-}
-
 export function StatusPicker({ onClose }: StatusPickerProps) {
   const { profile, fetchProfile } = useAuthStore()
   const { updatePresence } = usePresenceStore()

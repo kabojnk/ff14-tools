@@ -7,6 +7,10 @@ export type UserStatus =
   | 'you_can_call'
   | 'potential_eep'
 
+export type Space = 'main' | 'schist'
+export type Presence = 'online' | 'away' | 'offline'
+export type MediaKind = 'image' | 'video' | 'gif' | 'file' | 'audio' | 'link'
+
 export interface Profile {
   id: string
   nickname: string
@@ -16,8 +20,51 @@ export interface Profile {
   status: UserStatus
   custom_status_text: string | null
   custom_status_emoji: string | null
+  status_id: string | null
+  read_receipts: boolean
+  lock_pin_length: number | null
   created_at: string
   updated_at: string
+}
+
+export interface Conversation {
+  id: string
+  title: string | null
+  archived: boolean
+  created_by: string | null
+  created_at: string
+}
+
+export interface ReadPosition {
+  conversation_id: string
+  user_id: string
+  space: Space
+  last_read_at: string
+}
+
+export interface StatusDefinition {
+  id: string
+  label: string
+  color: string
+  position: number
+  legacy_key: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MediaItem {
+  id: string
+  message_id: string
+  conversation_id: string
+  space: Space
+  session_id: string
+  kind: MediaKind
+  url: string
+  filename: string | null
+  extension: string | null
+  size: number | null
+  created_at: string
 }
 
 export interface Channel {
@@ -32,7 +79,8 @@ export interface Channel {
 
 export interface Session {
   id: string
-  channel_id: string
+  conversation_id: string
+  channel_id: string | null
   visible: boolean
   created_by: string
   created_at: string
@@ -40,7 +88,7 @@ export interface Session {
 
 export interface Attachment {
   url: string
-  type: 'image' | 'video' | 'gif' | 'file'
+  type: 'image' | 'video' | 'gif' | 'file' | 'audio'
   filename: string
   size: number
   spoiler: boolean
@@ -48,7 +96,9 @@ export interface Attachment {
 
 export interface Message {
   id: string
-  channel_id: string
+  conversation_id: string
+  space: Space
+  channel_id: string | null
   session_id: string
   author_id: string
   content: string | null
@@ -87,7 +137,8 @@ export type ThemePreset = 'dark' | 'light' | 'midnight'
 
 export interface PinnedMessage {
   id: string
-  channel_id: string
+  conversation_id: string
+  channel_id: string | null
   message_id: string
   pinned_by: string
   pinned_at: string

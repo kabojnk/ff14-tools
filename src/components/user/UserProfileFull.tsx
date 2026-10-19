@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Portal } from '@/components/ui/Portal'
-import { statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import type { Profile, UserStatus } from '@/types'
 
 interface UserProfileFullProps {
@@ -68,7 +68,7 @@ export function UserProfileFull({ profile, status, customText, customEmoji, onCl
               )}
               <div
                 className="absolute bottom-1 right-0.5 h-5 w-5 rounded-full border-[3px] border-[hsl(var(--color-bg-floating))]"
-                style={{ backgroundColor: statusColor(status) }}
+                style={{ backgroundColor: presenceColor(presenceOf(status)) }}
               />
             </div>
 
@@ -77,8 +77,8 @@ export function UserProfileFull({ profile, status, customText, customEmoji, onCl
 
             {/* Status */}
             <div className="mt-1.5 flex items-center gap-2">
-              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: statusColor(status) }} />
-              <span className="text-sm text-muted">{statusLabel(status)}</span>
+              <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: presenceColor(presenceOf(status)) }} />
+              <span className="text-sm text-muted">{presenceLabel(presenceOf(status))}</span>
             </div>
 
             {/* Custom status */}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Portal } from '@/components/ui/Portal'
-import { statusColor, statusLabel } from '@/components/user/StatusPicker'
+import { presenceColor, presenceLabel, presenceOf } from '@/lib/status'
 import { UserProfileFull } from '@/components/user/UserProfileFull'
 import type { Profile, UserStatus } from '@/types'
 
@@ -87,7 +87,7 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
             )}
             <div
               className="absolute bottom-1 right-0.5 h-4 w-4 rounded-full border-[3px] border-[hsl(var(--color-bg-floating))]"
-              style={{ backgroundColor: statusColor(status) }}
+              style={{ backgroundColor: presenceColor(presenceOf(status)) }}
             />
           </div>
 
@@ -96,8 +96,8 @@ export function UserProfile({ profile, status, customText, customEmoji, anchorRe
 
           {/* Status line */}
           <div className="mt-1 flex items-center gap-1.5">
-            <div className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: statusColor(status) }} />
-            <span className="text-xs text-muted">{statusLabel(status)}</span>
+            <div className="h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: presenceColor(presenceOf(status)) }} />
+            <span className="text-xs text-muted">{presenceLabel(presenceOf(status))}</span>
           </div>
 
           {/* Custom status — emoji inline with text */}
