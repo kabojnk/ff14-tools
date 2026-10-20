@@ -5,7 +5,6 @@ import { MessageReactions } from '@/components/chat2/Reactions'
 import { ReplyStrip } from '@/components/chat2/ReplyStrip'
 import type { EmojiLookup } from '@/components/chat2/Markdown'
 import { MessageActions } from '@/components/chat2/MessageActions'
-import { LegacyInlineEdit } from '@/components/chat/legacy/LegacyInlineEdit'
 import { supabase } from '@/lib/supabase'
 import type { Tick } from '@/lib/chat'
 import { useMessageStore } from '@/stores/messageStore'
@@ -94,9 +93,7 @@ export const MessageRow = memo(function MessageRow(props: MessageRowProps) {
           onBroadcastDelete={props.onBroadcastDelete}
           onNotice={props.onNotice}
         >
-          <LegacyInlineEdit message={message} spaceKey={spaceKey}>
-            {bubble}
-          </LegacyInlineEdit>
+          {bubble}
         </MessageActions>
       )}
       {!message.localState && <MessageReactions messageId={message.id} mine={mine} />}

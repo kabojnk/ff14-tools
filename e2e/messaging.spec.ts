@@ -58,7 +58,7 @@ test('the typing indicator clears as soon as the message is sent, and returns on
   const text = `on my way ${Date.now()}`
   await bea.composer.pressSequentially(text)
   await expect(typing).toBeVisible({ timeout: 5_000 })
-  await bea.composer.press('Enter')
+  await bea.submit()
   await expect(alice.message(text)).toBeVisible({ timeout: 5_000 })
   // Well inside the 5 s expiry, so it was the send that cleared it, not the timeout.
   await expect(typing).toBeHidden({ timeout: 1_000 })
@@ -79,7 +79,7 @@ test('a slash command does not leave a typing indicator behind', async ({ alice,
 
   await bea.composer.pressSequentially('/eep')
   await expect(typing).toBeVisible({ timeout: 5_000 })
-  await bea.composer.press('Enter')
+  await bea.submit()
   await expect(bea.eepHeading).toBeVisible()
   await expect(typing).toBeHidden({ timeout: 1_000 })
 })

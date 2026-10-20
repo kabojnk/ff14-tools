@@ -87,8 +87,9 @@ test.describe('message actions and spoilers', () => {
     await item('Edit').click()
     const edited = unique('edited')
     const editor = alice.page.getByRole('textbox', { name: 'Edit message' })
+    await expect(alice.page.getByText('Editing message')).toBeVisible()
     await editor.fill(edited)
-    await editor.press('Enter')
+    await alice.submit()
     await expect(bea.message(edited)).toBeVisible({ timeout: 5_000 })
   })
 

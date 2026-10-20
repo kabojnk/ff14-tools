@@ -146,7 +146,7 @@ test.describe('Cozy message list', () => {
     const content = `\`\`\`js\nconst ${marker} = 1\n\`\`\``
     sentTexts.push(content)
     await alice.composer.fill(content)
-    await alice.composer.press('Enter')
+    await alice.submit()
 
     for (const user of [alice, bea]) {
       const block = user.messageList.locator('figure.md-code').filter({ hasText: marker })

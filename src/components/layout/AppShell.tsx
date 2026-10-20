@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useComposerStore } from '@/stores/composerStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { useKeyboardViewport } from '@/hooks/useKeyboardViewport'
 import { defaultPhoneView, type PhoneView } from '@/lib/layout'
 import { ChatHeader } from '@/components/chat2/ChatHeader'
 import { ReconnectBar } from '@/components/chat2/ReconnectBar'
 import { MessageList } from '@/components/chat2/MessageList'
-import { MessageInput } from '@/components/chat/MessageInput'
+import { Composer } from '@/components/chat2/Composer'
 import { ChannelInfoPanel, type InfoTab } from '@/components/chat/ChannelInfoPanel'
 import { LeftColumn } from '@/components/layout/LeftColumn'
 import { ConversationList } from '@/components/layout/ConversationList'
@@ -35,7 +37,7 @@ export function AppShell() {
   const [infoTab, setInfoTab] = useState<InfoTab>('media')
   const [showInfo, setShowInfo] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
-  const keyboardHeight = useKeyboardHeight(!isDesktop)
+  const keyboard = useKeyboardViewport(!isDesktop)
 
   const conversationCount = conversation ? 1 : 0
   const phoneView = chosenView ?? defaultPhoneView(conversationCount)
@@ -66,6 +68,7 @@ export function AppShell() {
   useEffect(() => {
     setReplyTo(null)
     setShowInfo(false)
+    useComposerStore.getState().cancelEdit()
   }, [activeSpace, conversationId])
 
   const noConversation = (
@@ -89,10 +92,11 @@ export function AppShell() {
         <ChatHeader isDesktop={isDesktop} onBack={mobileBack} onOpenPanel={openInfoPanel} />
         <ReconnectBar />
         <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
-        <MessageInput
+        <Composer
           key={`input:${activeSpace}`}
           conversationId={conversationId}
           space={activeSpace}
+          isDesktop={isDesktop}
           replyTo={replyTo}
           onCancelReply={() => setReplyTo(null)}
         />
@@ -109,8 +113,9 @@ export function AppShell() {
       data-app-shell
       data-layout={isDesktop ? 'desktop' : 'phone'}
       className="flex h-full flex-col overflow-hidden"
-      // iOS doesn't shrink the layout viewport for the keyboard; fit the app to what's visible.
-      style={keyboardHeight !== null ? { height: keyboardHeight } : undefined}
+      // iOS doesn't shrink the layout viewport for the keyboard; fit the app to what's visible, so the
+      // composer sits on top of the keyboard.
+      style={keyboard ? { height: keyboard.height, transform: keyboard.top ? `translateY(${keyboard.top}px)` : undefined } : undefined}
     >
       {isDesktop ? (
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -175,26 +180,6 @@ function PhoneBar({ onBack }: { onBack: () => void }) {
       </div>
     </div>
   )
-}
-
-/**
- * The visible height while the on-screen keyboard is open (phones), else null. iOS keeps the layout
- * viewport full height under the keyboard, so the app is sized to the visual viewport instead.
- */
-function useKeyboardHeight(enabled: boolean): number | null {
-  const [height, setHeight] = useState<number | null>(null)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!enabled || !vv) {
-      setHeight(null)
-      return
-    }
-    const onResize = () => setHeight(vv.height < window.innerHeight - 100 ? Math.round(vv.height) : null)
-    onResize()
-    vv.addEventListener('resize', onResize)
-    return () => vv.removeEventListener('resize', onResize)
-  }, [enabled])
-  return height
 }
 
 /** Ctrl+Shift+E, or Esc twice within half a second, shows the disguise. */

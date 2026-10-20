@@ -11,9 +11,8 @@ interface ComposerState {
 }
 
 /**
- * What the composer is doing besides writing a new message. Redesign 3a Task 10 wires the Edit action
- * here. Until Task 11 moves editing into the composer, the row's interim inline editor
- * (components/chat/legacy/LegacyInlineEdit) opens for `editing`.
+ * What the composer is doing besides writing a new message. The Edit action (⋮ menu, long-press sheet,
+ * the E key) starts an edit here; the Composer shows the message under an "Editing message" bar.
  */
 export const useComposerStore = create<ComposerState>((set) => ({
   editing: null,

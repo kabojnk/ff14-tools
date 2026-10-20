@@ -39,7 +39,7 @@ test.describe('Lake', () => {
     await expect(bea.composer).toHaveValue(draft)
 
     // The draft goes into the new session and both people see it.
-    await bea.composer.press('Enter')
+    await bea.submit()
     await expect(bea.message(draft)).toBeVisible()
     await expect(alice.message(draft)).toBeVisible({ timeout: 5_000 })
   })

@@ -207,9 +207,23 @@ export class ChatUser {
     return this.page.locator('[data-media-item]').filter({ visible: true })
   }
 
+  /** The composer's round Send button (Save edit while editing). */
+  get sendButton() {
+    return this.page.getByRole('button', { name: /^(Send|Save edit)$/ }).filter({ visible: true })
+  }
+
+  /**
+   * Sends (or saves an edit) the way this layout does: Enter on desktop; the Send button on phones,
+   * where Return always adds a newline.
+   */
+  async submit() {
+    if (await this.isPhone()) await this.sendButton.click()
+    else await this.composer.press('Enter')
+  }
+
   async send(text: string) {
     await this.composer.fill(text)
-    await this.composer.press('Enter')
+    await this.submit()
   }
 
   async enterPassphrase(passphrase: string) {
