@@ -159,6 +159,20 @@ describe('ActionSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
+  it('leaves Escape to a dialog opened over it (Add emoji from the picker)', () => {
+    const onClose = vi.fn()
+    render(<ActionSheet actions={sample()} onClose={onClose} />)
+    const over = document.createElement('div')
+    over.setAttribute('role', 'dialog')
+    over.setAttribute('aria-modal', 'true')
+    document.body.appendChild(over)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    over.remove()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('focuses the first action when it opens', () => {
     render(<ActionSheet actions={sample()} onClose={() => {}} />)
     expect(screen.getByRole('button', { name: 'Reply' })).toHaveFocus()

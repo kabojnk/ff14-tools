@@ -207,6 +207,34 @@ describe('Sheet', () => {
     expect(opener).toHaveFocus()
   })
 
+  it('when the opener sits under a sheet that is still open, focus goes to that sheet instead', async () => {
+    // AddEmoji's crop step: opened from the picker's tile (under the AddEmoji sheet), closed back onto AddEmoji.
+    function Flow() {
+      const [crop, setCrop] = useState(false)
+      return (
+        <>
+          <button onClick={() => setCrop(true)}>Tile underneath</button>
+          <Sheet title="Add emoji" onClose={() => {}}>
+            <input aria-label="Emoji name" />
+          </Sheet>
+          {crop && (
+            <Sheet title="Crop" onClose={() => setCrop(false)}>
+              <span>frame</span>
+            </Sheet>
+          )}
+        </>
+      )
+    }
+    render(<Flow />)
+    const tile = screen.getByRole('button', { name: 'Tile underneath', hidden: true })
+    act(() => tile.focus())
+    fireEvent.click(tile)
+    expect(screen.getByRole('dialog', { name: 'Crop' })).toBeInTheDocument()
+    esc()
+    expect(screen.queryByRole('dialog', { name: 'Crop' })).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Add emoji' }).contains(document.activeElement)).toBe(true)
+  })
+
   it('traps Tab inside the sheet', async () => {
     render(
       <>

@@ -37,9 +37,16 @@ export function ActionSheet({ actions, onClose, onHeight }: ActionSheetProps) {
   }, [])
 
   useEffect(() => {
+    // Dialogs open before this sheet are under it; one that opens later (Add emoji from the picker) is over it.
+    const before = new Set(document.querySelectorAll('[role="dialog"]'))
+    const newerDialogOpen = () =>
+      Array.from(document.querySelectorAll('[role="dialog"]')).some(
+        (d) => !before.has(d) && !panelRef.current?.contains(d) && !d.contains(panelRef.current),
+      )
     const onKey = (e: globalThis.KeyboardEvent) => {
       // Not when something over the sheet (the emoji picker) already handled this Escape.
-      if (e.key === 'Escape' && !e.defaultPrevented && !isDisguised()) onClose()
+      if (e.key !== 'Escape' || e.defaultPrevented || isDisguised() || newerDialogOpen()) return
+      onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

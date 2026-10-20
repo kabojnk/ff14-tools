@@ -71,7 +71,7 @@ const selects = () => h.queries.filter((q) => q.table === 'custom_emoji' && q.op
 
 /** Fires a realtime event on the custom-emoji channel. */
 function emit(eventType: 'INSERT' | 'DELETE', payload: { new?: unknown; old?: unknown }) {
-  const ch = h.channels.find((c) => c.name === 'custom-emoji')
+  const ch = [...h.channels].reverse().find((c) => c.name.startsWith('custom-emoji'))
   if (!ch) throw new Error('no custom-emoji channel')
   for (const { filter, handler } of ch.handlers) {
     if (filter.event === eventType || filter.event === '*') handler({ eventType, new: payload.new ?? {}, old: payload.old ?? {} })
@@ -135,7 +135,7 @@ describe('emojiStore.load', () => {
     await useEmojiStore.getState().load()
     useEmojiStore.getState().subscribe()
     await useEmojiStore.getState().load()
-    expect(h.channels.map((c) => c.name)).toEqual(['custom-emoji'])
+    expect(h.channels.map((c) => c.name)).toEqual([expect.stringMatching(/^custom-emoji:/)])
     expect(h.channels[0].handlers.map((x) => x.filter.event).sort()).toEqual(['DELETE', 'INSERT'])
   })
 
@@ -321,7 +321,9 @@ describe('emojiStore.reset', () => {
     expect(s.rows).toEqual([])
     expect(s.lookup('blob')).toBeUndefined()
     await useEmojiStore.getState().load()
-    expect(h.channels.filter((c) => c.name === 'custom-emoji')).toHaveLength(2)
+    const topics = h.channels.filter((c) => c.name.startsWith('custom-emoji')).map((c) => c.name)
+    // A fresh topic each time: realtime-js hands back a channel that's still leaving under the same name.
+    expect(new Set(topics).size).toBe(2)
   })
 
   it('drops a load that answers after the reset', async () => {

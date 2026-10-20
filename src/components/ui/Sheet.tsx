@@ -32,6 +32,7 @@ interface SheetProps {
 let nextOrder = 0
 const openSheets = new Set<number>()
 const topmost = () => Math.max(-1, ...openSheets)
+const panels = new Map<number, HTMLElement>()
 // An Escape one sheet acted on; no other sheet acts on the same event.
 const handledEscapes = new WeakSet<Event>()
 
@@ -77,12 +78,18 @@ export function Sheet({
 
   useEffect(() => {
     openSheets.add(order)
+    if (panelRef.current) panels.set(order, panelRef.current)
     if (topmost() === order && !panelRef.current?.contains(document.activeElement)) {
       panelRef.current?.focus()
     }
     return () => {
       openSheets.delete(order)
-      if (opener?.isConnected) opener.focus()
+      panels.delete(order)
+      // Back to the opener, unless it sits under a sheet that is still open (AddEmoji's crop step was opened
+      // from the picker's tile): then focus stays in that sheet.
+      const top = panels.get(topmost())
+      if (top?.isConnected && !(opener && top.contains(opener))) top.focus()
+      else if (opener?.isConnected) opener.focus()
     }
   }, [order, opener])
 

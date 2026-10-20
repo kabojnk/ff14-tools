@@ -112,7 +112,7 @@ export const useEmojiStore = create<EmojiState>((set, get) => {
       if (!channel) {
         joinedOnce = false
         channel = supabase
-          .channel('custom-emoji')
+          .channel(`custom-emoji:${generation}`)
           .on(
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'custom_emoji' },
