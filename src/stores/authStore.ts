@@ -4,6 +4,9 @@ import { leaveConversation } from '@/lib/conversationRealtime'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
+import { PROFILE_COLUMNS, useProfileStore } from '@/stores/profileStore'
+import { useReactionStore } from '@/stores/reactionStore'
+import { HAS_PIN_KEY } from '@/stores/uiStore'
 import type { Profile } from '@/types'
 import type { User, Session } from '@supabase/supabase-js'
 
@@ -89,6 +92,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (conversationId) useMessageStore.getState().clearConversation(conversationId)
     useConversationStore.getState().reset()
     useTypingStore.getState().clear()
+    useProfileStore.getState().reset()
+    useReactionStore.getState().reset()
+    // Every logout path comes through here: the next login on this device must not launch locked.
+    try {
+      localStorage.removeItem(HAS_PIN_KEY)
+    } catch {
+      // Storage blocked: nothing was stored.
+    }
     await supabase.auth.signOut()
     set({ user: null, session: null, profile: null })
   },
@@ -99,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .eq('id', user.id)
       .single()
 

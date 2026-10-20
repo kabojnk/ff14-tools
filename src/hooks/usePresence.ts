@@ -1,24 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useUiStore } from '@/stores/uiStore'
-import type { UserStatus } from '@/types'
 
-export function usePresence() {
+/** While visible, profiles.last_seen_at is refreshed this often. */
+export const LAST_SEEN_HEARTBEAT_MS = 60_000
+
+export function usePresence(): void {
   const { user, profile } = useAuthStore()
-  const { initPresence, cleanupPresence, updatePresence, onlineUsers } = usePresenceStore()
-
-  // Tracks the status to restore when the tab becomes visible again
-  const savedStatusRef = useRef<UserStatus>('online')
+  // After a fresh login the user arrives before the profile; start once both are here.
+  const ready = !!user && !!profile
 
   useEffect(() => {
     if (!user || !profile) return
 
-    // Restore exactly the status they had — never auto-reset to 'online'
-    const initialStatus: UserStatus = profile.status ?? 'online'
-    savedStatusRef.current = initialStatus
-
-    initPresence(user.id, initialStatus, profile.custom_status_text)
+    const ps = usePresenceStore.getState()
+    const visible = document.visibilityState !== 'hidden'
+    ps.initPresence(user.id, profile.presence_override ?? null, visible ? 'online' : 'offline')
+    void ps.touchLastSeen()
 
     const showPrivacyScreen = () => {
       const el = document.getElementById('privacy-screen')
@@ -34,14 +33,11 @@ export function usePresence() {
     const handlePageHide = () => {
       showPrivacyScreen()
       useUiStore.getState().setEepMode(true)
+      void usePresenceStore.getState().touchLastSeen()
     }
+    // Only this device goes online/offline; the user's other devices are unaffected.
     const restorePresence = () => {
-      const ps = usePresenceStore.getState()
-      if (!ps.presenceChannel || !ps.currentUserId) return
-      const p = useAuthStore.getState().profile
-      // Prefer an explicitly-chosen manual status over the auto-saved ref
-      const statusToRestore = ps.manualStatus ?? savedStatusRef.current
-      updatePresence(statusToRestore, p?.custom_status_text ?? null)
+      void usePresenceStore.getState().setDevicePresence('online')
     }
 
     const handlePageShow = () => {
@@ -52,12 +48,11 @@ export function usePresence() {
     }
 
     const handleVisibilityChange = () => {
-      const userId = user.id
       if (document.visibilityState === 'hidden') {
         showPrivacyScreen()
-        const live = usePresenceStore.getState().onlineUsers[userId]?.status
-        if (live && live !== 'offline') savedStatusRef.current = live
-        updatePresence('offline', null)
+        const live = usePresenceStore.getState()
+        void live.setDevicePresence('offline')
+        void live.touchLastSeen()
         useUiStore.getState().setEepMode(true)
       } else {
         hidePrivacyScreen()
@@ -65,19 +60,22 @@ export function usePresence() {
       }
     }
 
+    const heartbeat = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void usePresenceStore.getState().touchLastSeen()
+    }, LAST_SEEN_HEARTBEAT_MS)
+
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      cleanupPresence()
+      window.clearInterval(heartbeat)
+      usePresenceStore.getState().cleanupPresence()
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  // Only re-run if the logged-in user changes — not on every profile update
+  // Only re-run if the logged-in user changes or their profile first loads — not on every profile update
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
-
-  return { onlineUsers }
+  }, [user?.id, ready])
 }

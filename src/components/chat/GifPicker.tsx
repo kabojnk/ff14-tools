@@ -90,7 +90,7 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
             <button
               key={gif.id}
               onClick={() => { onSelect(gif); onClose() }}
-              className="overflow-hidden rounded hover:ring-2 hover:ring-[hsl(var(--color-brand))]"
+              className="overflow-hidden rounded hover:ring-2 hover:ring-[color:var(--accent)]"
             >
               <img
                 src={gif.preview}
@@ -104,7 +104,7 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
       </div>
 
       {/* Attribution */}
-      <div className="border-t border-[hsl(var(--color-input-border))] px-3 py-1.5 text-right">
+      <div className="border-t border-[color:var(--line)] px-3 py-1.5 text-right">
         <span className="text-[10px] text-muted">Powered by Klipy</span>
       </div>
     </>
@@ -117,12 +117,12 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
         <div className="absolute inset-0 bg-black/50" />
         {/* Sheet */}
         <div
-          className="relative rounded-t-2xl border-t border-[hsl(var(--color-input-border))] bg-floating shadow-xl"
+          className="relative rounded-t-2xl border-t border-[color:var(--line)] bg-floating shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1">
-            <div className="h-1 w-10 rounded-full bg-[hsl(var(--color-input-border))]" />
+            <div className="h-1 w-10 rounded-full bg-[color:var(--muted)]" />
           </div>
           {content}
         </div>
@@ -133,7 +133,7 @@ export function GifPicker({ onSelect, onClose, anchorRef }: GifPickerProps) {
 
   return createPortal(
     <div
-      className="fixed z-50 w-80 rounded-lg border border-[hsl(var(--color-input-border))] bg-floating shadow-xl"
+      className="fixed z-50 w-80 rounded-lg border border-[color:var(--line)] bg-floating shadow-xl"
       style={{ bottom: pos.bottom, right: pos.right }}
       onMouseDown={(e) => e.stopPropagation()}
     >

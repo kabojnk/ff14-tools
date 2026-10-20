@@ -2,42 +2,49 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
+import { useComposerStore } from '@/stores/composerStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { ChannelHeader } from '@/components/channels/ChannelHeader'
-import { MessageList } from '@/components/chat/MessageList'
-import { MessageInput } from '@/components/chat/MessageInput'
-import { ChannelInfoPanel } from '@/components/chat/ChannelInfoPanel'
-import { MemberList } from '@/components/user/MemberList'
-import { SpaceList } from '@/components/spaces/SpaceList'
-import { UserPanel } from '@/components/user/UserPanel'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
-import type { InfoTab } from '@/components/chat/ChannelInfoPanel'
+import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { useKeyboardViewport } from '@/hooks/useKeyboardViewport'
+import { defaultPhoneView, type PhoneView } from '@/lib/layout'
+import { ChatHeader } from '@/components/chat2/ChatHeader'
+import { ReconnectBar } from '@/components/chat2/ReconnectBar'
+import { MessageList } from '@/components/chat2/MessageList'
+import { Composer } from '@/components/chat2/Composer'
+import { ChannelInfoPanel, type InfoTab } from '@/components/chat/ChannelInfoPanel'
+import { LeftColumn } from '@/components/layout/LeftColumn'
+import { ConversationList } from '@/components/layout/ConversationList'
+import { MeRow } from '@/components/layout/MeRow'
+import { SlideOver } from '@/components/layout/SlideOver'
 import type { Message } from '@/types'
 
-// Mobile views — mutually exclusive full-screen panels
-type MobileView = 'channels' | 'chat' | 'members'
-
+/**
+ * Phone: straight into the chat; the header's back chevron leads to the conversation list.
+ * Desktop: left column | chat | right slide-over (media, pins, search).
+ * Only one layout tree is mounted, so the chat hooks (realtime, typing, pins) never run twice.
+ */
 export function AppShell() {
-  // Tailwind's md breakpoint. Only one layout tree is mounted, so chat hooks
-  // (realtime channels, typing, pins) never run twice on the same device.
-  const isDesktop = useMediaQuery('(min-width: 768px)')
-  const { setEepMode, memberListOpen } = useUiStore()
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const setEepMode = useUiStore((s) => s.setEepMode)
   const userId = useAuthStore((s) => s.user?.id)
   const conversation = useConversationStore((s) => s.conversation)
   const conversationLoading = useConversationStore((s) => s.loading)
   const activeSpace = useConversationStore((s) => s.activeSpace)
   const loadConversation = useConversationStore((s) => s.load)
-  const [mobileView, setMobileView] = useState<MobileView>('channels')
-  const [keyboardOpen, setKeyboardOpen] = useState(false)
-  const [channelInfoTab, setChannelInfoTab] = useState<InfoTab>('media')
-  const [showChannelInfo, setShowChannelInfo] = useState(false)
+  // null until the person navigates: then the default follows the number of conversations.
+  const [chosenView, setChosenView] = useState<PhoneView | null>(null)
+  const [infoTab, setInfoTab] = useState<InfoTab>('media')
+  const [showInfo, setShowInfo] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const keyboard = useKeyboardViewport(!isDesktop)
+
+  const conversationCount = conversation ? 1 : 0
+  const phoneView = chosenView ?? defaultPhoneView(conversationCount)
 
   const openInfoPanel = (tab: InfoTab = 'media') => {
-    setChannelInfoTab(tab)
-    setShowChannelInfo(true)
+    setInfoTab(tab)
+    setShowInfo(true)
   }
 
   // The conversation is loaded here only (App.tsx doesn't), and its realtime channel is joined once.
@@ -55,25 +62,14 @@ export function AppShell() {
     return stop
   }, [userId])
 
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    const baseHeight = vv.height
-    const onResize = () => setKeyboardOpen(vv.height < baseHeight - 100)
-    vv.addEventListener('resize', onResize)
-    return () => vv.removeEventListener('resize', onResize)
-  }, [])
-
   const conversationId = conversation?.id ?? null
 
   // Reset reply and info panel when the space changes
   useEffect(() => {
     setReplyTo(null)
-    setShowChannelInfo(false)
+    setShowInfo(false)
+    useComposerStore.getState().cancelEdit()
   }, [activeSpace, conversationId])
-
-  // Tapping a space on mobile navigates straight to chat (SpaceList sets the active space)
-  const handleMobileSpaceSelect = () => setMobileView('chat')
 
   const noConversation = (
     <div className="flex flex-1 items-center justify-center">
@@ -90,122 +86,78 @@ export function AppShell() {
     </div>
   )
 
+  const chatColumn = (mobileBack?: () => void) =>
+    conversationId ? (
+      <>
+        <ChatHeader isDesktop={isDesktop} onBack={mobileBack} onOpenPanel={openInfoPanel} />
+        <ReconnectBar />
+        <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
+        <Composer
+          key={`input:${activeSpace}`}
+          conversationId={conversationId}
+          space={activeSpace}
+          isDesktop={isDesktop}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+        />
+      </>
+    ) : (
+      <>
+        {mobileBack && <PhoneBar onBack={mobileBack} />}
+        {noConversation}
+      </>
+    )
+
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-
-      {/* ── md+ layout: sidebar | chat | member-list ── */}
-      {isDesktop && (<div className="flex flex-1 overflow-hidden">
-
-        {/* Left sidebar — always visible on md+ */}
-        <div className="w-[var(--sidebar-width)] flex-shrink-0 border-r border-[hsl(var(--color-bg-tertiary))]">
-          <Sidebar />
-        </div>
-
-        {/* Chat area */}
-        <main className="flex flex-1 flex-col overflow-hidden bg-primary">
-          {conversationId ? (
-            <>
-              <ChannelHeader space={activeSpace} onInfoOpen={openInfoPanel} />
-              <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
-              <MessageInput
-                key={`input:${activeSpace}`}
+    <div
+      data-app-shell
+      data-layout={isDesktop ? 'desktop' : 'phone'}
+      className="flex h-full flex-col overflow-hidden"
+      // iOS doesn't shrink the layout viewport for the keyboard; fit the app to what's visible, so the
+      // composer sits on top of the keyboard.
+      style={keyboard ? { height: keyboard.height, transform: keyboard.top ? `translateY(${keyboard.top}px)` : undefined } : undefined}
+    >
+      {isDesktop ? (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <LeftColumn onSearch={() => openInfoPanel('search')} />
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-primary">{chatColumn()}</main>
+          {showInfo && conversationId && (
+            <SlideOver label="Conversation details">
+              <ChannelInfoPanel
+                variant="panel"
                 conversationId={conversationId}
                 space={activeSpace}
-                replyTo={replyTo}
-                onCancelReply={() => setReplyTo(null)}
+                initialTab={infoTab}
+                onClose={() => setShowInfo(false)}
               />
-            </>
-          ) : (
-            noConversation
+            </SlideOver>
           )}
+        </div>
+      ) : phoneView === 'chat' ? (
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary">
+          {chatColumn(() => setChosenView('list'))}
         </main>
-
-        {/* Right member list — toggled via header button */}
-        {memberListOpen && (
-          <div className="border-l border-[hsl(var(--color-bg-tertiary))]">
-            <MemberList />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-secondary">
+          <div className="flex-shrink-0 pt-safe" style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}>
+            <MeRow />
           </div>
-        )}
-      </div>)}
-
-      {/* ── Mobile layout: full-screen views + bottom tab bar ── */}
-      {!isDesktop && (<div className="flex flex-1 flex-col overflow-hidden">
-
-        {/* Spaces panel */}
-        {mobileView === 'channels' && (
-          <div className="flex h-full flex-col bg-secondary">
-            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
-              <div className="pt-safe" />
-              <div className="flex h-[var(--header-height)] items-center px-5">
-                <h2 className="text-[15px] font-semibold text-primary">Spaces</h2>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <SpaceList variant="mobile" onSelect={handleMobileSpaceSelect} />
-            </div>
-            {/* User panel at bottom — gives access to status & settings on mobile */}
-            <UserPanel />
+          <div
+            className="min-h-0 flex-1 overflow-y-auto pb-safe"
+            style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
+          >
+            <ConversationList onOpen={() => setChosenView('chat')} />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Chat panel */}
-        {mobileView === 'chat' && (
-          <main className="flex h-full flex-col overflow-hidden bg-primary">
-            {conversationId ? (
-              <>
-                <ChannelHeader
-                  space={activeSpace}
-                  mobileBack={() => setMobileView('channels')}
-                  onInfoOpen={openInfoPanel}
-                />
-                <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
-                <MessageInput
-                  key={`input:${activeSpace}`}
-                  conversationId={conversationId}
-                  space={activeSpace}
-                  replyTo={replyTo}
-                  onCancelReply={() => setReplyTo(null)}
-                />
-              </>
-            ) : (
-              noConversation
-            )}
-          </main>
-        )}
-
-        {/* Members panel */}
-        {mobileView === 'members' && (
-          <div className="flex h-full flex-col bg-secondary">
-            <div className="flex-shrink-0 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary shadow-sm">
-              <div className="pt-safe" />
-              <div className="flex h-[var(--header-height)] items-center px-5">
-                <h2 className="text-[15px] font-semibold text-primary">Members</h2>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <MemberList />
-            </div>
-          </div>
-        )}
-
-        {/* Bottom tab bar — hidden while keyboard is open in chat to reclaim space */}
-        {!(keyboardOpen && mobileView === 'chat') && (
-          <MobileTabBar
-            active={mobileView}
-            onChange={setMobileView}
-            hasChannel={!!conversationId}
-            onEep={() => setEepMode(true)}
-          />
-        )}
-      </div>)}
-
-      {/* Channel info panel overlay — mobile + desktop */}
-      {showChannelInfo && conversationId && (
+      {/* Phones: the info panel covers the screen. */}
+      {!isDesktop && showInfo && conversationId && (
         <ChannelInfoPanel
           conversationId={conversationId}
           space={activeSpace}
-          initialTab={channelInfoTab}
-          onClose={() => setShowChannelInfo(false)}
+          initialTab={infoTab}
+          onClose={() => setShowInfo(false)}
         />
       )}
 
@@ -214,105 +166,23 @@ export function AppShell() {
   )
 }
 
-// ── Bottom tab bar ──
-function MobileTabBar({
-  active,
-  onChange,
-  hasChannel,
-  onEep,
-}: {
-  active: MobileView
-  onChange: (v: MobileView) => void
-  hasChannel: boolean
-  onEep: () => void
-}) {
+/** The phone header when there's no conversation to show: just the way back to the list. */
+function PhoneBar({ onBack }: { onBack: () => void }) {
   return (
-    <nav className="flex-shrink-0 border-t border-[hsl(var(--color-bg-tertiary))] bg-secondary">
-      <div className="flex">
-        <TabButton
-          label="Spaces"
-          active={active === 'channels'}
-          onClick={() => onChange('channels')}
-          icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="4" y1="9" x2="20" y2="9" />
-              <line x1="4" y1="15" x2="20" y2="15" />
-              <line x1="10" y1="3" x2="8" y2="21" />
-              <line x1="16" y1="3" x2="14" y2="21" />
-            </svg>
-          }
-        />
-        <TabButton
-          label="Chat"
-          active={active === 'chat'}
-          onClick={() => onChange('chat')}
-          disabled={!hasChannel}
-          icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          }
-        />
-        <TabButton
-          label="Members"
-          active={active === 'members'}
-          onClick={() => onChange('members')}
-          icon={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="9" cy="7" r="4" />
-              <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              <path d="M21 21v-2a4 4 0 0 0-3-3.85" />
-            </svg>
-          }
-        />
-        {/* Eep — visually distinct, always accessible */}
-        <button
-          onClick={onEep}
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-bold uppercase tracking-wide transition-colors"
-          style={{ color: '#e94560' }}
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-            <line x1="12" y1="9" x2="12" y2="13"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
+    <div className="flex-shrink-0 border-b border-[color:var(--line)] bg-primary">
+      <div className="pt-safe" />
+      <div className="flex h-[var(--header-height)] items-center px-3">
+        <button onClick={onBack} className="rounded p-1 text-interactive hover:text-interactive-hover" aria-label="Back to chats">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
           </svg>
-          Eep!
         </button>
       </div>
-    </nav>
+    </div>
   )
 }
 
-function TabButton({
-  label,
-  icon,
-  active,
-  onClick,
-  disabled = false,
-}: {
-  label: string
-  icon: React.ReactNode
-  active: boolean
-  onClick: () => void
-  disabled?: boolean
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-semibold uppercase tracking-wide transition-colors
-        ${active ? 'text-interactive-hover' : 'text-interactive'}
-        ${disabled ? 'pointer-events-none opacity-30' : 'hover:text-interactive-hover'}
-      `}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-}
-
+/** Ctrl+Shift+E, or Esc twice within half a second, shows the disguise. */
 function EepShortcutListener({ onActivate }: { onActivate: () => void }) {
   const lastEscapeRef = useRef(0)
 

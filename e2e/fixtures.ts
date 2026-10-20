@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type TestInfo, type Browser } from '@playwright/test'
+import { test as base, expect, type Page, type TestInfo, type Browser, type BrowserContextOptions, type Locator } from '@playwright/test'
 import { EEP_HEADING, USERS, type SeedUser, type UserKey } from './users'
 import { stubExternalServices } from './stubs'
 
@@ -23,49 +23,139 @@ export class ChatUser {
     return this.page.getByTestId('pin-dots')
   }
 
+  /** A message in the open space's list (not its preview in the conversation list). */
   message(text: string) {
-    return this.page.getByText(text, { exact: true })
+    return this.page.locator('[data-realtime]').getByText(text, { exact: true })
   }
 
-  /** The Main or Schist entry in the space list (sidebar on desktop, the Spaces screen on mobile). */
+  /** The row (bubble, ticks, extras) of a message in the open space's list, by its exact text. */
+  messageRow(text: string) {
+    return this.page.locator('[data-realtime] [data-message-id]').filter({ has: this.page.getByText(text, { exact: true }) })
+  }
+
+  /** Whether this device is in the phone layout (long-press sheet) rather than desktop (hover toolbar). */
+  async isPhone() {
+    return (await this.page.locator('[data-layout="phone"]').count()) > 0
+  }
+
+  /** A finger held on `target` past the long-press delay (pointer events, as on iOS). */
+  async longPress(target: Locator) {
+    await target.scrollIntoViewIfNeeded()
+    await target.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 })
+    await this.page.waitForTimeout(600)
+    await target.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 })
+  }
+
+  /**
+   * Opens a message's actions on `target` (the bubble, or one photo in it) and returns where its items
+   * are: the long-press sheet on phones (buttons), the hover toolbar's ⋯ menu on desktop (menuitems).
+   */
+  async openMessageActions(target: Locator): Promise<(name: string) => Locator> {
+    if (await this.isPhone()) {
+      await this.longPress(target)
+      const sheet = this.page.getByRole('dialog', { name: 'Message actions' })
+      await expect(sheet).toBeVisible()
+      return (name) => sheet.getByRole('button', { name, exact: true })
+    }
+    await target.hover()
+    const row = target.locator('xpath=ancestor-or-self::*[@data-message-id][1]')
+    await row.getByRole('toolbar', { name: 'Message actions' }).getByRole('button', { name: 'More actions' }).click()
+    const menu = this.page.getByRole('menu', { name: 'More actions' })
+    await expect(menu).toBeVisible()
+    return (name) => menu.getByRole('menuitem', { name, exact: true })
+  }
+
+  /** The scrolling message list of the open space. */
+  get messageList() {
+    return this.page.locator('[data-realtime]').filter({ visible: true }).first()
+  }
+
+  /** The Main or Schist tab (under the header on phones, inline in it on desktop). */
   spaceButton(name: SpaceName) {
-    return this.page.locator(`[data-space="${name.toLowerCase()}"]`).filter({ visible: true }).first()
+    return this.page.getByRole('tab').and(this.page.locator(`[data-space="${name.toLowerCase()}"]`)).filter({ visible: true }).first()
+  }
+
+  /** The chat header: the partner, presence, status pill, Eep!, the ⋮ menu. */
+  get header() {
+    return this.page.locator('[data-chat-header]').filter({ visible: true }).first()
+  }
+
+  /** The partner's status pill in the header subline. */
+  get headerPill() {
+    return this.header.locator('[data-status-pill]')
+  }
+
+  /** Opens the partner's profile card from the header (desktop popover, phone sheet) and returns it. */
+  async partnerCard() {
+    await this.showChat()
+    await this.header.getByRole('button', { name: /^View .+'s profile$/ }).click()
+    const card = this.page.locator('[data-partner-card]').filter({ visible: true })
+    await expect(card).toBeVisible()
+    return card
+  }
+
+  /** The conversation's row in the conversation list (desktop left column; the phone list screen). */
+  get conversationRow() {
+    return this.page.locator('[data-conversation]').filter({ visible: true }).first()
+  }
+
+  /** Your own row: the desktop left column's top, or the phone list screen's top bar. */
+  get meRow() {
+    return this.page.locator('[data-me-row]').filter({ visible: true }).first()
+  }
+
+  /** Waits for the app to settle on the chat or the disguise; if it's the disguise, unlocks it with the PIN. */
+  async unlockIfLocked() {
+    await expect(this.page.locator('[data-app-shell]').filter({ visible: true }).or(this.eepHeading).first()).toBeVisible()
+    if (!(await this.eepHeading.isVisible())) return
+    await this.openPinPad()
+    await this.tapPin(this.user.pin)
+    await expect(this.eepHeading).toBeHidden()
   }
 
   /** Loads the app and opens a space (Main by default), waiting for the realtime channel to join. */
   async openChat(space: SpaceName = 'Main') {
     await this.page.goto('/')
+    await this.unlockIfLocked()
     await this.openSpace(space)
   }
 
-  /** Switches to a space without reloading. On mobile it goes back to the Spaces screen first. */
+  /** Phones: from the conversation list into the chat. A no-op when the chat is already showing. */
+  async showChat() {
+    if ((await this.page.locator('[data-layout="phone"]').count()) === 0) return
+    if ((await this.conversationRow.count()) > 0) await this.conversationRow.click()
+  }
+
+  /** Phones: back from the chat to the conversation list. A no-op on desktop (the left column). */
+  async showList() {
+    const back = this.page.getByRole('button', { name: 'Back to chats' }).filter({ visible: true })
+    if ((await back.count()) > 0) await back.first().click()
+    await expect(this.meRow).toBeVisible()
+  }
+
+  /** Switches to a space with the Main|Schist tabs, without reloading (on phones, from the list screen back into the chat first). */
   async openSpace(name: SpaceName) {
-    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
-    if (!(await this.spaceButton(name).isVisible()) && (await back.count()) > 0) await back.first().click()
+    if (!(await this.spaceButton(name).isVisible())) await this.showChat()
     await this.spaceButton(name).click()
     await expect(this.page.getByPlaceholder(`Message #${name}`)).toBeVisible()
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
   }
 
-  /** Makes the space list visible: a no-op on desktop (the sidebar); on mobile, back to the Spaces screen. */
+  /** Makes the Main|Schist tabs visible (phones: from the list screen back into the chat). */
   async showSpaces() {
-    const back = this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true })
-    if (!(await this.spaceButton('Main').isVisible()) && (await back.count()) > 0) await back.first().click()
+    if (!(await this.spaceButton('Main').isVisible())) await this.showChat()
     await expect(this.spaceButton('Main')).toBeVisible()
   }
 
-  /** "<name> is typing" under the open space's messages. */
+  /** The typing bubble ("<name> is typing") at the end of the open space's messages. */
   typing(nickname: string) {
-    return this.page.getByText(`${nickname} is typing`, { exact: true }).filter({ visible: true })
+    return this.page.locator('[data-realtime]').getByRole('status', { name: `${nickname} is typing`, exact: true }).filter({ visible: true })
   }
 
-  /** Opens User Settings from the user panel (on mobile, from the Spaces screen). */
+  /** Opens User Settings from your row (on phones, the list screen's top bar). */
   async openSettings() {
-    const settings = this.page.getByTitle('User settings').filter({ visible: true })
-    if ((await settings.count()) === 0) {
-      await this.page.getByRole('button', { name: 'Back to spaces' }).filter({ visible: true }).first().click()
-    }
-    await settings.first().click()
+    await this.showList()
+    await this.meRow.getByTitle('User settings').click()
   }
 
   /** Opens User Settings on the Security tab (desktop) or screen (mobile: gear → Security). */
@@ -77,46 +167,33 @@ export class ChatUser {
     await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
   }
 
-  /** Opens the info panel of the current space on a tab. */
+  /** Opens the info panel of the current space on a tab, from the header's ⋮ menu (desktop: the right slide-over; phones: full screen). */
   async openInfoPanel(tab: InfoTabName) {
-    const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }
-    const direct = this.page.getByTitle(titles[tab], { exact: true }).filter({ visible: true })
-    if ((await direct.count()) > 0) {
-      await direct.first().click()
-    } else {
-      // Mobile: tapping the space name opens the panel; then pick the tab.
-      await this.page.locator('h3').filter({ visible: true }).first().click()
-      await this.page.getByRole('button', { name: tab, exact: true }).filter({ visible: true }).first().click()
-    }
+    const items: Record<InfoTabName, string> = { Media: 'Media, files & links', Pins: 'Pinned messages', Search: 'Search messages' }
+    await this.showChat()
+    await this.chatMenuItem(items[tab]).then((item) => item.click())
     await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
   }
 
-  /** The member list row for a person (the right panel on desktop, the Members screen on mobile). */
-  member(nickname: string) {
-    return this.page.locator(`[data-member="${nickname}"]`).filter({ visible: true }).first()
+  /** Opens the header's ⋮ menu and returns one of its items. */
+  async chatMenuItem(name: string) {
+    await this.header.getByRole('button', { name: 'More', exact: true }).click()
+    const item = this.page.getByRole('menuitem', { name, exact: true })
+    await expect(item).toBeVisible()
+    return item
   }
 
-  /** Shows the member list: always open on desktop; the Members tab on mobile. */
-  async openMembers() {
-    if ((await this.page.locator('[data-member]').filter({ visible: true }).count()) > 0) return
-    await this.page.getByRole('button', { name: 'Members', exact: true }).filter({ visible: true }).first().click()
-    await expect(this.page.locator('[data-member]').filter({ visible: true }).first()).toBeVisible()
-  }
-
-  /** Opens the status picker from the user panel (on mobile, from the Spaces screen). */
+  /** Opens the status picker from your avatar (on phones, on the list screen). */
   async openStatusPicker() {
-    const button = this.page.getByTitle('Set status').filter({ visible: true })
-    if ((await button.count()) === 0) {
-      await this.page.getByRole('button', { name: 'Spaces', exact: true }).filter({ visible: true }).first().click()
-    }
-    await button.first().click()
+    await this.showList()
+    await this.meRow.getByTitle('Set status').click()
     await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
   }
 
-  /** Drag the Lake from the header's More actions menu. */
+  /** Drag the Lake from the header's ⋮ menu. */
   async dragTheLake() {
-    await this.page.getByTitle('More actions').filter({ visible: true }).first().click()
-    await this.page.getByRole('button', { name: 'Drag the Lake' }).filter({ visible: true }).first().click()
+    await this.showChat()
+    await (await this.chatMenuItem('Drag the Lake')).click()
   }
 
   /** Fill the Lake from Settings → Security (open it first with openSecurity). */
@@ -130,9 +207,23 @@ export class ChatUser {
     return this.page.locator('[data-media-item]').filter({ visible: true })
   }
 
+  /** The composer's round Send button (Save edit while editing). */
+  get sendButton() {
+    return this.page.getByRole('button', { name: /^(Send|Save edit)$/ }).filter({ visible: true })
+  }
+
+  /**
+   * Sends (or saves an edit) the way this layout does: Enter on desktop; the Send button on phones,
+   * where Return always adds a newline.
+   */
+  async submit() {
+    if (await this.isPhone()) await this.sendButton.click()
+    else await this.composer.press('Enter')
+  }
+
   async send(text: string) {
     await this.composer.fill(text)
-    await this.composer.press('Enter')
+    await this.submit()
   }
 
   async enterPassphrase(passphrase: string) {
@@ -140,8 +231,14 @@ export class ChatUser {
     await this.page.getByRole('button', { name: 'Add' }).click()
   }
 
+  /**
+   * Opens the PIN pad from the disguise. A locked launch shows it by itself once the PIN length loads,
+   * in the same render as the Unlock button, so wait for either before deciding.
+   */
   async openPinPad() {
-    await this.page.getByRole('button', { name: 'Unlock' }).click()
+    const unlock = this.page.getByRole('button', { name: 'Unlock' })
+    await expect(this.pinDots.or(unlock).first()).toBeVisible()
+    if (!(await this.pinDots.isVisible())) await unlock.click()
     await expect(this.pinDots).toBeVisible()
   }
 
@@ -182,7 +279,8 @@ export class ChatUser {
   }
 }
 
-async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
+/** A signed-in device (context) for a seeded user, like the project's devices unless `overrides` say otherwise. */
+export async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey, overrides: BrowserContextOptions = {}) {
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL } = testInfo.project.use
   const context = await browser.newContext({
     viewport,
@@ -192,6 +290,7 @@ async function openUser(browser: Browser, testInfo: TestInfo, key: UserKey) {
     hasTouch,
     baseURL,
     storageState: USERS[key].storageState,
+    ...overrides,
   })
   await stubExternalServices(context)
   const page = await context.newPage()

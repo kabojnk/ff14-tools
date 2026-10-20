@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 
 type Listener = (e: { matches: boolean }) => void
 
@@ -50,5 +50,11 @@ describe('useMediaQuery', () => {
     vi.stubGlobal('matchMedia', undefined)
     const { result } = renderHook(() => useMediaQuery('(min-width: 768px)'))
     expect(result.current).toBe(false)
+  })
+})
+
+describe('DESKTOP_QUERY', () => {
+  it('needs a wide screen with a mouse, so landscape phones stay in the phone layout', () => {
+    expect(DESKTOP_QUERY).toBe('(min-width: 900px) and (hover: hover) and (pointer: fine)')
   })
 })

@@ -30,6 +30,13 @@ export function EepMode({ onLoginClick }: EepModeProps) {
   const handleCustomSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (eepPassphrase && customRaid === eepPassphrase) {
+      // While the PIN lock is on (including before the PIN length has loaded), the passphrase only
+      // opens the PIN pad; the chat needs the PIN.
+      if (pinLocked) {
+        setShowPinPad(true)
+        setCustomRaid('')
+        return
+      }
       setEepMode(false)
       return
     }

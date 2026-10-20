@@ -27,8 +27,9 @@ checksum() {
     union all select 's:'||id||':'||visible||':'||coalesce(conversation_id::text,'') from public.sessions
     union all select 'c:'||conversation_id||':'||user_id from public.conversation_members
     union all select 'x:'||id||':'||coalesce(conversation_id::text,'')||':'||coalesce(space,'')||':'||archived from public.channels
-    union all select 'mm:'||id||':'||message_id||':'||kind||':'||url||':'||coalesce(extension,'') from public.message_media
-    union all select 'p:'||id||':'||coalesce(status_id::text,'')||':'||coalesce(lock_pin_length::text,'') from public.profiles
+    union all select 'mm:'||id||':'||message_id||':'||kind||':'||url||':'||coalesce(extension,'')||':'||spoiler from public.message_media
+    union all select 'r:'||id||':'||coalesce(reply_to::text,'') from public.messages
+    union all select 'p:'||id||':'||coalesce(status_id::text,'')||':'||coalesce(lock_pin_length::text,'')||':'||coalesce(presence_override,'') from public.profiles
   ) t(x)"
 }
 before=$(checksum)

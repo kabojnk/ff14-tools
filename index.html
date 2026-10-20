@@ -15,8 +15,29 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
     <!-- Android / Chrome PWA -->
-    <meta name="theme-color" content="#2b2d31" />
+    <meta name="theme-color" content="#2f3137" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- First paint: apply the stored theme before anything renders (mirrors uiStore's initialTheme
+         and src/lib/themes.ts THEME_IDS), and give the status bar the disguise colour if the app opens disguised. -->
+    <script>
+      (function () {
+        var ids = ['light', 'dark', 'midnight', 'latte', 'mocha', 'sakura', 'dawn', 'rosepine', 'dracula', 'nord', 'tokyo'];
+        var theme = null;
+        var eep = false;
+        try { theme = localStorage.getItem('theme'); } catch (e) {}
+        try { eep = sessionStorage.getItem('eepMode') === 'true'; } catch (e) {}
+        // A phone that has a PIN launches disguised (mirrors uiStore's launchState).
+        try { if (localStorage.getItem('hasPin') === '1' && window.matchMedia('(pointer: coarse)').matches) eep = true; } catch (e) {}
+        if (ids.indexOf(theme) < 0) {
+          var dark = true;
+          try { dark = window.matchMedia('(prefers-color-scheme: dark)').matches; } catch (e) {}
+          theme = dark ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+        if (eep) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1a1a2e');
+      })();
+    </script>
 
     <!-- General -->
     <meta name="description" content="FF14 team chat and tools" />

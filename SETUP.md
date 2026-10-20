@@ -184,7 +184,7 @@ Requires Docker.
 | `npm test` | Unit/component tests (Vitest) |
 | `npm run test:db` | Database tests (pgTAP, `supabase/tests/database`): schema, old-app compatibility, RLS, read receipts, media, RPCs. Each file runs in a rolled-back transaction, so it works on a database the e2e suite has used. |
 | `npm run test:migration` | Migration test: loads old-shape, multi-channel history onto the baseline schema, applies the conversations migrations, checks exact counts and that re-running them changes nothing. Ends with `db:reset`. |
-| `npm run e2e` | Two-user end-to-end tests (Playwright: desktop Chromium + iPhone WebKit). Resets the DB first; set `E2E_SKIP_RESET=1` to skip. |
+| `npm run e2e` | Two-user end-to-end tests (Playwright: desktop Chromium + iPhone WebKit). Resets the DB first; set `E2E_SKIP_RESET=1` to skip. The theme screenshot projects are included but skip outside Linux (see below). |
 | `npm run e2e:ui` | Playwright UI mode for debugging |
 
 Seeded accounts (password `password123` for all):
@@ -198,7 +198,28 @@ Seeded accounts (password `password123` for all):
 Eep passphrase `test-passphrase`, lake password `test-lake-password`. These are local-only values.
 
 CI (`.github/workflows/ci.yml`) runs lint, type-check and unit tests, then the database tests, the migration
-test and the full e2e suite, on pull requests to `main` and pushes to `main`.
+test, the e2e suite and the theme screenshots, on pull requests to `main` and pushes to `main`.
+
+### Screenshot baselines
+
+`e2e/themes.spec.ts` takes a screenshot of the chat in each of the 11 themes, in two projects:
+`screenshots-desktop` (1280×800) and `screenshots-phone` (393×852, touch, coarse pointer). Times, date
+chips, presence and the typing bubble are masked. The tests run **only on Linux**, because fonts render
+differently on macOS; locally they show as skipped. The baselines are rendered by CI on `ubuntu-24.04`
+(pinned in the workflow, so a runner image change doesn't break every comparison).
+
+- **First run (no baselines committed):** CI's "Theme screenshots" step runs with
+  `--update-snapshots=missing`, so it writes every missing baseline and passes. The step after it uploads
+  the `*-snapshots` folders as the `screenshot-baselines` artifact on every run.
+- **Commit them:** download that artifact from the workflow run and unzip it into the repo so the files land
+  in `e2e/themes.spec.ts-snapshots/` (named like `sakura-screenshots-phone-linux.png`). Look through them, then
+  commit.
+- **Later runs** compare against the committed baselines; a visual change fails the step, and the report
+  (`screenshot-report` artifact) shows the diff.
+- **Intentional change** (a theme or layout tweak): delete the affected `.png` files, push, and commit the
+  new ones from that run's artifact. Or, on a Linux machine with the local stack running:
+  `npx playwright test --project=screenshots-desktop --project=screenshots-phone --update-snapshots=all`.
+  The run resets the database first, so the seeded history is the same each time.
 
 Bug-fix policy: every fix starts with a failing test at the lowest layer that can reproduce it.
 Before each milestone, run `docs/testing/iphone-checklist.md` on a real device.

@@ -20,10 +20,10 @@ describe('presenceOf', () => {
 })
 
 describe('presence display', () => {
-  it('uses the status colour tokens', () => {
-    expect(presenceColor('online')).toBe('hsl(var(--color-status-online))')
-    expect(presenceColor('away')).toBe('hsl(var(--color-status-away))')
-    expect(presenceColor('offline')).toBe('hsl(var(--color-status-offline))')
+  it('uses the theme presence tokens', () => {
+    expect(presenceColor('online')).toBe('var(--presence-online)')
+    expect(presenceColor('away')).toBe('var(--presence-away)')
+    expect(presenceColor('offline')).toBe('var(--presence-offline)')
   })
 
   it('labels each presence', () => {

@@ -8,7 +8,7 @@ import { BannerCrop } from '@/components/user/BannerCrop'
 import { PinPad } from '@/components/pin/PinPad'
 import { LakeSettings } from '@/components/user/LakeSettings'
 import { Portal } from '@/components/ui/Portal'
-import type { ThemePreset } from '@/types'
+import { ThemePicker } from '@/components/user/ThemePicker'
 
 interface UserSettingsProps {
   onClose: () => void
@@ -46,7 +46,7 @@ function GearIcon() {
 
 export function UserSettings({ onClose }: UserSettingsProps) {
   const { profile, fetchProfile } = useAuthStore()
-  const { theme, setTheme, pinLength, setPin, clearPinRemote, verifyPin } = useUiStore()
+  const { pinLength, setPin, clearPinRemote, verifyPin } = useUiStore()
   const [nickname, setNickname] = useState(profile?.nickname ?? '')
   const [profileMessage, setProfileMessage] = useState(profile?.profile_message ?? '')
   const [saving, setSaving] = useState(false)
@@ -135,12 +135,6 @@ export function UserSettings({ onClose }: UserSettingsProps) {
     setSaving(false)
   }
 
-  const themes: { value: ThemePreset; label: string; preview: string }[] = [
-    { value: 'dark', label: 'Dark', preview: '#313338' },
-    { value: 'light', label: 'Light', preview: '#ffffff' },
-    { value: 'midnight', label: 'Midnight', preview: '#1a1d2e' },
-  ]
-
   const desktopTabs: { value: DesktopTab; label: string }[] = [
     { value: 'profile', label: 'My Profile' },
     { value: 'appearance', label: 'Appearance' },
@@ -161,20 +155,20 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           {profile?.banner_url ? (
             <img src={profile.banner_url} alt="Banner" className="h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full bg-[hsl(var(--color-brand)/.6)]" />
+            <div className="h-full w-full bg-[color:color-mix(in_srgb,var(--accent)_60%,transparent)]" />
           )}
         </div>
         <div className="flex gap-3">
           <button
             onClick={() => bannerInputRef.current?.click()}
-            className="rounded-[3px] border border-[hsl(var(--color-brand))] px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-white"
+            className="rounded-[3px] border border-[color:var(--accent)] px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand hover:text-on-accent"
           >
             {profile?.banner_url ? 'Change Banner' : 'Upload Banner'}
           </button>
           {profile?.banner_url && (
             <button
               onClick={handleRemoveBanner}
-              className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover"
+              className="rounded-[3px] border border-[color:var(--line)] px-4 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover"
             >
               Remove
             </button>
@@ -211,7 +205,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+        className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-brand-hover disabled:opacity-50"
       >
         {saving ? 'Saving...' : 'Save Changes'}
       </button>
@@ -221,25 +215,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
   const appearanceContent = (
     <div className="mb-4">
       <label className="mb-3 block text-xs font-bold uppercase text-secondary">Theme</label>
-      <div className="flex gap-4">
-        {themes.map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setTheme(t.value)}
-            className={`rounded-lg border-2 p-1 transition-colors ${
-              theme === t.value
-                ? 'border-[hsl(var(--color-brand))]'
-                : 'border-transparent hover:border-[hsl(var(--color-input-border))]'
-            }`}
-          >
-            <div className="flex h-16 w-24 items-end rounded p-2" style={{ backgroundColor: t.preview }}>
-              <span className={`text-xs font-medium ${t.value === 'light' ? 'text-gray-800' : 'text-white'}`}>
-                {t.label}
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
+      <ThemePicker />
     </div>
   )
 
@@ -261,7 +237,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           {pinLength === null ? (
             <button
               onClick={() => setPinStep('set')}
-              className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+              className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-brand-hover"
             >
               Set PIN
             </button>
@@ -269,13 +245,13 @@ export function UserSettings({ onClose }: UserSettingsProps) {
             <>
               <button
                 onClick={() => setPinStep('change-verify')}
-                className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover"
+                className="rounded-[3px] bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-brand-hover"
               >
                 Change PIN
               </button>
               <button
                 onClick={() => setPinStep('remove-verify')}
-                className="rounded-[3px] border border-[hsl(var(--color-input-border))] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
+                className="rounded-[3px] border border-[color:var(--line)] px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-hover"
               >
                 Remove PIN
               </button>
@@ -283,7 +259,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           )}
         </div>
       </div>
-      <div className="my-8 border-t border-[hsl(var(--color-bg-tertiary))]" />
+      <div className="my-8 border-t border-[color:var(--line)]" />
       <LakeSettings />
     </>
   )
@@ -309,7 +285,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
         <div className="flex flex-1 flex-col bg-primary md:hidden">
           {/* Header — safe-area-aware so it clears the iPhone status bar */}
           <div className="flex-shrink-0 bg-secondary pt-safe">
-            <div className="flex h-12 items-center border-b border-[hsl(var(--color-bg-tertiary))] px-2">
+            <div className="flex h-12 items-center border-b border-[color:var(--line)] px-2">
               {/* Left: Cancel / Back */}
               <button
                 onClick={handleMobileBack}
@@ -356,7 +332,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
                   <span>Appearance</span>
                   <span className="text-muted"><ChevronRight /></span>
                 </button>
-                <div className="mx-4 border-t border-[hsl(var(--color-bg-tertiary))]" />
+                <div className="mx-4 border-t border-[color:var(--line)]" />
                 <button
                   onClick={() => { setMobileScreen('security'); resetPinWizard() }}
                   className="flex w-full items-center justify-between px-4 py-4 text-sm text-primary transition-colors hover:bg-hover"
@@ -426,7 +402,7 @@ export function UserSettings({ onClose }: UserSettingsProps) {
           <div className="fixed right-8 top-4">
             <button
               onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[hsl(var(--color-input-border))] text-interactive transition-colors hover:text-interactive-hover"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[color:var(--line)] text-interactive transition-colors hover:text-interactive-hover"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />

@@ -1,12 +1,17 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { SPACES } from '@/lib/spaces'
+import { messagePreview } from '@/lib/chat/preview'
 import { useMessageStore } from '@/stores/messageStore'
 import type { Attachment, Conversation, Message, ReadPosition, Session, Space } from '@/types'
 
 import type { RealtimeStatus } from '@/lib/conversationRealtime'
 
 export interface OutgoingMessage {
+  /** Client-generated row id (crypto.randomUUID()), so a retry can't post twice. */
+  id?: string
+  /** The message this one replies to (same conversation). */
+  replyTo?: string | null
   authorId: string
   space: Space
   content: string | null
@@ -14,7 +19,8 @@ export interface OutgoingMessage {
   type: Message['type']
 }
 
-type Latest = { at: string; authorId: string } | null
+/** The newest message of a space: when, who, and a one-line preview for the conversation list. */
+type Latest = { at: string; authorId: string; preview: string } | null
 
 interface ConversationState {
   conversation: Conversation | null
@@ -22,6 +28,8 @@ interface ConversationState {
   activeSpace: Space
   activeSession: Session | null
   readAt: Record<Space, string | null> // my read positions
+  /** The partner's read positions. RLS returns them only while both people have read receipts on. */
+  partnerReadAt: Record<Space, string | null>
   latest: Record<Space, Latest>
   loading: boolean
   /** Status of the conversation's realtime channel (rendered as data-realtime). */
@@ -48,6 +56,8 @@ interface ConversationState {
   noteMessage: (m: Message) => void
   applyReadPosition: (rp: ReadPosition, myId: string) => void
   markReadLocal: (space: Space, at: string) => void
+  /** Refetch the partner's read positions (read receipts were turned back on). */
+  refreshPartnerReadAt: (myId: string) => Promise<void>
   reset: () => void
 }
 
@@ -86,6 +96,7 @@ const initial = () => ({
   memberIds: [] as string[],
   activeSession: null,
   readAt: emptyBySpace<string | null>(null),
+  partnerReadAt: emptyBySpace<string | null>(null),
   latest: emptyBySpace<Latest>(null),
   loading: false,
   realtimeStatus: 'CLOSED' as RealtimeStatus,
@@ -107,7 +118,7 @@ async function fetchLatest(conversationId: string, space: Space): Promise<Latest
   const { data, error } = await supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: 1 })
   if (error) return undefined // keep what we had
   const m = (data as Message[] | null)?.[0]
-  return m ? { at: m.created_at, authorId: m.author_id } : null
+  return m ? { at: m.created_at, authorId: m.author_id, preview: messagePreview(m) } : null
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -133,18 +144,26 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const [members, session, positions, latest] = await Promise.all([
       supabase.from('conversation_members').select('user_id').eq('conversation_id', conversation.id),
       fetchNewestSession(conversation.id),
-      supabase.from('read_positions').select('*').eq('conversation_id', conversation.id).eq('user_id', myId),
+      supabase.from('read_positions').select('*').eq('conversation_id', conversation.id),
       Promise.all(SPACES.map((s) => fetchLatest(conversation.id, s))),
     ])
 
+    const memberIds = ((members.data as { user_id: string }[] | null) ?? []).map((m) => m.user_id)
     const readAt = emptyBySpace<string | null>(null)
-    for (const rp of (positions.data as ReadPosition[] | null) ?? []) readAt[rp.space] = rp.last_read_at
+    const partnerReadAt = emptyBySpace<string | null>(null)
+    for (const rp of (positions.data as ReadPosition[] | null) ?? []) {
+      if (rp.user_id === myId) readAt[rp.space] = rp.last_read_at
+      else if (memberIds.includes(rp.user_id) && isNewer(rp.last_read_at, partnerReadAt[rp.space])) {
+        partnerReadAt[rp.space] = rp.last_read_at
+      }
+    }
 
     set({
       conversation,
-      memberIds: ((members.data as { user_id: string }[] | null) ?? []).map((m) => m.user_id),
+      memberIds,
       activeSession: session,
       readAt,
+      partnerReadAt,
       latest: { main: latest[0] ?? null, schist: latest[1] ?? null },
       loading: false,
     })
@@ -184,6 +203,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       return supabase
         .from('messages')
         .insert({
+          ...(m.id ? { id: m.id } : {}),
           conversation_id: conversation.id,
           space: m.space,
           session_id: session.id,
@@ -191,15 +211,22 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
           content: m.content,
           attachments: m.attachments,
           type: m.type,
+          ...(m.replyTo ? { reply_to: m.replyTo } : {}),
         })
         .select()
         .single()
     }
 
+    const code = (e: unknown) => (e as { code?: string } | null)?.code
     let { data, error } = await insert()
-    if ((error as { code?: string } | null)?.code === '42501') {
+    if (code(error) === '42501') {
       set({ activeSession: null })
       ;({ data, error } = await insert())
+    }
+    // The id is mine, so a duplicate means an earlier try landed (its answer was lost): that's a success.
+    if (m.id && code(error) === '23505') {
+      const found = await supabase.from('messages').select('*').eq('id', m.id).maybeSingle()
+      return (found.data as Message | null) ?? null
     }
     return !error && data ? (data as Message) : null
   },
@@ -272,14 +299,35 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { conversation, latest } = get()
     if (!conversation || m.conversation_id !== conversation.id || m.deleted) return
     if (!isNewer(m.created_at, latest[m.space]?.at)) return
-    set({ latest: { ...latest, [m.space]: { at: m.created_at, authorId: m.author_id } } })
+    set({ latest: { ...latest, [m.space]: { at: m.created_at, authorId: m.author_id, preview: messagePreview(m) } } })
   },
 
   applyReadPosition: (rp, myId) => {
-    const { conversation, readAt } = get()
-    if (rp.user_id !== myId || !conversation || rp.conversation_id !== conversation.id) return
-    if (!isNewer(rp.last_read_at, readAt[rp.space])) return
-    set({ readAt: { ...readAt, [rp.space]: rp.last_read_at } })
+    const { conversation, readAt, partnerReadAt, memberIds } = get()
+    if (!conversation || rp.conversation_id !== conversation.id) return
+    if (rp.user_id === myId) {
+      if (!isNewer(rp.last_read_at, readAt[rp.space])) return
+      set({ readAt: { ...readAt, [rp.space]: rp.last_read_at } })
+    } else if (memberIds.includes(rp.user_id)) {
+      if (!isNewer(rp.last_read_at, partnerReadAt[rp.space])) return
+      set({ partnerReadAt: { ...partnerReadAt, [rp.space]: rp.last_read_at } })
+    }
+  },
+
+  refreshPartnerReadAt: async (myId) => {
+    const { conversation } = get()
+    if (!conversation) return
+    const { data, error } = await supabase
+      .from('read_positions')
+      .select('*')
+      .eq('conversation_id', conversation.id)
+      .neq('user_id', myId)
+    if (error || get().conversation?.id !== conversation.id) return
+    const next = emptyBySpace<string | null>(null)
+    for (const rp of (data as ReadPosition[] | null) ?? []) {
+      if (isNewer(rp.last_read_at, next[rp.space])) next[rp.space] = rp.last_read_at
+    }
+    set({ partnerReadAt: next })
   },
 
   markReadLocal: (space, at) => {

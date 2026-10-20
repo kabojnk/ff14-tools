@@ -1,121 +1,132 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { UserStatus } from '@/types'
-
-interface PresenceUser {
-  user_id: string
-  status: UserStatus
-  custom_status_text: string | null
-}
+import { aggregate, deviceId, displayed, type AggregatePresence, type DevicePresence } from '@/lib/presence'
+import type { Presence, PresenceOverride } from '@/types'
 
 interface PresenceState {
-  onlineUsers: Record<string, PresenceUser>
+  /** Most-online state per user across their devices (no manual override applied; use displayed()). */
+  users: Record<string, AggregatePresence>
+  /** The last entries received from the server, flattened. */
+  entries: DevicePresence[]
   presenceChannel: RealtimeChannel | null
   currentUserId: string | null
-  // When the user explicitly picks a status, idle detection won't override it
-  manualStatus: UserStatus | null
+  /** This device's own state: online while visible, offline while hidden. */
+  devicePresence: Presence
+  /** My manual override (profiles.presence_override), mirrored into the legacy `status` field. */
+  override: PresenceOverride | null
 
-  initPresence: (userId: string, status: UserStatus, customText: string | null) => void
-  updatePresence: (status: UserStatus, customText: string | null, manual?: boolean) => void
+  initPresence: (userId: string, override: PresenceOverride | null, devicePresence?: Presence) => void
+  setDevicePresence: (presence: Presence) => Promise<void>
+  setOverride: (override: PresenceOverride | null) => Promise<void>
+  /** A user's aggregate presence across devices; offline when absent. */
+  presenceOf: (userId: string) => Presence
+  /** Stamps profiles.last_seen_at = now() for the signed-in user. */
+  touchLastSeen: () => Promise<void>
   cleanupPresence: () => void
 }
 
-export const usePresenceStore = create<PresenceState>((set, get) => ({
-  onlineUsers: {},
-  presenceChannel: null,
-  currentUserId: null,
-  manualStatus: null,
+function selfPayload(userId: string, presence: Presence, override: PresenceOverride | null) {
+  return {
+    user_id: userId,
+    device_id: deviceId(),
+    presence,
+    // Old cached apps read `status`; give them the state everyone should see.
+    status: displayed({ presence }, override),
+    at: Date.now(),
+  }
+}
 
-  initPresence: (userId, status, customText) => {
-    // If already initialized for this user, just update presence payload — don't re-subscribe
-    const existing = get()
-    if (existing.presenceChannel && existing.currentUserId === userId) {
-      existing.updatePresence(status, customText)
-      return
-    }
+/** Server entries with this device's entry replaced by its current local state. */
+function withSelf(entries: DevicePresence[], userId: string, presence: Presence): DevicePresence[] {
+  const me = deviceId()
+  const others = entries.filter((e) => !(e.user_id === userId && e.device_id === me))
+  return [...others, { user_id: userId, device_id: me, presence, at: Date.now() }]
+}
 
-    // Clean up any old channel first
-    if (existing.presenceChannel) {
-      supabase.removeChannel(existing.presenceChannel)
-    }
+export const usePresenceStore = create<PresenceState>((set, get) => {
+  const track = async () => {
+    const { presenceChannel, currentUserId, devicePresence, override } = get()
+    if (!presenceChannel || !currentUserId) return
+    await presenceChannel.track(selfPayload(currentUserId, devicePresence, override))
+  }
 
-    const channel = supabase.channel('presence', {
-      config: { presence: { key: userId } },
-    })
+  return {
+    users: {},
+    entries: [],
+    presenceChannel: null,
+    currentUserId: null,
+    devicePresence: 'online',
+    override: null,
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const serverState = channel.presenceState<PresenceUser>()
-        const users: Record<string, PresenceUser> = {}
-        for (const [, presences] of Object.entries(serverState)) {
-          for (const presence of presences) {
-            users[presence.user_id] = presence
-          }
-        }
-        // If the server hasn't confirmed our track yet, keep our optimistic self-entry
-        // so we don't flash as offline while the round-trip is in flight.
-        const { currentUserId, onlineUsers } = get()
-        if (currentUserId && !users[currentUserId] && onlineUsers[currentUserId]) {
-          users[currentUserId] = onlineUsers[currentUserId]
-        }
-        set({ onlineUsers: users })
-      })
-      .subscribe(async (status_response) => {
-        if (status_response === 'SUBSCRIBED') {
-          await channel.track({
-            user_id: userId,
-            status,
-            custom_status_text: customText,
-          })
-        }
+    initPresence: (userId, override, devicePresence = 'online') => {
+      const existing = get()
+      if (existing.presenceChannel && existing.currentUserId === userId) {
+        set({ override, devicePresence })
+        void track()
+        return
+      }
+      if (existing.presenceChannel) supabase.removeChannel(existing.presenceChannel)
+
+      const channel = supabase.channel('presence', {
+        config: { presence: { key: `${userId}:${deviceId()}` } },
       })
 
-    // Set channel + currentUserId + optimistic self-entry in one update so the UI
-    // is immediately consistent before the Realtime subscription round-trip completes.
-    set((state) => ({
-      presenceChannel: channel,
-      currentUserId: userId,
-      onlineUsers: {
-        ...state.onlineUsers,
-        [userId]: { user_id: userId, status, custom_status_text: customText },
-      },
-    }))
-  },
+      channel
+        .on('presence', { event: 'sync' }, () => {
+          const entries = Object.values(channel.presenceState<DevicePresence>()).flat()
+          const { currentUserId, devicePresence: own } = get()
+          const me = deviceId()
+          // Until the server confirms this device, keep our optimistic entry so we don't flash offline.
+          const confirmed = entries.some((e) => e.user_id === currentUserId && e.device_id === me)
+          const list = currentUserId && !confirmed ? withSelf(entries, currentUserId, own) : entries
+          set({ entries, users: aggregate(list) })
+        })
+        .subscribe(async (status) => {
+          // Re-track the *current* state on every (re)subscribe.
+          if (status === 'SUBSCRIBED') await track()
+        })
 
-  updatePresence: async (status, customText, manual = false) => {
-    const { presenceChannel, currentUserId } = get()
-    if (manual) {
-      set({ manualStatus: status })
-    }
-    // Optimistically update our own entry so the UI is immediately consistent,
-    // without waiting for the server's sync event (which can race on reconnect).
-    if (currentUserId) {
-      set((state) => ({
-        onlineUsers: {
-          ...state.onlineUsers,
-          [currentUserId]: {
-            user_id: currentUserId,
-            status,
-            custom_status_text: customText,
-          },
-        },
-      }))
-    }
-    if (presenceChannel && currentUserId) {
-      await presenceChannel.track({
-        user_id: currentUserId,
-        status,
-        custom_status_text: customText,
+      set({
+        presenceChannel: channel,
+        currentUserId: userId,
+        devicePresence,
+        override,
+        entries: [],
+        users: aggregate(withSelf([], userId, devicePresence)),
       })
-    }
-  },
+    },
 
-  cleanupPresence: () => {
-    const { presenceChannel } = get()
-    if (presenceChannel) {
-      supabase.removeChannel(presenceChannel)
-    }
-    set({ presenceChannel: null, currentUserId: null, onlineUsers: {}, manualStatus: null })
-  },
-}))
+    setDevicePresence: async (presence) => {
+      const { currentUserId, entries } = get()
+      set({ devicePresence: presence })
+      if (currentUserId) set({ users: aggregate(withSelf(entries, currentUserId, presence)) })
+      await track()
+    },
+
+    setOverride: async (override) => {
+      set({ override })
+      await track()
+    },
+
+    presenceOf: (userId) => get().users[userId]?.presence ?? 'offline',
+
+    touchLastSeen: async () => {
+      if (!get().currentUserId) return
+      await supabase.rpc('touch_last_seen')
+    },
+
+    cleanupPresence: () => {
+      const { presenceChannel } = get()
+      if (presenceChannel) supabase.removeChannel(presenceChannel)
+      set({
+        presenceChannel: null,
+        currentUserId: null,
+        users: {},
+        entries: [],
+        devicePresence: 'online',
+        override: null,
+      })
+    },
+  }
+})

@@ -1,5 +1,4 @@
-import { useEffect } from 'react'
-import { sendMessageEvent } from '@/lib/conversationRealtime'
+import { useEffect, useState } from 'react'
 import { spaceKey } from '@/lib/spaces'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
@@ -11,19 +10,24 @@ const NO_MESSAGES: Message[] = []
 export function useMessages(conversationId: string, space: Space) {
   const key = spaceKey(conversationId, space)
   const messages = useMessageStore((s) => s.messages[key]) ?? NO_MESSAGES
-  const loading = useMessageStore((s) => s.loading)
   const fetchMessages = useMessageStore((s) => s.fetchMessages)
   const realtimeStatus = useConversationStore((s) => s.realtimeStatus)
+  // True once this mount's first fetch has answered (the list then knows where to open).
+  const [readyKey, setReadyKey] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchMessages(conversationId, space)
-  }, [conversationId, space, fetchMessages])
+    let live = true
+    void fetchMessages(conversationId, space).finally(() => {
+      if (live) setReadyKey(key)
+    })
+    return () => {
+      live = false
+    }
+  }, [conversationId, space, key, fetchMessages])
 
   return {
     messages,
-    loading,
+    ready: readyKey === key,
     realtimeStatus,
-    broadcastEditMessage: (message: Message) => sendMessageEvent('edit', message),
-    broadcastDeleteMessage: (messageId: string) => sendMessageEvent('delete', { id: messageId, space }),
   }
 }

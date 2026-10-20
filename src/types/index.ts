@@ -9,6 +9,8 @@ export type UserStatus =
 
 export type Space = 'main' | 'schist'
 export type Presence = 'online' | 'away' | 'offline'
+/** profiles.presence_override: a manual choice applied on every device. */
+export type PresenceOverride = 'away' | 'invisible'
 export type MediaKind = 'image' | 'video' | 'gif' | 'file' | 'audio' | 'link'
 
 export interface Profile {
@@ -22,6 +24,9 @@ export interface Profile {
   status_id: string | null
   read_receipts: boolean
   lock_pin_length: number | null
+  /** Manual presence choice; null follows the devices. */
+  presence_override: PresenceOverride | null
+  last_seen_at: string | null
   created_at: string
   updated_at: string
 }
@@ -63,6 +68,7 @@ export interface MediaItem {
   filename: string | null
   extension: string | null
   size: number | null
+  spoiler: boolean
   created_at: string
 }
 
@@ -95,9 +101,12 @@ export interface Message {
   type: 'text' | 'gif' | 'system'
   edited_at: string | null
   deleted: boolean
+  reply_to: string | null
   created_at: string
   // Joined fields
   author?: Profile
+  /** Client only: my message while it's being sent, or after the send failed. Never stored. */
+  localState?: 'sending' | 'failed'
 }
 
 export interface Reaction {
@@ -122,7 +131,7 @@ export interface AppSettings {
   updated_at: string
 }
 
-export type ThemePreset = 'dark' | 'light' | 'midnight'
+export type { ThemeId as ThemePreset } from '@/lib/themes'
 
 export interface PinnedMessage {
   id: string

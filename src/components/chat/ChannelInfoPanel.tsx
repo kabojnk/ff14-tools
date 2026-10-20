@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { MediaViewer } from '@/components/chat/MediaViewer'
-import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
+import Markdown from '@/components/chat2/Markdown'
+import { useEmojiStore } from '@/stores/emojiStore'
 import { Portal } from '@/components/ui/Portal'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { MediaFilters } from '@/components/chat/MediaFilters'
@@ -17,10 +18,17 @@ interface ChannelInfoPanelProps {
   space: Space
   initialTab?: InfoTab
   onClose: () => void
+  /** `overlay` (phones) covers the screen; `panel` (desktop) fills the right-hand slide-over. */
+  variant?: 'overlay' | 'panel'
 }
 
-export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose }: ChannelInfoPanelProps) {
+export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', onClose, variant = 'overlay' }: ChannelInfoPanelProps) {
   const [activeTab, setActiveTab] = useState<InfoTab>(initialTab)
+
+  // The desktop panel stays open while another entry point (e.g. "Search messages") picks a tab.
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<Message[]>([])
@@ -86,12 +94,12 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
     { value: 'search', label: 'Search' },
   ]
 
-  return (
-    <Portal>
-      <div className="fixed inset-0 z-40 flex flex-col bg-primary">
+  const panel = variant === 'panel'
+  const body = (
+      <div className={panel ? 'flex h-full min-h-0 flex-col bg-primary' : 'fixed inset-0 z-40 flex flex-col bg-primary'}>
         {/* Header */}
-        <div className="flex-shrink-0 bg-secondary pt-safe">
-          <div className="flex h-12 items-center border-b border-[hsl(var(--color-bg-tertiary))] px-4">
+        <div className={`flex-shrink-0 bg-secondary ${panel ? '' : 'pt-safe'}`}>
+          <div className="flex h-12 items-center border-b border-[color:var(--line)] px-4">
             <button
               onClick={onClose}
               className="flex items-center gap-1 text-sm font-medium text-brand"
@@ -108,7 +116,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-[hsl(var(--color-bg-tertiary))]">
+          <div className="flex border-b border-[color:var(--line)]">
             {tabs.map((t) => (
               <button
                 key={t.value}
@@ -135,7 +143,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
             pinnedMessages.length === 0 ? (
               <EmptyState label="No pinned messages in this space." />
             ) : (
-              <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+              <div className="divide-y divide-[color:var(--line)]">
                 {pinnedMessages.map((msg) => (
                   <PinnedMessageCard
                     key={msg.id}
@@ -151,7 +159,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           {activeTab === 'search' && (
             <div className="flex flex-col gap-0">
               {/* Search bar */}
-              <div className="sticky top-0 z-10 border-b border-[hsl(var(--color-bg-tertiary))] bg-secondary p-3">
+              <div className="sticky top-0 z-10 border-b border-[color:var(--line)] bg-secondary p-3">
                 <div className="flex items-center gap-2 rounded-lg bg-input px-3 py-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-muted">
                     <circle cx="11" cy="11" r="8" />
@@ -185,7 +193,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
                 <EmptyState label={`No messages matching "${searchQuery}"`} />
               )}
               {!searchLoading && searchResults.length > 0 && (
-                <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+                <div className="divide-y divide-[color:var(--line)]">
                   {searchResults.map((msg) => (
                     <SearchResultCard key={msg.id} message={msg} query={searchQuery} />
                   ))}
@@ -195,9 +203,8 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
           )}
         </div>
       </div>
-
-    </Portal>
   )
+  return panel ? body : <Portal>{body}</Portal>
 }
 
 const VISUAL_KINDS = new Set<MediaItem['kind']>(['image', 'video', 'gif'])
@@ -206,7 +213,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
   const [kind, setKind] = useState<MediaFilterKind>('all')
   const [extension, setExtension] = useState('')
   const [scope, setScope] = useState<MediaScope>('space')
-  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video' } | null>(null)
+  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video'; spoiler: boolean } | null>(null)
   const { items, loading, hasMore, loadMore } = useMediaGallery({ conversationId, space, scope, kind, extension })
 
   const visual = items.filter((i) => VISUAL_KINDS.has(i.kind))
@@ -241,9 +248,12 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
             <div className="grid grid-cols-3 gap-0.5 p-0.5">
               {visual.map((item) => (
                 <button
-                  key={item.id}
+                  key={`${item.id}:${item.spoiler}`}
                   data-media-item={item.kind}
-                  onClick={() => setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video' })}
+                  data-spoiler={item.spoiler ? '' : undefined}
+                  onClick={() =>
+                    setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video', spoiler: item.spoiler })
+                  }
                   className="relative aspect-square overflow-hidden bg-tertiary"
                 >
                   {item.kind === 'video' ? (
@@ -253,7 +263,18 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
                       </svg>
                     </div>
                   ) : (
-                    <img src={item.url} alt={item.filename ?? ''} className="h-full w-full object-cover" loading="lazy" />
+                    <img
+                      src={item.url}
+                      alt={item.filename ?? ''}
+                      className={`h-full w-full object-cover ${item.spoiler ? 'scale-110 blur-[16px] brightness-50' : ''}`}
+                      loading="lazy"
+                      draggable={false}
+                    />
+                  )}
+                  {item.spoiler && (
+                    <span className="absolute left-1 top-1 rounded-full bg-black/60 px-1.5 text-[9px] font-bold tracking-wider text-white">
+                      SPOILER
+                    </span>
                   )}
                 </button>
               ))}
@@ -261,7 +282,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
           )}
 
           {files.length > 0 && (
-            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+            <div className="divide-y divide-[color:var(--line)]">
               {files.map((item) => (
                 <a
                   key={item.id}
@@ -284,7 +305,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
           )}
 
           {links.length > 0 && (
-            <div className="divide-y divide-[hsl(var(--color-bg-tertiary))]">
+            <div className="divide-y divide-[color:var(--line)]">
               {links.map((item) => (
                 <a
                   key={item.id}
@@ -316,7 +337,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
       )}
 
       {viewer && (
-        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} onClose={() => setViewer(null)} />
+        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} spoiler={viewer.spoiler} onClose={() => setViewer(null)} />
       )}
     </>
   )
@@ -331,6 +352,7 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: () => void }) {
+  const emoji = useEmojiStore((s) => s.lookup)
   const date = new Date(message.created_at)
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 
@@ -348,7 +370,7 @@ function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: ()
         </div>
         {message.content && (
           <div className="text-sm text-secondary">
-            <MarkdownRenderer content={message.content} />
+            <Markdown content={message.content} emoji={emoji} />
           </div>
         )}
         {message.attachments?.some((a) => a.type === 'image' || a.type === 'gif') && (
@@ -375,7 +397,7 @@ function SearchResultCard({ message, query }: { message: Message; query: string 
     const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
     return parts.map((part, i) =>
       part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="rounded bg-brand/30 px-0.5 text-primary not-italic">{part}</mark>
+        ? <mark key={i} className="rounded bg-[color:color-mix(in_srgb,var(--accent)_30%,transparent)] px-0.5 text-primary not-italic">{part}</mark>
         : part,
     )
   }

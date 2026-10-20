@@ -34,7 +34,7 @@ insert into public.profiles (id, nickname, status) values
   ('11111111-1111-4111-8111-111111111111', 'Alice', 'offline'),
   ('22222222-2222-4222-8222-222222222222', 'Bea', 'offline'),
   ('33333333-3333-4333-8333-333333333333', 'Cleo', 'offline')
-on conflict (id) do update set nickname = excluded.nickname;
+on conflict (id) do update set nickname = excluded.nickname, presence_override = null;
 
 -- One conversation with Alice and Bea. Cleo is deliberately not a member.
 insert into public.conversations (id, created_by, created_at) values

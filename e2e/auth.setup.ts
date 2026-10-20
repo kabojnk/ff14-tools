@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs'
 import { expect, test as setup } from '@playwright/test'
 import { USERS } from './users'
 
@@ -13,6 +14,10 @@ for (const user of Object.values(USERS)) {
     await page.waitForFunction(() =>
       Object.keys(localStorage).some((k) => k.startsWith('sb-') && k.endsWith('-auth-token')),
     )
-    await page.context().storageState({ path: user.storageState })
+    // Without the device PIN flag: each test's devices start as a fresh login, so phones open on the chat.
+    // Launch tests add the flag themselves.
+    const state = await page.context().storageState()
+    for (const origin of state.origins) origin.localStorage = origin.localStorage.filter((e) => e.name !== 'hasPin')
+    writeFileSync(user.storageState, JSON.stringify(state, null, 2))
   })
 }

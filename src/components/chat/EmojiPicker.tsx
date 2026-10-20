@@ -52,7 +52,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   return (
     <div
       ref={pickerRef}
-      className="absolute bottom-full right-0 mb-2 w-80 rounded-lg bg-floating shadow-xl border border-[hsl(var(--color-input-border))]"
+      className="absolute bottom-full right-0 mb-2 w-80 rounded-lg bg-floating shadow-xl border border-[color:var(--line)]"
     >
       {/* Search */}
       <div className="p-2">
@@ -67,7 +67,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       </div>
 
       {/* Category tabs */}
-      <div className="flex gap-1 border-b border-[hsl(var(--color-input-border))] px-2 pb-1">
+      <div className="flex gap-1 border-b border-[color:var(--line)] px-2 pb-1">
         {Object.keys(EMOJI_CATEGORIES).map((cat) => (
           <button
             key={cat}
