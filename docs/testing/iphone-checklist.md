@@ -24,6 +24,13 @@ Run on a real iPhone, using the app installed to the home screen, at the end of 
 | 18 | With a PIN set, launching the app from the home screen opens on the FF14 page, locked; the PIN unlocks it. Without a PIN it opens on the chat. | |
 | 19 | In the chat, the status bar matches the chosen theme's bar (check a light and a dark theme; it follows a theme switch). On the FF14 page it always has the disguise's own colour, never a hint of the chat theme. | |
 | 20 | Turning the phone to landscape keeps the phone layout (one screen at a time, Send button), even though it is wider than the desktop breakpoint. | |
+| 21 | **Profile:** crop an avatar and a banner on the device, including a portrait photo from the camera roll (it crops the right way up, not sideways); Save shows the result on the other phone. | |
+| 22 | **Emoji picker:** the panel over the keyboard area doesn't hide the composer; long-pressing a custom emoji offers Delete. | |
+| 23 | **Add emoji:** adding an emoji from the photo library works, including a GIF, and from a photo taken with the camera; the other phone sees it without a refresh. | |
+| 24 | **Photo picker cancel:** open the photo picker (profile or Add emoji), cancel it once, then try again: it opens and the chosen photo is used. | |
+| 25 | **Viewer:** swipe between photos; "Show in chat" switches space if needed, scrolls to the message and highlights it. | |
+| 26 | **Settings:** every section opens and Back returns. | |
+| 27 | **Log out:** Log out from Settings lands on the login screen; the FF14 screen's Logout still works. | |
 
 ## Known open issues
 
@@ -31,3 +38,4 @@ Run on a real iPhone, using the app installed to the home screen, at the end of 
 - Send-after-unlock (item 12) doesn't reproduce in WebKit emulation after Task 8 (duplicate desktop and mobile layouts on phones, which tore down the shared realtime channel) and Task 15 (new messages were never broadcast). Those are the likely real causes. Confirm on a device. (2026-10-19)
 - Production's `reactions` table lacks `REPLICA IDENTITY FULL` (the old `00009` migration was never applied). Removing a reaction may not sync to the other person. To be addressed in sub-project 2.
 - Swipe to reply (swipe a bubble right) is left out of 3a (Task 10), per the design's escape hatch. Try it later on a device: it must not fight the list's vertical scroll or iOS's edge-swipe back gesture.
+- 3b (2026-10-20): items 21–27 are new. Emoji 16 glyphs need iOS 18.4 or later; on an older iOS they show as boxes (updating iOS fixes it). Skin tones are left out by choice.
