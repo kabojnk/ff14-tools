@@ -27,7 +27,7 @@ jobs:
 
   e2e:
     needs: check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: the theme screenshot baselines are rendered on it
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +54,7 @@ jobs:
         run: npm run test:migration # ends with a db reset, so the seed is back for e2e
 
       - name: Run e2e
-        run: npm run e2e
+        run: npx playwright test --project=chromium-desktop --project=webkit-iphone
         env:
           CI: 'true'
           E2E_SKIP_RESET: '1' # test:migration's final reset re-applied migrations + seed
@@ -63,6 +63,33 @@ jobs:
         if: failure()
         with:
           name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+      # Theme screenshots: compared with the committed baselines; any missing baseline is written
+      # (and passes), so the first run produces them. Resets the database first for a known seed.
+      # See SETUP.md, "Screenshot baselines".
+      - name: Theme screenshots
+        if: ${{ !cancelled() }}
+        run: npx playwright test --project=screenshots-desktop --project=screenshots-phone --update-snapshots=missing
+        env:
+          CI: 'true'
+
+      - name: Upload screenshot baselines
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-baselines
+          path: e2e/**/*-snapshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: screenshot-report
           path: |
             playwright-report/
             test-results/
