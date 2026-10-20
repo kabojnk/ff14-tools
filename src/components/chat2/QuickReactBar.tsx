@@ -94,7 +94,7 @@ export function QuickReactBar({ onPick, onClose, emoji, className = '', ignoreOu
           <Icon icon={Plus} size={18} />
         </button>
       </div>
-      {full && <EmojiPicker mode="reaction" anchorRef={moreRef} isDesktop={isDesktop} onPick={pick} onClose={closeFull} />}
+      {full && <EmojiPicker mode="reaction" canAddEmoji anchorRef={moreRef} isDesktop={isDesktop} onPick={pick} onClose={closeFull} />}
     </div>
   )
 }

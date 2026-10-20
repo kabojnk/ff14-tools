@@ -422,7 +422,7 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
         />
         {showGif && <GifPicker anchorRef={gifButtonRef} onSelect={onGif} onClose={() => setShowGif(false)} />}
         {showEmoji && isDesktop && (
-          <EmojiPicker mode="composer" isDesktop anchorRef={emojiButtonRef} insideRef={rootRef} onPick={onEmoji} onClose={closeEmoji} />
+          <EmojiPicker mode="composer" isDesktop canAddEmoji anchorRef={emojiButtonRef} insideRef={rootRef} onPick={onEmoji} onClose={closeEmoji} />
         )}
       </div>
       {phonePicker && (
@@ -430,6 +430,7 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
           mode="composer"
           isDesktop={false}
           phone="inline"
+          canAddEmoji
           anchorRef={emojiButtonRef}
           insideRef={rootRef}
           onPick={onEmoji}

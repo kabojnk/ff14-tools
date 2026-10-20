@@ -15,10 +15,12 @@ import {
   Volleyball,
   type LucideIcon,
 } from 'lucide-react'
+import { AddEmoji } from '@/components/emoji/AddEmoji'
 import { Icon } from '@/components/ui/Icon'
 import { Portal } from '@/components/ui/Portal'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useLongPress } from '@/hooks/useLongPress'
+import { EMOJI_ACCEPT } from '@/lib/emoji/upload'
 import { loadEmoji, searchEmoji, type EmojiTabId, type StandardEmoji } from '@/lib/emoji/data'
 import { noteRecentEmoji, recentEmojiList } from '@/lib/recentEmoji'
 import { useEmojiStore } from '@/stores/emojiStore'
@@ -33,8 +35,12 @@ export interface EmojiPickerProps {
   /** A standard emoji, or a custom one as `:name:`. */
   onPick: (emoji: string) => void
   onClose: () => void
-  /** Shows the "Add emoji" tile first in Custom. */
-  onAddEmoji?: () => void
+  /**
+   * Shows the "Add emoji" tile first in Custom. The picker runs the add flow itself (it holds the file
+   * input, so the tap opens the photo picker at once, as iOS requires), stays mounted under it, and
+   * scrolls to and highlights the new emoji afterwards.
+   */
+  canAddEmoji?: boolean
   /** The button that opened it. The desktop popover sits above it (below when there's no room), and a press on it isn't "outside". */
   anchorRef?: RefObject<HTMLElement | null>
   /** Another area whose presses aren't "outside" (the composer). */
@@ -93,7 +99,7 @@ export function EmojiPicker({
   mode,
   onPick,
   onClose,
-  onAddEmoji,
+  canAddEmoji = false,
   anchorRef,
   insideRef,
   phone = 'overlay',
@@ -122,6 +128,14 @@ export function EmojiPicker({
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [recentRaw] = useState(recentEmojiList)
+  /** The add flow: open (its sheet is over the picker), and the file chosen from the tile. */
+  const [adding, setAdding] = useState(false)
+  const [addFile, setAddFile] = useState<File | null>(null)
+  const addingRef = useRef(false)
+  addingRef.current = adding
+  const fileRef = useRef<HTMLInputElement>(null)
+  /** The custom emoji just added, highlighted briefly. */
+  const [highlight, setHighlight] = useState<string | null>(null)
 
   // A row deleted (here or by the other person) takes its card, menu and confirmation with it.
   const card = cardId ? (rows.find((r) => r.id === cardId) ?? null) : null
@@ -176,6 +190,7 @@ export function EmojiPicker({
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || pinPadOpen() || inNewerDialog(e.target)) return
+      if (addingRef.current) return // the add flow's sheet is on top and takes it
       // Never stopPropagation: the double-Esc disguise shortcut on window must still see it.
       e.preventDefault()
       escapeRef.current()
@@ -183,7 +198,8 @@ export function EmojiPicker({
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
       if (rootRef.current?.contains(t) || anchorRef?.current?.contains(t) || insideRef?.current?.contains(t)) return
-      if (inNewerDialog(t) || pinPadOpen()) return
+      // The add flow's sheets (and a desktop sheet's backdrop) sit over the picker.
+      if (inNewerDialog(t) || pinPadOpen() || addingRef.current) return
       closeRef.current()
     }
     document.addEventListener('keydown', onKey, true)
@@ -269,6 +285,37 @@ export function EmojiPicker({
     setActive(current)
   }
 
+  // ── Adding ──
+  const startAdd = () => {
+    // Synchronously, inside the tap: iOS opens the photo picker only during a user gesture.
+    fileRef.current?.click()
+    setAddFile(null)
+    setAdding(true)
+  }
+  const closeAdd = useCallback(() => {
+    setAdding(false)
+    setAddFile(null)
+  }, [])
+  const onAdded = useCallback((name: string) => {
+    setQuery('')
+    setHighlight(name)
+  }, [])
+
+  // Scroll the new emoji (already in the store) to the middle of the list, then fade the highlight.
+  useEffect(() => {
+    if (!highlight) return
+    const body = bodyRef.current
+    const cell = sectionRefs.current.custom?.querySelector<HTMLElement>(`[data-custom-emoji="${highlight}"]`)
+    if (body && cell) {
+      const b = body.getBoundingClientRect()
+      const c = cell.getBoundingClientRect()
+      body.scrollTo?.({ top: body.scrollTop + c.top - b.top - (body.clientHeight - c.height) / 2 })
+      setActive('custom')
+    }
+    const timer = window.setTimeout(() => setHighlight(null), 2000)
+    return () => window.clearTimeout(timer)
+  }, [highlight])
+
   const nicknameOf = (row: CustomEmoji) => (row.uploaded_by ? (profiles[row.uploaded_by]?.nickname ?? null) : null)
 
   const askDelete = (row: CustomEmoji) => {
@@ -321,6 +368,7 @@ export function EmojiPicker({
       onPick={pick}
       onShowCard={setCardId}
       onLongPress={openMenu}
+      highlighted={highlight === row.name}
     />
   )
 
@@ -372,14 +420,14 @@ export function EmojiPicker({
           )
       } else if (tab.id === 'custom') {
         content =
-          rows.length > 0 || onAddEmoji ? (
+          rows.length > 0 || canAddEmoji ? (
             <div className={`grid ${cols} gap-px`}>
-              {onAddEmoji && (
+              {canAddEmoji && (
                 <button
                   type="button"
                   aria-label="Add emoji"
                   title={desktop ? 'Add emoji' : undefined}
-                  onClick={onAddEmoji}
+                  onClick={startAdd}
                   className="m-0.5 grid aspect-square place-items-center rounded-[7px] border-[1.5px] border-dashed border-[color:var(--muted)] text-[color:var(--muted)] hover:text-[color:var(--fg)]"
                 >
                   <Icon icon={Plus} size={18} />
@@ -484,6 +532,23 @@ export function EmojiPicker({
         {body}
       </div>
 
+      {canAddEmoji && (
+        <input
+          ref={fileRef}
+          type="file"
+          accept={EMOJI_ACCEPT}
+          aria-hidden="true"
+          tabIndex={-1}
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            // Reset, so choosing the same file again still fires a change.
+            e.target.value = ''
+            if (f) setAddFile(f)
+          }}
+        />
+      )}
+
       {deleteError && (
         <p role="alert" className="flex-none border-t border-[color:var(--line)] px-3 py-1.5 text-[12px] text-[color:var(--danger,#ef4444)]">
           {deleteError}
@@ -571,9 +636,42 @@ export function EmojiPicker({
 
   const panelClass = 'relative flex flex-col overflow-hidden bg-[color:var(--bar)] text-[color:var(--fg)]'
 
+  // Beside the picker (in its own portal); the picker stays mounted underneath.
+  const addSheet = adding && <AddEmoji file={addFile} onClose={closeAdd} onAdded={onAdded} />
+
   if (desktop) {
     return (
-      <Portal>
+      <>
+        <Portal>
+          <div
+            ref={(el) => {
+              rootRef.current = el
+              panelRef.current = el
+            }}
+            role="dialog"
+            aria-label="Emoji picker"
+            data-emoji-picker
+            className={`${panelClass} fixed z-50 rounded-xl border border-[color:var(--line)] shadow-[0_16px_40px_var(--shadow),0_2px_6px_var(--shadow)]`}
+            style={{
+              top: pos?.top ?? 0,
+              left: pos?.left ?? 0,
+              width: POPOVER_W,
+              height: POPOVER_H,
+              maxWidth: `calc(100vw - ${2 * MARGIN}px)`,
+              visibility: pos ? undefined : 'hidden',
+            }}
+          >
+            {content}
+          </div>
+        </Portal>
+        {addSheet}
+      </>
+    )
+  }
+
+  if (phone === 'inline') {
+    return (
+      <>
         <div
           ref={(el) => {
             rootRef.current = el
@@ -582,54 +680,33 @@ export function EmojiPicker({
           role="dialog"
           aria-label="Emoji picker"
           data-emoji-picker
-          className={`${panelClass} fixed z-50 rounded-xl border border-[color:var(--line)] shadow-[0_16px_40px_var(--shadow),0_2px_6px_var(--shadow)]`}
-          style={{
-            top: pos?.top ?? 0,
-            left: pos?.left ?? 0,
-            width: POPOVER_W,
-            height: POPOVER_H,
-            maxWidth: `calc(100vw - ${2 * MARGIN}px)`,
-            visibility: pos ? undefined : 'hidden',
-          }}
+          className={`${panelClass} h-[54%] flex-none border-t border-[color:var(--line)] pb-[env(safe-area-inset-bottom)]`}
+          style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
         >
           {content}
         </div>
-      </Portal>
-    )
-  }
-
-  if (phone === 'inline') {
-    return (
-      <div
-        ref={(el) => {
-          rootRef.current = el
-          panelRef.current = el
-        }}
-        role="dialog"
-        aria-label="Emoji picker"
-        data-emoji-picker
-        className={`${panelClass} h-[54%] flex-none border-t border-[color:var(--line)] pb-[env(safe-area-inset-bottom)]`}
-        style={{ paddingLeft: 'env(safe-area-inset-left)', paddingRight: 'env(safe-area-inset-right)' }}
-      >
-        {content}
-      </div>
+        {addSheet}
+      </>
     )
   }
 
   return (
-    <Portal>
-      <div ref={rootRef} data-emoji-picker className="fixed inset-0 z-50 flex flex-col justify-end">
-        <div data-testid="emoji-backdrop" aria-hidden="true" onClick={onClose} className="sheet-dim absolute inset-0 bg-black/45" />
-        <div
-          ref={panelRef}
-          role="dialog"
-          aria-label="Emoji picker"
-          className={`${panelClass} sheet-up h-[54%] flex-none rounded-t-[14px] border-t border-[color:var(--line)] pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_20px_var(--shadow)]`}
-        >
-          {content}
+    <>
+      <Portal>
+        <div ref={rootRef} data-emoji-picker className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div data-testid="emoji-backdrop" aria-hidden="true" onClick={onClose} className="sheet-dim absolute inset-0 bg-black/45" />
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-label="Emoji picker"
+            className={`${panelClass} sheet-up h-[54%] flex-none rounded-t-[14px] border-t border-[color:var(--line)] pb-[env(safe-area-inset-bottom)] shadow-[0_-6px_20px_var(--shadow)]`}
+          >
+            {content}
+          </div>
         </div>
-      </div>
-    </Portal>
+      </Portal>
+      {addSheet}
+    </>
   )
 }
 
@@ -640,12 +717,15 @@ function CustomCell({
   onPick,
   onShowCard,
   onLongPress,
+  highlighted = false,
 }: {
   row: CustomEmoji
   desktop: boolean
   onPick: (emoji: string) => void
   onShowCard: (id: string) => void
   onLongPress: (row: CustomEmoji, target: Element) => void
+  /** Just added: ringed in the accent colour for a moment. */
+  highlighted?: boolean
 }) {
   const label = `:${row.name}:`
   const longPress = useLongPress((el) => onLongPress(row, el.closest('button') ?? el), { enabled: !desktop })
@@ -655,6 +735,7 @@ function CustomCell({
       aria-label={label}
       title={desktop ? label : undefined}
       data-custom-emoji={row.name}
+      data-highlight={highlighted || undefined}
       {...longPress}
       onClick={() => onPick(label)}
       onPointerEnter={(e) => {
@@ -663,7 +744,7 @@ function CustomCell({
       onFocus={desktop ? () => onShowCard(row.id) : undefined}
       className={`grid aspect-square place-items-center rounded-[7px] outline-none transition-colors hover:bg-[color:var(--seg)] focus-visible:bg-[color:var(--seg)] ${
         desktop ? '' : 'touch-pan-y select-none [-webkit-touch-callout:none]'
-      }`}
+      } ${highlighted ? 'bg-[color:var(--seg)] ring-2 ring-inset ring-[color:var(--accent)]' : ''}`}
     >
       <img src={row.image_url} alt="" draggable={false} className="pointer-events-none h-[70%] w-[70%] object-contain" />
     </button>

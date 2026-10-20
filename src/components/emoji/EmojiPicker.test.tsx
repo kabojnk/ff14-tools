@@ -73,7 +73,10 @@ beforeEach(() => {
   useProfileStore.setState({ profiles: { alice: { id: 'alice', nickname: 'Alice' } as Profile } })
   Element.prototype.scrollTo = vi.fn()
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('EmojiPicker', () => {
   it('shows the ten category tabs and the sections, with standard emoji named by label', async () => {
@@ -163,17 +166,60 @@ describe('EmojiPicker', () => {
   })
 
   it('"Add emoji" shows first in Custom only when there is an add flow', async () => {
-    const onAddEmoji = vi.fn()
-    const { unmount } = setup({ onAddEmoji })
+    const { unmount } = setup({ canAddEmoji: true })
     await ready()
     const custom = within(screen.getByRole('region', { name: 'Custom' })).getAllByRole('button')
     expect(custom[0]).toHaveAccessibleName('Add emoji')
-    fireEvent.click(custom[0])
-    expect(onAddEmoji).toHaveBeenCalled()
     unmount()
     setup()
     await ready()
     expect(screen.queryByRole('button', { name: 'Add emoji' })).toBeNull()
+  })
+
+  it('"Add emoji" opens the photo picker inside the tap and the add sheet over the picker', async () => {
+    const clicks: string[] = []
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(function (this: HTMLInputElement) {
+      clicks.push(this.type)
+    })
+    const { onClose } = setup({ canAddEmoji: true })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Add emoji' }))
+    // Synchronously, in the click handler (iOS needs the user gesture).
+    expect(clicks).toEqual(['file'])
+    expect(screen.getByRole('dialog', { name: 'Choose a picture' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Emoji picker' })).toBeInTheDocument()
+    // Escape belongs to the add sheet: it closes, the picker stays.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Choose a picture' })).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Emoji picker' })).toBeInTheDocument()
+  })
+
+  it('after adding, the picker stays and highlights the new emoji in Custom', async () => {
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    URL.createObjectURL = vi.fn(() => 'blob:test')
+    URL.revokeObjectURL = vi.fn()
+    const add = vi.fn(async (name: string) => {
+      setRows([row(name, { created_at: '2026-10-20T10:00:00Z' }), ...useEmojiStore.getState().rows])
+      return { error: null }
+    })
+    useEmojiStore.setState({ add })
+    const { onClose } = setup({ canAddEmoji: true })
+    await ready()
+    fireEvent.click(screen.getByRole('button', { name: 'Add emoji' }))
+    const input = screen.getByRole('dialog', { name: 'Emoji picker' }).querySelector<HTMLInputElement>('input[type="file"]')!
+    const gif = new File(['gif'], 'wave.gif', { type: 'image/gif' })
+    fireEvent.change(input, { target: { files: [gif] } })
+    expect(input.value).toBe('')
+    const named = await screen.findByRole('dialog', { name: 'Name it' })
+    fireEvent.change(within(named).getByRole('textbox', { name: 'Emoji name' }), { target: { value: 'wave' } })
+    fireEvent.click(within(named).getByRole('button', { name: 'Add emoji' }))
+    await vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Name it' })).toBeNull())
+    expect(add).toHaveBeenCalledWith('wave', gif)
+    const cell = within(screen.getByRole('region', { name: /^Custom/ })).getByRole('button', { name: ':wave:' })
+    expect(cell).toHaveAttribute('data-highlight')
+    expect(Element.prototype.scrollTo).toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
   })
 
   it('desktop: hovering a custom emoji shows its card; deleting asks first, then removes it', async () => {
