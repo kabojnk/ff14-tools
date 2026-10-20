@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const isCI = !!process.env.CI
+/** E2E_PORT lets a second checkout (an agent's worktree) run the suite without reusing this one's dev server. */
+const port = Number(process.env.E2E_PORT ?? 5174)
 
 /** The theme screenshots run only in their own projects (a separate CI step; see SETUP.md). */
 const SCREENSHOTS = /themes\.spec\.ts/
@@ -14,7 +16,7 @@ export default defineConfig({
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : [['list'], ['html', { open: 'never' }]],
   globalSetup: './e2e/global-setup.ts',
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: `http://localhost:${port}`,
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',
@@ -54,8 +56,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev:test',
-    url: 'http://localhost:5174',
+    command: `npx vite --mode test --port ${port} --strictPort`,
+    url: `http://localhost:${port}`,
     reuseExistingServer: !isCI,
     timeout: 60_000,
   },
