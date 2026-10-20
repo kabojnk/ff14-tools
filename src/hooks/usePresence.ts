@@ -8,6 +8,8 @@ export const LAST_SEEN_HEARTBEAT_MS = 60_000
 
 export function usePresence(): void {
   const { user, profile } = useAuthStore()
+  // After a fresh login the user arrives before the profile; start once both are here.
+  const ready = !!user && !!profile
 
   useEffect(() => {
     if (!user || !profile) return
@@ -73,7 +75,7 @@ export function usePresence(): void {
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  // Only re-run if the logged-in user changes — not on every profile update
+  // Only re-run if the logged-in user changes or their profile first loads — not on every profile update
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id])
+  }, [user?.id, ready])
 }

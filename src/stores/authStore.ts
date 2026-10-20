@@ -4,7 +4,7 @@ import { leaveConversation } from '@/lib/conversationRealtime'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
-import { useProfileStore } from '@/stores/profileStore'
+import { PROFILE_COLUMNS, useProfileStore } from '@/stores/profileStore'
 import { useReactionStore } from '@/stores/reactionStore'
 import { HAS_PIN_KEY } from '@/stores/uiStore'
 import type { Profile } from '@/types'
@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { data } = await supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_COLUMNS)
       .eq('id', user.id)
       .single()
 
