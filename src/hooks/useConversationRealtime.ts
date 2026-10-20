@@ -6,6 +6,7 @@ import { setLakeBroadcaster, useConversationStore } from '@/stores/conversationS
 import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
 import { useProfileStore } from '@/stores/profileStore'
+import { useReactionStore } from '@/stores/reactionStore'
 import type { Message } from '@/types'
 
 setLakeBroadcaster(sendLake)
@@ -59,10 +60,14 @@ export function useConversationRealtime() {
         // apply() keeps only the known columns: the realtime row carries lock_pin, which is never stored.
         profiles().apply(row)
       },
+      onReaction(event, row) {
+        useReactionStore.getState().apply(event, row)
+      },
       onStatus(status, rejoined) {
         conv().setRealtimeStatus(status)
         if (status !== 'SUBSCRIBED') return
         // Messages may have been missed while disconnected (or between load() and the first join).
+        // Reloading the messages also reloads their reactions (messageStore → reactionStore.loadFor).
         if (rejoined) {
           void conv().reloadAfterLake()
           void profiles().load(memberIds)

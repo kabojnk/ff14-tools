@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message, Space } from '@/types'
 
-const { mockRpc } = vi.hoisted(() => ({ mockRpc: vi.fn() }))
+const { mockRpc, mockLoadFor } = vi.hoisted(() => ({ mockRpc: vi.fn(), mockLoadFor: vi.fn() }))
 
 vi.mock('@/lib/supabase', () => ({
   supabase: { rpc: mockRpc, from: vi.fn() },
+}))
+
+vi.mock('@/stores/reactionStore', () => ({
+  useReactionStore: { getState: () => ({ loadFor: mockLoadFor }) },
 }))
 
 import { useMessageStore } from '@/stores/messageStore'
@@ -36,6 +40,7 @@ const SCHIST = spaceKey('conv-1', 'schist')
 beforeEach(() => {
   useMessageStore.setState(initialState, true)
   mockRpc.mockReset()
+  mockLoadFor.mockReset()
 })
 
 describe('messageStore', () => {
@@ -149,6 +154,28 @@ describe('messageStore', () => {
       addMessage(MAIN, msg('client-1', 'main'))
       confirmPending(MAIN, 'client-1', msg('client-1', 'main'))
       expect(useMessageStore.getState().messages[MAIN]).toHaveLength(1)
+    })
+  })
+
+  describe('reactions for each loaded page', () => {
+    it('fetchMessages loads the reactions of the page it loaded', async () => {
+      mockRpc.mockResolvedValue({ data: [msg('m2', 'main'), msg('m1', 'main')], error: null })
+      await useMessageStore.getState().fetchMessages('conv-1', 'main')
+      expect(mockLoadFor).toHaveBeenCalledTimes(1)
+      expect(mockLoadFor).toHaveBeenCalledWith(['m1', 'm2'])
+    })
+
+    it('fetchOlder loads the reactions of the older page only', async () => {
+      useMessageStore.getState().addMessage(MAIN, msg('m5', 'main', '2026-10-19T10:00:05Z'))
+      mockRpc.mockResolvedValue({ data: [msg('m4', 'main', '2026-10-19T10:00:04Z')], error: null })
+      await useMessageStore.getState().fetchOlder('conv-1', 'main')
+      expect(mockLoadFor).toHaveBeenCalledWith(['m4'])
+    })
+
+    it('loads nothing when the fetch fails', async () => {
+      mockRpc.mockResolvedValue({ data: null, error: { message: 'boom' } })
+      await useMessageStore.getState().fetchMessages('conv-1', 'main')
+      expect(mockLoadFor).not.toHaveBeenCalled()
     })
   })
 

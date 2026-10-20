@@ -1,6 +1,4 @@
 import { useRef, useEffect } from 'react'
-import { useAuthStore } from '@/stores/authStore'
-import type { Reaction } from '@/types'
 
 interface ReactionPickerProps {
   messageId: string
@@ -30,47 +28,6 @@ export function ReactionPicker({ onAdd, onClose }: ReactionPickerProps) {
           className="flex h-8 w-8 items-center justify-center rounded text-lg hover:bg-hover"
         >
           {emoji}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// Display reactions on a message
-interface ReactionDisplayProps {
-  reactions: Reaction[]
-  messageId: string
-  onAdd: (emoji: string) => void
-  onRemove: (emoji: string) => void
-}
-
-export function ReactionDisplay({ reactions, onAdd, onRemove }: ReactionDisplayProps) {
-  const { user } = useAuthStore()
-
-  if (reactions.length === 0) return null
-
-  // Group by emoji
-  const grouped = reactions.reduce<Record<string, { count: number; hasOwn: boolean }>>((acc, r) => {
-    if (!acc[r.emoji]) acc[r.emoji] = { count: 0, hasOwn: false }
-    acc[r.emoji].count++
-    if (r.user_id === user?.id) acc[r.emoji].hasOwn = true
-    return acc
-  }, {})
-
-  return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {Object.entries(grouped).map(([emoji, { count, hasOwn }]) => (
-        <button
-          key={emoji}
-          onClick={() => hasOwn ? onRemove(emoji) : onAdd(emoji)}
-          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-xs transition-colors ${
-            hasOwn
-              ? 'border-[color:var(--accent)] bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)]'
-              : 'border-[color:var(--line)] bg-secondary hover:border-[color:var(--muted)]'
-          }`}
-        >
-          <span className="text-sm">{emoji}</span>
-          <span className={hasOwn ? 'text-brand' : 'text-muted'}>{count}</span>
         </button>
       ))}
     </div>

@@ -1,16 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useMessageStore } from '@/stores/messageStore'
-import { supabase } from '@/lib/supabase'
-import { ReactionPicker, ReactionDisplay } from '@/components/chat/ReactionPicker'
+import { useReactionStore } from '@/stores/reactionStore'
+import { noteRecentEmoji } from '@/lib/recentEmoji'
+import { ReactionPicker } from '@/components/chat/ReactionPicker'
 import { MessageContextMenu } from '@/components/chat/MessageContextMenu'
-import type { Message, Reaction } from '@/types'
+import type { Message } from '@/types'
 
 /**
- * INTERIM (redesign 3a, Task 8): the old MessageItem's reaction row, hover toolbar / long-press menu
- * (reply, copy, pin, edit, delete) and inline edit, wrapped around the new Cozy bubble so the existing
- * behaviour keeps working. Task 9 replaces the reactions (and this per-message channel), Task 10 the
- * menus, Task 11 the edit (moved into the composer); then this file goes.
+ * INTERIM (redesign 3a, Task 8): the old MessageItem's hover toolbar / long-press menu (react, reply,
+ * copy, pin, edit, delete) and inline edit, wrapped around the new Cozy bubble so the existing behaviour
+ * keeps working. The reactions themselves moved to reactionStore + MessageRow's Reactions (Task 9); the
+ * add-reaction entry points here feed that store. Task 10 replaces the menus, Task 11 the edit (moved
+ * into the composer); then this file goes.
  */
 interface LegacyMessageExtrasProps {
   message: Message
@@ -44,7 +46,6 @@ export function LegacyMessageExtras({
   const [showActions, setShowActions] = useState(false)
   const [showReactionPicker, setShowReactionPicker] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [reactions, setReactions] = useState<Reaction[]>([])
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [moreAnchor, setMoreAnchor] = useState<DOMRect | null>(null)
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -69,65 +70,13 @@ export function LegacyMessageExtras({
     }
   }
 
-  // Reactions: fetched and subscribed per message (Task 9 moves them onto the conversation channel).
-  useEffect(() => {
-    supabase
-      .from('reactions')
-      .select('*')
-      .eq('message_id', message.id)
-      .then(({ data }) => {
-        if (data) setReactions(data as Reaction[])
-      })
-
-    const channel = supabase
-      .channel(`reactions:${message.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions', filter: `message_id=eq.${message.id}` },
-        (payload) => {
-          setReactions((prev) => {
-            const r = payload.new as Reaction
-            return prev.some((x) => x.id === r.id) ? prev : [...prev, r]
-          })
-        })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions', filter: `message_id=eq.${message.id}` },
-        (payload) => {
-          setReactions((prev) => prev.filter((r) => r.id !== (payload.old as Reaction).id))
-        })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [message.id])
-
-  const handleAddReaction = async (emoji: string) => {
+  /** Adds my reaction (never removes it: the menus only add) through the conversation's reaction store. */
+  const handleAddReaction = (emoji: string) => {
     if (!user) return
-    const optimistic: Reaction = {
-      id: `optimistic-${Date.now()}`,
-      message_id: message.id,
-      user_id: user.id,
-      emoji,
-      created_at: new Date().toISOString(),
-    }
-    setReactions((prev) => [...prev, optimistic])
-    const { data } = await supabase
-      .from('reactions')
-      .insert({ message_id: message.id, user_id: user.id, emoji })
-      .select()
-      .single()
-    if (data) {
-      setReactions((prev) => prev.map((r) => r.id === optimistic.id ? data as Reaction : r))
-    } else {
-      setReactions((prev) => prev.filter((r) => r.id !== optimistic.id))
-    }
-  }
-
-  const handleRemoveReaction = async (emoji: string) => {
-    if (!user) return
-    setReactions((prev) => prev.filter((r) => !(r.user_id === user.id && r.emoji === emoji)))
-    await supabase
-      .from('reactions')
-      .delete()
-      .eq('message_id', message.id)
-      .eq('user_id', user.id)
-      .eq('emoji', emoji)
+    const store = useReactionStore.getState()
+    if (store.chips(message.id, user.id).some((c) => c.emoji === emoji && c.mine)) return
+    noteRecentEmoji(emoji)
+    void store.toggle(message.id, emoji, user.id)
   }
 
   const handleCopy = () => {
@@ -207,10 +156,6 @@ export function LegacyMessageExtras({
       ) : (
         children
       )}
-
-      <div className={`flex max-w-[var(--bubble-max,78%)] ${isOwn ? 'justify-end' : ''}`}>
-        <ReactionDisplay reactions={reactions} messageId={message.id} onAdd={handleAddReaction} onRemove={handleRemoveReaction} />
-      </div>
 
       {/* Message actions (desktop hover) */}
       {showActions && !isEditing && (

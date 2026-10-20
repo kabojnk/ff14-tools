@@ -199,6 +199,11 @@
   0%, 100% { background-color: transparent; }
   25% { background-color: color-mix(in srgb, var(--accent) 22%, transparent); }
 }
+@keyframes rx-pop {
+  0% { opacity: 0; transform: scale(0.5); }
+  60% { opacity: 1; transform: scale(1.15); }
+  100% { opacity: 1; transform: none; }
+}
 @keyframes typing-dot {
   0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
   40% { opacity: 1; transform: translateY(-2px); }
@@ -216,9 +221,13 @@
 .typing-dot {
   animation: typing-dot 1.2s infinite ease-in-out;
 }
+.rx-pop {
+  animation: rx-pop 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
 @media (prefers-reduced-motion: reduce) {
   .msg-in,
-  .msg-sent {
+  .msg-sent,
+  .rx-pop {
     animation: msg-fade 160ms ease-out both;
   }
   .typing-dot {

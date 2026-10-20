@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { SPACES, spaceKey } from '@/lib/spaces'
+import { useReactionStore } from '@/stores/reactionStore'
 import type { Message, Space } from '@/types'
 
 interface MessageState {
@@ -61,6 +62,8 @@ export const useMessageStore = create<MessageState>((set, get) => {
         const local = (state.messages[key] ?? []).filter((m) => m.localState && !ids.has(m.id))
         return { messages: { ...state.messages, [key]: [...msgs, ...local] }, loading: false }
       })
+      // The page's reactions, in one query (also re-run on a rejoin and after the lake, which reload here).
+      void useReactionStore.getState().loadFor(msgs.map((m) => m.id))
     } else {
       set({ loading: false })
     }
@@ -93,6 +96,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
           const ids = new Set(existing.map((m) => m.id))
           return { messages: { ...state.messages, [key]: [...page.filter((m) => !ids.has(m.id)), ...existing] } }
         })
+        void useReactionStore.getState().loadFor(page.map((m) => m.id))
       }
       return page.length >= PAGE_SIZE
     },

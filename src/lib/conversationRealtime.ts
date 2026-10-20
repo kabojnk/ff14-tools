@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Message, ReadPosition, Space } from '@/types'
+import type { Message, Reaction, ReadPosition, Space } from '@/types'
 
 export type RealtimeStatus = 'CLOSED' | 'JOINING' | 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT'
 export type MessageEventKind = 'new' | 'edit' | 'delete'
@@ -15,6 +15,8 @@ export interface ConversationHandlers {
   onReadPosition(rp: ReadPosition): void
   /** A member's profiles row changed. The full row, `lock_pin` included: the receiver must drop it. */
   onProfile(row: Record<string, unknown>): void
+  /** A reaction row came or went. A DELETE carries only the primary key, and reaches every subscriber. */
+  onReaction(event: 'INSERT' | 'DELETE', row: Partial<Reaction> & { id: string }): void
   onStatus(s: RealtimeStatus, rejoined: boolean): void
 }
 
@@ -32,7 +34,8 @@ const LAKE_DEBOUNCE_MS = 250
 /**
  * Owns the one private `conv:<id>` channel per device. Message, typing and lake broadcasts for both
  * spaces travel on it, plus postgres_changes on messages, sessions and read positions as a safety net
- * (which also covers inserts from a cached old app), and on the members' profiles.
+ * (which also covers inserts from a cached old app), on the members' profiles, and on reactions (one
+ * binding for every message, instead of a channel per message).
  *
  * StrictMode-safe: the channel is created synchronously, a generation counter silences callbacks from
  * a channel that has been left, and a second join for the same conversation reuses the first.
@@ -112,6 +115,14 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'read_positions', filter }, (payload) => {
         if (live()) handlers.onReadPosition(payload.new as ReadPosition)
+      })
+      // Unfiltered: reactions have no conversation_id, and RLS already limits delivery to members.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reactions' }, (payload) => {
+        if (live()) handlers.onReaction('INSERT', payload.new as Reaction)
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions' }, (payload) => {
+        const old = payload.old as Partial<Reaction>
+        if (live() && old?.id) handlers.onReaction('DELETE', { ...old, id: old.id })
       })
     // The members' profiles (name, avatar, status, presence override, last seen), live for the header.
     if (memberIds.length > 0) {

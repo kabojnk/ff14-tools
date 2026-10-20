@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from 'react'
 import { Bubble } from '@/components/chat2/Bubble'
 import { DateChip } from '@/components/chat2/DateChip'
+import { MessageReactions } from '@/components/chat2/Reactions'
 import { ReplyStrip } from '@/components/chat2/ReplyStrip'
 import type { EmojiLookup } from '@/components/chat2/Markdown'
 import { LegacyMessageExtras } from '@/components/chat/legacy/LegacyMessageExtras'
@@ -35,13 +36,13 @@ interface MessageRowProps {
 
 const MOTION_CLASS = { in: 'msg-in', sent: 'msg-sent' } as const
 
-/** One message in the list: a system note, or a bubble aligned to its side, with the legacy extras around it. */
+/** One message in the list: a system note, or a bubble aligned to its side, with the legacy extras around it and its reactions under it. */
 export const MessageRow = memo(function MessageRow(props: MessageRowProps) {
   const { message, mine, runStart, tick, motion, flash, pinned, spaceKey, emoji, onHighlight, onRetry, onJump } = props
   const original = useReplyOriginal(message.reply_to, spaceKey)
   const originalAuthor = useProfileStore((s) => (original ? (s.profiles[original.author_id]?.nickname ?? null) : null))
 
-  const rowClass = `flex flex-col ${mine ? 'items-end' : 'items-start'} ${runStart ? 'mt-2' : 'mt-0.5'} ${
+  const rowClass = `group/row flex flex-col ${mine ? 'items-end' : 'items-start'} ${runStart ? 'mt-2' : 'mt-0.5'} ${
     motion ? MOTION_CLASS[motion] : ''
   } ${flash ? 'msg-flash' : ''}`
 
@@ -89,6 +90,7 @@ export const MessageRow = memo(function MessageRow(props: MessageRowProps) {
           {bubble}
         </LegacyMessageExtras>
       )}
+      {!message.localState && <MessageReactions messageId={message.id} mine={mine} />}
     </div>
   )
 })
