@@ -1,14 +1,17 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Portal } from '@/components/ui/Portal'
 
 interface MediaViewerProps {
   url: string
   filename: string
   type: 'image' | 'gif' | 'video'
+  /** A spoiler stays blurred here too until it's tapped. */
+  spoiler?: boolean
   onClose: () => void
 }
 
-export function MediaViewer({ url, filename, type, onClose }: MediaViewerProps) {
+export function MediaViewer({ url, filename, type, spoiler = false, onClose }: MediaViewerProps) {
+  const [hidden, setHidden] = useState(spoiler)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handleKey)
@@ -18,6 +21,9 @@ export function MediaViewer({ url, filename, type, onClose }: MediaViewerProps) 
   return (
     <Portal>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={filename || 'Media'}
         className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85"
         onClick={onClose}
       >
@@ -53,20 +59,31 @@ export function MediaViewer({ url, filename, type, onClose }: MediaViewerProps) 
         </div>
 
         {/* Media */}
-        <div className="flex max-h-[90vh] max-w-[90vw] items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <div className="relative flex max-h-[90vh] max-w-[90vw] items-center justify-center overflow-hidden rounded" onClick={(e) => e.stopPropagation()}>
           {type === 'video' ? (
             <video
               src={url}
-              controls
-              autoPlay
-              className="max-h-[90vh] max-w-[90vw] rounded"
+              controls={!hidden}
+              autoPlay={!hidden}
+              className={`max-h-[90vh] max-w-[90vw] rounded ${hidden ? 'scale-110 blur-[24px] brightness-50' : ''}`}
             />
           ) : (
             <img
               src={url}
               alt={filename}
-              className="max-h-[90vh] max-w-[90vw] rounded object-contain"
+              draggable={false}
+              className={`max-h-[90vh] max-w-[90vw] rounded object-contain ${hidden ? 'scale-110 blur-[24px] brightness-50' : ''}`}
             />
+          )}
+          {hidden && (
+            <button
+              type="button"
+              aria-label="Show spoiler"
+              onClick={() => setHidden(false)}
+              className="absolute inset-0 flex items-center justify-center"
+            >
+              <span className="rounded-full bg-black/60 px-3 py-1 text-sm font-bold tracking-wider text-white">SPOILER</span>
+            </button>
           )}
         </div>
 

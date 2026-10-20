@@ -68,8 +68,12 @@ function defaultTables() {
   h.tables.conversation_members = () => ({ data: [{ user_id: 'alice' }, { user_id: 'bea' }], error: null })
   h.tables.sessions = (ops) =>
     hasOp(ops, 'insert') ? { data: { ...SESSION, id: 'sess-new' }, error: null } : { data: SESSION, error: null }
+  // RLS returns the partner's rows only while both have read receipts on.
   h.tables.read_positions = () => ({
-    data: [{ conversation_id: 'conv-1', user_id: 'alice', space: 'main', last_read_at: '2026-10-19T09:00:00Z' }],
+    data: [
+      { conversation_id: 'conv-1', user_id: 'alice', space: 'main', last_read_at: '2026-10-19T09:00:00Z' },
+      { conversation_id: 'conv-1', user_id: 'bea', space: 'schist', last_read_at: '2026-10-19T08:30:00Z' },
+    ],
     error: null,
   })
 }
@@ -101,13 +105,14 @@ beforeEach(() => {
 })
 
 describe('conversationStore.load', () => {
-  it('picks the conversation, its members, session, my read positions and the latest per space', async () => {
+  it('picks the conversation, its members, session, read positions and the latest per space', async () => {
     await useConversationStore.getState().load('alice')
     const s = useConversationStore.getState()
     expect(s.conversation).toEqual(CONV)
     expect(s.memberIds).toEqual(['alice', 'bea'])
     expect(s.activeSession).toEqual(SESSION)
     expect(s.readAt).toEqual({ main: '2026-10-19T09:00:00Z', schist: null })
+    expect(s.partnerReadAt).toEqual({ main: null, schist: '2026-10-19T08:30:00Z' })
     expect(s.latest).toEqual({
       main: { at: '2026-10-19T10:00:00Z', authorId: 'bea', preview: 'm2' },
       schist: { at: '2026-10-19T08:00:00Z', authorId: 'alice', preview: 's1' },
@@ -117,7 +122,7 @@ describe('conversationStore.load', () => {
     const conv = h.queries.find((q) => q.table === 'conversations')!
     expect(conv.ops).toContainEqual(['eq', ['archived', false]])
     const rp = h.queries.find((q) => q.table === 'read_positions')!
-    expect(rp.ops).toContainEqual(['eq', ['user_id', 'alice']])
+    expect(rp.ops).toContainEqual(['eq', ['conversation_id', 'conv-1']])
     expect(h.rpc).toHaveBeenCalledWith('get_messages', { p_conversation: 'conv-1', p_space: 'main', p_limit: 1 })
     expect(h.rpc).toHaveBeenCalledWith('get_messages', { p_conversation: 'conv-1', p_space: 'schist', p_limit: 1 })
   })
@@ -181,9 +186,30 @@ describe('conversationStore read positions', () => {
     expect(useConversationStore.getState().readAt.main).toBe('2026-10-19T09:30:00Z')
   })
 
-  it('applyReadPosition ignores other users', () => {
-    useConversationStore.getState().applyReadPosition(rp({ user_id: 'bea', space: 'schist' }), 'alice')
-    expect(useConversationStore.getState().readAt.schist).toBeNull()
+  it("applyReadPosition stores the partner's position separately, forward-only", () => {
+    const { applyReadPosition } = useConversationStore.getState()
+    applyReadPosition(rp({ user_id: 'bea', space: 'main', last_read_at: '2026-10-19T09:45:00Z' }), 'alice')
+    expect(useConversationStore.getState().readAt.main).toBe('2026-10-19T09:00:00Z')
+    expect(useConversationStore.getState().partnerReadAt.main).toBe('2026-10-19T09:45:00Z')
+    applyReadPosition(rp({ user_id: 'bea', space: 'main', last_read_at: '2026-10-19T09:10:00Z' }), 'alice')
+    expect(useConversationStore.getState().partnerReadAt.main).toBe('2026-10-19T09:45:00Z')
+  })
+
+  it('applyReadPosition ignores users outside the conversation', () => {
+    useConversationStore.getState().applyReadPosition(rp({ user_id: 'cleo', space: 'main', last_read_at: '2026-10-19T11:00:00Z' }), 'alice')
+    expect(useConversationStore.getState().partnerReadAt.main).toBeNull()
+  })
+
+  it("refreshPartnerReadAt refetches the partner's positions (receipts back on)", async () => {
+    useConversationStore.setState({ partnerReadAt: { main: null, schist: null } })
+    h.tables.read_positions = () => ({
+      data: [{ conversation_id: 'conv-1', user_id: 'bea', space: 'main', last_read_at: '2026-10-19T11:00:00Z' }],
+      error: null,
+    })
+    await useConversationStore.getState().refreshPartnerReadAt('alice')
+    expect(useConversationStore.getState().partnerReadAt).toEqual({ main: '2026-10-19T11:00:00Z', schist: null })
+    const q = h.queries.filter((x) => x.table === 'read_positions').pop()!
+    expect(q.ops).toContainEqual(['neq', ['user_id', 'alice']])
   })
 
   it('applyReadPosition ignores older times', () => {
@@ -323,6 +349,30 @@ describe('conversationStore.sendMessage', () => {
     h.tables.messages = () => ({ data: null, error: { code: '23505', message: 'dup' } })
     expect(await useConversationStore.getState().sendMessage(out)).toBeNull()
     expect(h.queries.filter((q) => q.table === 'messages')).toHaveLength(1)
+  })
+})
+
+describe('conversationStore.sendMessage with a client-generated id', () => {
+  const out = { authorId: 'alice', space: 'main' as const, content: 'hi', attachments: [], type: 'text' as const }
+
+  it('inserts the given id and reply_to', async () => {
+    await useConversationStore.getState().load('alice')
+    h.tables.messages = () => ({ data: msg('c-1', 'main', '2026-10-19T12:00:00Z', 'alice'), error: null })
+    await useConversationStore.getState().sendMessage({ ...out, id: 'c-1', replyTo: 'm0' })
+    const insert = h.queries.find((q) => q.table === 'messages')!
+    expect(insert.ops[0][1]).toEqual([expect.objectContaining({ id: 'c-1', reply_to: 'm0' })])
+  })
+
+  it('a retry that hits 23505 (the first try did land) counts as success and returns the stored row', async () => {
+    await useConversationStore.getState().load('alice')
+    h.tables.messages = (ops) =>
+      hasOp(ops, 'insert')
+        ? { data: null, error: { code: '23505', message: 'duplicate key' } }
+        : { data: msg('c-1', 'main', '2026-10-19T12:00:00Z', 'alice'), error: null }
+    const sent = await useConversationStore.getState().sendMessage({ ...out, id: 'c-1' })
+    expect(sent?.id).toBe('c-1')
+    const lookup = h.queries.filter((q) => q.table === 'messages').pop()!
+    expect(lookup.ops).toContainEqual(['eq', ['id', 'c-1']])
   })
 })
 

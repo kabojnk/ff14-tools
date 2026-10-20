@@ -28,6 +28,16 @@ export class ChatUser {
     return this.page.locator('[data-realtime]').getByText(text, { exact: true })
   }
 
+  /** The row (bubble, ticks, extras) of a message in the open space's list, by its exact text. */
+  messageRow(text: string) {
+    return this.page.locator('[data-realtime] [data-message-id]').filter({ has: this.page.getByText(text, { exact: true }) })
+  }
+
+  /** The scrolling message list of the open space. */
+  get messageList() {
+    return this.page.locator('[data-realtime]').filter({ visible: true }).first()
+  }
+
   /** The Main or Schist tab (under the header on phones, inline in it on desktop). */
   spaceButton(name: SpaceName) {
     return this.page.getByRole('tab').and(this.page.locator(`[data-space="${name.toLowerCase()}"]`)).filter({ visible: true }).first()
@@ -105,9 +115,9 @@ export class ChatUser {
     await expect(this.spaceButton('Main')).toBeVisible()
   }
 
-  /** "<name> is typing" under the open space's messages. */
+  /** The typing bubble ("<name> is typing") at the end of the open space's messages. */
   typing(nickname: string) {
-    return this.page.getByText(`${nickname} is typing`, { exact: true }).filter({ visible: true })
+    return this.page.locator('[data-realtime]').getByRole('status', { name: `${nickname} is typing`, exact: true }).filter({ visible: true })
   }
 
   /** Opens User Settings from your row (on phones, the list screen's top bar). */

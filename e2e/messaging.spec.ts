@@ -53,7 +53,7 @@ test('a landscape phone (wider than 900px, touch) keeps the phone layout', async
 test('the typing indicator clears as soon as the message is sent, and returns on the next keystroke', async ({ alice, bea }) => {
   await alice.openChat()
   await bea.openChat()
-  const typing = alice.page.getByText('Bea is typing')
+  const typing = alice.typing('Bea')
 
   const text = `on my way ${Date.now()}`
   await bea.composer.pressSequentially(text)
@@ -75,7 +75,7 @@ test('the typing indicator clears as soon as the message is sent, and returns on
 test('a slash command does not leave a typing indicator behind', async ({ alice, bea }) => {
   await alice.openChat()
   await bea.openChat()
-  const typing = alice.page.getByText('Bea is typing')
+  const typing = alice.typing('Bea')
 
   await bea.composer.pressSequentially('/eep')
   await expect(typing).toBeVisible({ timeout: 5_000 })

@@ -105,6 +105,8 @@ export interface Message {
   created_at: string
   // Joined fields
   author?: Profile
+  /** Client only: my message while it's being sent, or after the send failed. Never stored. */
+  localState?: 'sending' | 'failed'
 }
 
 export interface Reaction {

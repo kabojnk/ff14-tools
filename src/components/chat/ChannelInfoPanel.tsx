@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { MediaViewer } from '@/components/chat/MediaViewer'
-import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer'
+import Markdown from '@/components/chat2/Markdown'
+import { useEmojiStore } from '@/stores/emojiStore'
 import { Portal } from '@/components/ui/Portal'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { MediaFilters } from '@/components/chat/MediaFilters'
@@ -212,7 +213,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
   const [kind, setKind] = useState<MediaFilterKind>('all')
   const [extension, setExtension] = useState('')
   const [scope, setScope] = useState<MediaScope>('space')
-  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video' } | null>(null)
+  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video'; spoiler: boolean } | null>(null)
   const { items, loading, hasMore, loadMore } = useMediaGallery({ conversationId, space, scope, kind, extension })
 
   const visual = items.filter((i) => VISUAL_KINDS.has(i.kind))
@@ -247,9 +248,12 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
             <div className="grid grid-cols-3 gap-0.5 p-0.5">
               {visual.map((item) => (
                 <button
-                  key={item.id}
+                  key={`${item.id}:${item.spoiler}`}
                   data-media-item={item.kind}
-                  onClick={() => setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video' })}
+                  data-spoiler={item.spoiler ? '' : undefined}
+                  onClick={() =>
+                    setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video', spoiler: item.spoiler })
+                  }
                   className="relative aspect-square overflow-hidden bg-tertiary"
                 >
                   {item.kind === 'video' ? (
@@ -259,7 +263,18 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
                       </svg>
                     </div>
                   ) : (
-                    <img src={item.url} alt={item.filename ?? ''} className="h-full w-full object-cover" loading="lazy" />
+                    <img
+                      src={item.url}
+                      alt={item.filename ?? ''}
+                      className={`h-full w-full object-cover ${item.spoiler ? 'scale-110 blur-[16px] brightness-50' : ''}`}
+                      loading="lazy"
+                      draggable={false}
+                    />
+                  )}
+                  {item.spoiler && (
+                    <span className="absolute left-1 top-1 rounded-full bg-black/60 px-1.5 text-[9px] font-bold tracking-wider text-white">
+                      SPOILER
+                    </span>
                   )}
                 </button>
               ))}
@@ -322,7 +337,7 @@ function MediaTab({ conversationId, space }: { conversationId: string; space: Sp
       )}
 
       {viewer && (
-        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} onClose={() => setViewer(null)} />
+        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} spoiler={viewer.spoiler} onClose={() => setViewer(null)} />
       )}
     </>
   )
@@ -337,6 +352,7 @@ function EmptyState({ label }: { label: string }) {
 }
 
 function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: () => void }) {
+  const emoji = useEmojiStore((s) => s.lookup)
   const date = new Date(message.created_at)
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 
@@ -354,7 +370,7 @@ function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: ()
         </div>
         {message.content && (
           <div className="text-sm text-secondary">
-            <MarkdownRenderer content={message.content} />
+            <Markdown content={message.content} emoji={emoji} />
           </div>
         )}
         {message.attachments?.some((a) => a.type === 'image' || a.type === 'gif') && (

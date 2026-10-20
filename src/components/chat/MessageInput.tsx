@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { useMessageStore } from '@/stores/messageStore'
-import { useConversationStore, type OutgoingMessage } from '@/stores/conversationStore'
+import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useTyping } from '@/hooks/useTyping'
-import { sendMessageEvent } from '@/lib/conversationRealtime'
+import { sendOutgoing } from '@/lib/chat/outbox'
 import { SPACE_LABEL, spaceKey } from '@/lib/spaces'
 import { uploadFile, getFileType } from '@/lib/bunny'
 import { EmojiPicker } from '@/components/chat/EmojiPicker'
@@ -23,16 +22,6 @@ interface MessageInputProps {
 // desktop breakpoint (e.g. rotating an iPhone) or the space changes, so a half-typed message isn't lost.
 // A drag of the lake leaves them alone.
 const drafts = new Map<string, { content: string; attachments: Attachment[] }>()
-
-/** Sends a message and shows it here at once; the other screens hear about it over realtime. */
-async function postMessage(m: OutgoingMessage) {
-  const conv = useConversationStore.getState()
-  const data = await conv.sendMessage(m)
-  if (!data) return
-  useMessageStore.getState().addMessage(spaceKey(data.conversation_id, data.space), data)
-  conv.noteMessage(data)
-  sendMessageEvent('new', data)
-}
 
 export function MessageInput({ conversationId, space, replyTo, onCancelReply }: MessageInputProps) {
   const { user } = useAuthStore()
@@ -77,12 +66,21 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
     }
 
     const attachmentsToSend = pendingAttachments
+    const replyToId = replyTo?.id ?? null
     setContent('')
     setPendingAttachments([])
     onCancelReply?.()
 
-    // Send the message with attachments (into the newest visible session, created if needed)
-    await postMessage({ authorId: user.id, space, content: trimmed || null, attachments: attachmentsToSend, type: 'text' })
+    // Shows at once (clock tick), then goes into the newest visible session (created if needed).
+    // A failed send stays in the list with Retry.
+    const sending = sendOutgoing({
+      authorId: user.id,
+      space,
+      content: trimmed || null,
+      attachments: attachmentsToSend,
+      type: 'text',
+      replyTo: replyToId,
+    })
 
     // Re-focus input
     textareaRef.current?.focus()
@@ -90,7 +88,8 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }, [content, pendingAttachments, user, space, dragTheLake, setEepMode, onCancelReply, stopTyping])
+    await sending
+  }, [content, pendingAttachments, user, space, replyTo, dragTheLake, setEepMode, onCancelReply, stopTyping])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -140,7 +139,7 @@ export function MessageInput({ conversationId, space, replyTo, onCancelReply }: 
     if (!user) return
 
     // Send GIF as a message immediately
-    await postMessage({
+    await sendOutgoing({
       authorId: user.id,
       space,
       content: null,

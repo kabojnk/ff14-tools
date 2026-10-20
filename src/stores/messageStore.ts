@@ -10,21 +10,57 @@ interface MessageState {
   fetchMessages: (conversationId: string, space: Space) => Promise<void>
   editMessage: (messageId: string, newContent: string, key: string) => Promise<void>
   deleteMessage: (messageId: string, key: string) => Promise<void>
+  /** Loads the page before the oldest loaded message. Resolves to whether there may be more. */
+  fetchOlder: (conversationId: string, space: Space) => Promise<boolean>
+  /** Adds the message (or merges a realtime echo into my pending one with the same id). */
   addMessage: (key: string, message: Message) => void
+  /** My message, shown at once while it's sent. Its id is client-generated and becomes the row's id. */
+  addPending: (key: string, message: Message) => void
+  /** The server row for a pending message: replaces it in place. */
+  confirmPending: (key: string, id: string, message: Message) => void
+  failPending: (key: string, id: string) => void
+  /** Back to sending (Retry). */
+  retryPending: (key: string, id: string) => void
   updateMessage: (key: string, message: Message) => void
   removeMessage: (key: string, messageId: string) => void
   clearMessages: (key: string) => void
   clearConversation: (conversationId: string) => void
 }
 
+const PAGE_SIZE = 50
+
+/** The message at `i` replaced by `message`, without any local state. */
+function replaceAt(list: Message[], i: number, message: Message): Message[] {
+  const { localState: _drop, ...server } = message
+  void _drop
+  const next = list.slice()
+  next[i] = server
+  return next
+}
+
 export const useMessageStore = create<MessageState>((set, get) => {
+  const setLocalState = (key: string, id: string, localState: 'sending' | 'failed') =>
+    set((state) => {
+      const existing = state.messages[key] ?? []
+      const i = existing.findIndex((m) => m.id === id && m.localState)
+      if (i === -1) return state
+      const next = existing.slice()
+      next[i] = { ...existing[i], localState }
+      return { messages: { ...state.messages, [key]: next } }
+    })
+
   const load = async (key: string, request: PromiseLike<{ data: unknown; error: unknown }>) => {
     set({ loading: true })
     const { data, error } = await request
     if (!error && data) {
       // The RPCs return newest first; reverse for display.
       const msgs = [...(data as Message[])].reverse()
-      set((state) => ({ messages: { ...state.messages, [key]: msgs }, loading: false }))
+      set((state) => {
+        // My unconfirmed messages aren't on the server (yet): keep them at the end.
+        const ids = new Set(msgs.map((m) => m.id))
+        const local = (state.messages[key] ?? []).filter((m) => m.localState && !ids.has(m.id))
+        return { messages: { ...state.messages, [key]: [...msgs, ...local] }, loading: false }
+      })
     } else {
       set({ loading: false })
     }
@@ -37,8 +73,29 @@ export const useMessageStore = create<MessageState>((set, get) => {
     fetchMessages: (conversationId, space) =>
       load(
         spaceKey(conversationId, space),
-        supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: 50 }),
+        supabase.rpc('get_messages', { p_conversation: conversationId, p_space: space, p_limit: PAGE_SIZE }),
       ),
+
+    fetchOlder: async (conversationId, space) => {
+      const key = spaceKey(conversationId, space)
+      const oldest = (get().messages[key] ?? []).find((m) => !m.localState)
+      const { data, error } = await supabase.rpc('get_messages', {
+        p_conversation: conversationId,
+        p_space: space,
+        p_limit: PAGE_SIZE,
+        ...(oldest ? { p_before: oldest.created_at } : {}),
+      })
+      if (error || !data) return false
+      const page = [...(data as Message[])].reverse()
+      if (page.length > 0) {
+        set((state) => {
+          const existing = state.messages[key] ?? []
+          const ids = new Set(existing.map((m) => m.id))
+          return { messages: { ...state.messages, [key]: [...page.filter((m) => !ids.has(m.id)), ...existing] } }
+        })
+      }
+      return page.length >= PAGE_SIZE
+    },
 
     editMessage: async (messageId, newContent, key) => {
       const { data, error } = await supabase
@@ -64,11 +121,33 @@ export const useMessageStore = create<MessageState>((set, get) => {
     addMessage: (key, message) => {
       set((state) => {
         const existing = state.messages[key] ?? []
-        // Avoid duplicates
-        if (existing.some((m) => m.id === message.id)) return state
-        return { messages: { ...state.messages, [key]: [...existing, message] } }
+        const i = existing.findIndex((m) => m.id === message.id)
+        if (i === -1) return { messages: { ...state.messages, [key]: [...existing, message] } }
+        // The echo of my own pending message: the server row replaces it. Otherwise a duplicate.
+        if (!existing[i].localState) return state
+        return { messages: { ...state.messages, [key]: replaceAt(existing, i, message) } }
       })
     },
+
+    addPending: (key, message) => {
+      set((state) => {
+        const existing = state.messages[key] ?? []
+        if (existing.some((m) => m.id === message.id)) return state
+        return { messages: { ...state.messages, [key]: [...existing, { ...message, localState: 'sending' }] } }
+      })
+    },
+
+    confirmPending: (key, id, message) => {
+      set((state) => {
+        const existing = state.messages[key] ?? []
+        const i = existing.findIndex((m) => m.id === id)
+        if (i === -1) return state
+        return { messages: { ...state.messages, [key]: replaceAt(existing, i, message) } }
+      })
+    },
+
+    failPending: (key, id) => setLocalState(key, id, 'failed'),
+    retryPending: (key, id) => setLocalState(key, id, 'sending'),
 
     updateMessage: (key, message) => {
       set((state) => {
