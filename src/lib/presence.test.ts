@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { aggregate, deviceId, displayed, lastSeen, overrideFor } from '@/lib/presence'
+import { aggregate, deviceId, displayed, lastSeen, overrideFor, presenceLine } from '@/lib/presence'
 
 describe('aggregate', () => {
   it('shows a user online when one of two devices is offline', () => {
@@ -128,5 +128,29 @@ describe('deviceId', () => {
     const a = deviceId()
     expect(a).toBeTruthy()
     expect(deviceId()).toBe(a)
+  })
+})
+
+describe('presenceLine', () => {
+  const now = new Date(2026, 9, 19, 15, 0)
+  const opts = { locale: 'en-US' }
+
+  it('says online or away as they are', () => {
+    expect(presenceLine('online', null, now, opts)).toBe('online')
+    expect(presenceLine('away', now.getTime(), now, opts)).toBe('away')
+  })
+
+  it('says when an offline person was last seen: the time today', () => {
+    expect(presenceLine('offline', new Date(2026, 9, 19, 9, 14).getTime(), now, opts)).toBe('last seen 9:14 AM')
+  })
+
+  it('says yesterday, the weekday this week, else the date', () => {
+    expect(presenceLine('offline', new Date(2026, 9, 18, 23, 0).getTime(), now, opts)).toBe('last seen yesterday')
+    expect(presenceLine('offline', new Date(2026, 9, 15, 12, 0).getTime(), now, opts)).toBe('last seen Thu')
+    expect(presenceLine('offline', new Date(2026, 8, 3, 12, 0).getTime(), now, opts)).toBe('last seen Sep 3')
+  })
+
+  it('says offline when last seen is unknown', () => {
+    expect(presenceLine('offline', null, now, opts)).toBe('offline')
   })
 })

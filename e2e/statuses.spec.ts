@@ -33,11 +33,10 @@ function statusDot(user: ChatUser, label: string) {
 }
 
 test.describe('Shared statuses', () => {
-  // The member list is gone (Task 6). Alice seeing it next to Bea's name comes back with the partner card (Task 7).
-  test('Bea creates a status and picks it; it shows on her row and in Alice’s open picker', async ({ alice, bea }) => {
+  test('Bea creates a status and picks it; Alice sees it next to her name', async ({ alice, bea }) => {
     await alice.openChat()
-    await alice.openStatusPicker()
-    await expect(statusRow(alice, 'Raiding')).toHaveCount(0)
+    await expect(alice.header).toContainText('Bea')
+    await expect(alice.headerPill).toHaveCount(0)
 
     await bea.openChat()
     await bea.openStatusPicker()
@@ -56,8 +55,12 @@ test.describe('Shared statuses', () => {
     await expect(label).toHaveCSS('color', PINK)
     await expect(bea.meRow).toContainText('back at 9')
 
-    // The shared status reaches Alice's open picker live.
-    await expect(statusDot(alice, 'Raiding')).toHaveCSS('background-color', PINK, { timeout: 5_000 })
+    // It reaches Alice's header live: the pill (its dot in the status colour), and the message on Bea's card.
+    await expect(alice.headerPill.locator('[data-status-label]')).toHaveText('Raiding', { timeout: 5_000 })
+    await expect(alice.headerPill.locator('[data-pill-dot]')).toHaveCSS('background-color', PINK)
+    const card = await alice.partnerCard()
+    await expect(card.locator('[data-status-label]')).toHaveText('Raiding')
+    await expect(card).toContainText('back at 9')
 
     const { data } = await serviceClient().from('profiles').select('custom_status_text').eq('id', IDS.users.bea).single()
     expect(data).toEqual({ custom_status_text: 'back at 9' })

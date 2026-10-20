@@ -2,41 +2,11 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { SPACES, isUnread } from '@/lib/spaces'
 import { listTimeLabel } from '@/lib/chat/preview'
-import { displayed } from '@/lib/presence'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
-import { usePresenceStore } from '@/stores/presenceStore'
+import { usePartner } from '@/hooks/usePartner'
 import { Avatar } from '@/components/ui/Avatar'
-import type { Profile, Space } from '@/types'
-
-/** What a list row needs of the partner. Never the PIN columns. */
-type PartnerProfile = Pick<Profile, 'id' | 'nickname' | 'avatar_url' | 'presence_override' | 'last_seen_at'>
-
-const PARTNER_COLUMNS = 'id, nickname, avatar_url, presence_override, last_seen_at'
-
-/** The other member of the conversation. Task 7's live profile store replaces this one-off read. */
-function usePartner(partnerId: string | null): PartnerProfile | null {
-  const [partner, setPartner] = useState<PartnerProfile | null>(null)
-  useEffect(() => {
-    if (!partnerId) {
-      setPartner(null)
-      return
-    }
-    let active = true
-    void supabase
-      .from('profiles')
-      .select(PARTNER_COLUMNS)
-      .eq('id', partnerId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (active) setPartner((data as PartnerProfile | null) ?? null)
-      })
-    return () => {
-      active = false
-    }
-  }, [partnerId])
-  return partner
-}
+import type { Space } from '@/types'
 
 /**
  * Unread messages across both spaces (not mine, newer than my read position). Counted on the server
@@ -89,12 +59,9 @@ export function ConversationList({ onOpen, activeHighlight = false }: Conversati
   const myId = useAuthStore((s) => s.user?.id ?? null)
   const conversation = useConversationStore((s) => s.conversation)
   const loading = useConversationStore((s) => s.loading)
-  const memberIds = useConversationStore((s) => s.memberIds)
   const latest = useConversationStore((s) => s.latest)
   const readAt = useConversationStore((s) => s.readAt)
-  const partnerId = memberIds.find((id) => id !== myId) ?? null
-  const partner = usePartner(partnerId)
-  const presence = usePresenceStore((s) => displayed(partnerId ? s.users[partnerId] : undefined, partner?.presence_override))
+  const { id: partnerId, profile: partner, presence } = usePartner()
 
   const unreadSpaces = SPACES.filter((space) =>
     isUnread({ latestAt: latest[space]?.at ?? null, latestAuthorId: latest[space]?.authorId ?? null, lastReadAt: readAt[space], myId }),

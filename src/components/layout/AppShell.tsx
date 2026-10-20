@@ -6,11 +6,11 @@ import { useStatusStore } from '@/stores/statusStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { defaultPhoneView, type PhoneView } from '@/lib/layout'
-import { ChannelHeader } from '@/components/channels/ChannelHeader'
+import { ChatHeader } from '@/components/chat2/ChatHeader'
+import { ReconnectBar } from '@/components/chat2/ReconnectBar'
 import { MessageList } from '@/components/chat/MessageList'
 import { MessageInput } from '@/components/chat/MessageInput'
 import { ChannelInfoPanel, type InfoTab } from '@/components/chat/ChannelInfoPanel'
-import { SpaceList } from '@/components/spaces/SpaceList'
 import { LeftColumn } from '@/components/layout/LeftColumn'
 import { ConversationList } from '@/components/layout/ConversationList'
 import { MeRow } from '@/components/layout/MeRow'
@@ -86,11 +86,8 @@ export function AppShell() {
   const chatColumn = (mobileBack?: () => void) =>
     conversationId ? (
       <>
-        <ChannelHeader space={activeSpace} mobileBack={mobileBack} onInfoOpen={openInfoPanel} />
-        {/* Temporary: the spaces move into the header's Main|Schist tabs in Task 7. */}
-        <div className="flex-shrink-0 border-b border-[color:var(--line)] bg-secondary">
-          <SpaceList />
-        </div>
+        <ChatHeader isDesktop={isDesktop} onBack={mobileBack} onOpenPanel={openInfoPanel} />
+        <ReconnectBar />
         <MessageList key={`list:${activeSpace}`} conversationId={conversationId} space={activeSpace} onSetReply={setReplyTo} />
         <MessageInput
           key={`input:${activeSpace}`}

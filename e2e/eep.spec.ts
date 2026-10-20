@@ -19,3 +19,15 @@ test('a wrong passphrase keeps the FF14 tool showing', async ({ alice }) => {
   await expect(alice.eepHeading).toBeVisible()
   await expect(alice.composer).toBeHidden()
 })
+
+test('the Eep! button shows the disguise immediately', async ({ alice }) => {
+  await alice.openChat()
+  await alice.header.getByRole('button', { name: 'Eep!' }).click()
+  // No confirmation step: the disguise is up straight away.
+  await expect(alice.eepHeading).toBeVisible()
+  await expect(alice.composer).toBeHidden()
+  await expect(alice.page.locator('[data-chat-header]')).toBeHidden()
+
+  await alice.enterPassphrase(EEP_PASSPHRASE)
+  await expect(alice.composer).toBeVisible()
+})

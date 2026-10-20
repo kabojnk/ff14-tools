@@ -1,4 +1,6 @@
 import { presenceOf } from '@/lib/status'
+import { listTimeLabel } from '@/lib/chat/preview'
+import type { DateOptions } from '@/lib/chat/dates'
 import type { Presence, PresenceOverride } from '@/types'
 
 export type { Presence, PresenceOverride }
@@ -83,4 +85,12 @@ export function lastSeen(profile: { last_seen_at?: string | null } | null | unde
   if (!profile?.last_seen_at) return null
   const ms = Date.parse(profile.last_seen_at)
   return Number.isNaN(ms) ? null : ms
+}
+
+/** The header subline: `online`, `away`, `last seen 9:14 AM` / `yesterday` / `Thu` / `Sep 3`, else `offline`. */
+export function presenceLine(presence: Presence, lastSeenMs: number | null, now: Date, options: DateOptions = {}): string {
+  if (presence !== 'offline') return presence
+  if (lastSeenMs === null) return 'offline'
+  const label = listTimeLabel(new Date(lastSeenMs), now, options)
+  return `last seen ${label === 'Yesterday' ? 'yesterday' : label}`
 }

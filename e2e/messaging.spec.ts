@@ -1,4 +1,5 @@
-import { expect, openUser, test } from './fixtures'
+import { afterDevicesClose, expect, openUser, test } from './fixtures'
+import { restore } from './supabase'
 
 test('messages arrive live for the other person, both ways', async ({ alice, bea }) => {
   await alice.openChat()
@@ -81,4 +82,24 @@ test('a slash command does not leave a typing indicator behind', async ({ alice,
   await bea.composer.press('Enter')
   await expect(bea.eepHeading).toBeVisible()
   await expect(typing).toBeHidden({ timeout: 1_000 })
+})
+
+test.describe('the ⋮ menu', () => {
+  afterDevicesClose(async () => {
+    await restore()
+  })
+
+  test('the ⋮ menu’s Drag the Lake clears both spaces', async ({ alice, bea }) => {
+    await bea.openChat('Schist')
+    await expect(bea.message('Seed: schist hello')).toBeVisible()
+    await alice.openChat('Main')
+    await expect(alice.message('Seed: hi Bea')).toBeVisible()
+
+    await (await alice.chatMenuItem('Drag the Lake')).click()
+    await expect(alice.page.getByRole('menu')).toHaveCount(0)
+    await expect(alice.message('Seed: hi Bea')).toHaveCount(0)
+    await alice.openSpace('Schist')
+    await expect(alice.message('Seed: schist hello')).toHaveCount(0)
+    await expect(bea.message('Seed: schist hello')).toHaveCount(0, { timeout: 5_000 })
+  })
 })

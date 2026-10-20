@@ -28,9 +28,28 @@ export class ChatUser {
     return this.page.locator('[data-realtime]').getByText(text, { exact: true })
   }
 
-  /** The Main or Schist entry in the space list (for now inside the chat column, on both layouts). */
+  /** The Main or Schist tab (under the header on phones, inline in it on desktop). */
   spaceButton(name: SpaceName) {
-    return this.page.locator(`[data-space="${name.toLowerCase()}"]`).filter({ visible: true }).first()
+    return this.page.getByRole('tab').and(this.page.locator(`[data-space="${name.toLowerCase()}"]`)).filter({ visible: true }).first()
+  }
+
+  /** The chat header: the partner, presence, status pill, Eep!, the ⋮ menu. */
+  get header() {
+    return this.page.locator('[data-chat-header]').filter({ visible: true }).first()
+  }
+
+  /** The partner's status pill in the header subline. */
+  get headerPill() {
+    return this.header.locator('[data-status-pill]')
+  }
+
+  /** Opens the partner's profile card from the header (desktop popover, phone sheet) and returns it. */
+  async partnerCard() {
+    await this.showChat()
+    await this.header.getByRole('button', { name: /^View .+'s profile$/ }).click()
+    const card = this.page.locator('[data-partner-card]').filter({ visible: true })
+    await expect(card).toBeVisible()
+    return card
   }
 
   /** The conversation's row in the conversation list (desktop left column; the phone list screen). */
@@ -72,7 +91,7 @@ export class ChatUser {
     await expect(this.meRow).toBeVisible()
   }
 
-  /** Switches to a space without reloading (on phones, from the list screen back into the chat first). */
+  /** Switches to a space with the Main|Schist tabs, without reloading (on phones, from the list screen back into the chat first). */
   async openSpace(name: SpaceName) {
     if (!(await this.spaceButton(name).isVisible())) await this.showChat()
     await this.spaceButton(name).click()
@@ -80,7 +99,7 @@ export class ChatUser {
     await expect(this.page.locator('[data-realtime="SUBSCRIBED"]')).toBeAttached()
   }
 
-  /** Makes the space list visible (it sits in the chat column until Task 7's tabs). */
+  /** Makes the Main|Schist tabs visible (phones: from the list screen back into the chat). */
   async showSpaces() {
     if (!(await this.spaceButton('Main').isVisible())) await this.showChat()
     await expect(this.spaceButton('Main')).toBeVisible()
@@ -106,19 +125,20 @@ export class ChatUser {
     await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
   }
 
-  /** Opens the info panel of the current space on a tab (desktop: the right slide-over; phones: full screen). */
+  /** Opens the info panel of the current space on a tab, from the header's ⋮ menu (desktop: the right slide-over; phones: full screen). */
   async openInfoPanel(tab: InfoTabName) {
-    const titles: Record<InfoTabName, string> = { Media: 'Media', Pins: 'Pinned Messages', Search: 'Search Messages' }
+    const items: Record<InfoTabName, string> = { Media: 'Media, files & links', Pins: 'Pinned messages', Search: 'Search messages' }
     await this.showChat()
-    const direct = this.page.getByTitle(titles[tab], { exact: true }).filter({ visible: true })
-    if ((await direct.count()) > 0) {
-      await direct.first().click()
-    } else {
-      // Phone: tapping the space name opens the panel; then pick the tab.
-      await this.page.locator('h3').filter({ visible: true }).first().click()
-      await this.page.getByRole('button', { name: tab, exact: true }).filter({ visible: true }).first().click()
-    }
+    await this.chatMenuItem(items[tab]).then((item) => item.click())
     await expect(this.page.getByRole('button', { name: 'Back', exact: true }).filter({ visible: true }).first()).toBeVisible()
+  }
+
+  /** Opens the header's ⋮ menu and returns one of its items. */
+  async chatMenuItem(name: string) {
+    await this.header.getByRole('button', { name: 'More', exact: true }).click()
+    const item = this.page.getByRole('menuitem', { name, exact: true })
+    await expect(item).toBeVisible()
+    return item
   }
 
   /** Opens the status picker from your avatar (on phones, on the list screen). */
@@ -128,10 +148,10 @@ export class ChatUser {
     await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
   }
 
-  /** Drag the Lake from the header's More actions menu. */
+  /** Drag the Lake from the header's ⋮ menu. */
   async dragTheLake() {
-    await this.page.getByTitle('More actions').filter({ visible: true }).first().click()
-    await this.page.getByRole('button', { name: 'Drag the Lake' }).filter({ visible: true }).first().click()
+    await this.showChat()
+    await (await this.chatMenuItem('Drag the Lake')).click()
   }
 
   /** Fill the Lake from Settings → Security (open it first with openSecurity). */

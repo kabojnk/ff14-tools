@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
@@ -40,6 +40,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: { from: h.from } }))
 import { ConversationList } from '@/components/layout/ConversationList'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
+import { useProfileStore } from '@/stores/profileStore'
 
 const CONV = { id: 'conv-1', title: null, archived: false, created_by: null, created_at: '2026-01-01T00:00:00Z' }
 const initialConv = useConversationStore.getState()
@@ -49,6 +50,7 @@ beforeEach(() => {
   for (const k of Object.keys(h.counts)) delete h.counts[k]
   useConversationStore.setState(initialConv, true)
   useAuthStore.setState({ user: { id: 'alice' } as User })
+  useProfileStore.setState({ profiles: { bea: { id: 'bea', nickname: 'Bea', avatar_url: null, presence_override: null, last_seen_at: null } as never } })
 })
 
 function withConversation(over: Partial<ReturnType<typeof useConversationStore.getState>> = {}) {
@@ -79,13 +81,13 @@ describe('ConversationList', () => {
     expect(countQueries[0].ops).toContainEqual(['neq', ['author_id', 'alice']])
   })
 
-  it('never reads the PIN columns of the partner profile', async () => {
+  it('reads the partner from the live profile store, with no query of its own', async () => {
     withConversation()
     render(<ConversationList />)
     await screen.findByRole('button', { name: /Bea/ })
-    const profile = h.queries.find((q) => q.table === 'profiles')!
-    const select = profile.ops.find(([n]) => n === 'select')![1][0] as string
-    expect(select).not.toMatch(/lock_pin/)
+    expect(h.queries.filter((q) => q.table === 'profiles')).toHaveLength(0)
+    act(() => useProfileStore.getState().apply({ id: 'bea', nickname: 'Bea renamed' }))
+    expect(screen.getByRole('button', { name: /Bea renamed/ })).toBeInTheDocument()
   })
 
   it('shows no badge when both spaces are read', async () => {

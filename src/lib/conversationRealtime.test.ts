@@ -69,7 +69,7 @@ function fakeClient() {
 }
 
 function handlers(): ConversationHandlers & { [K in keyof ConversationHandlers]: ReturnType<typeof vi.fn> } {
-  return { onMessage: vi.fn(), onTyping: vi.fn(), onTypingStop: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onStatus: vi.fn() }
+  return { onMessage: vi.fn(), onTyping: vi.fn(), onTypingStop: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onProfile: vi.fn(), onStatus: vi.fn() }
 }
 
 describe('conversationRealtime', () => {
@@ -172,6 +172,23 @@ describe('conversationRealtime', () => {
     const pg = created[0].listeners.filter((l) => l.type === 'postgres_changes')
     expect(pg.map((l) => l.filter.table).sort()).toEqual(['messages', 'messages', 'read_positions', 'read_positions', 'sessions'])
     for (const l of pg) expect(l.filter.filter).toBe('conversation_id=eq.c1')
+  })
+
+  it('binds profile updates for the members only, and hands the rows over', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h, { memberIds: ['u1', 'u2'] })
+    const profiles = created[0].listeners.filter((l) => l.type === 'postgres_changes' && l.filter.table === 'profiles')
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0].filter).toEqual({ event: 'UPDATE', schema: 'public', table: 'profiles', filter: 'id=in.(u1,u2)' })
+    created[0].emitPg('profiles', 'UPDATE', { new: { id: 'u2', nickname: 'Bea' } })
+    expect(h.onProfile).toHaveBeenCalledWith({ id: 'u2', nickname: 'Bea' })
+  })
+
+  it('binds no profile updates without members', () => {
+    const { client, created } = fakeClient()
+    createConversationRealtime(client).joinConversation('c1', handlers())
+    expect(created[0].listeners.filter((l) => l.filter.table === 'profiles')).toEqual([])
   })
 
   it('sends on the joined channel and stops after leaving', () => {

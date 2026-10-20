@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { setLakeBroadcaster, useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
+import { useProfileStore } from '@/stores/profileStore'
 import type { Message } from '@/types'
 
 setLakeBroadcaster(sendLake)
@@ -17,6 +18,10 @@ export function useConversationRealtime() {
   useEffect(() => {
     if (!conversationId || !myId) return
     const conv = useConversationStore.getState
+    // Members are loaded together with the conversation, so they're known by the time it joins.
+    const memberIds = conv().memberIds
+    const profiles = useProfileStore.getState
+    void profiles().load(memberIds)
 
     return joinConversation(conversationId, {
       onMessage(m, kind) {
@@ -50,13 +55,19 @@ export function useConversationRealtime() {
       onReadPosition(rp) {
         conv().applyReadPosition(rp, myId)
       },
+      onProfile(row) {
+        // apply() keeps only the known columns: the realtime row carries lock_pin, which is never stored.
+        profiles().apply(row)
+      },
       onStatus(status, rejoined) {
         conv().setRealtimeStatus(status)
         if (status !== 'SUBSCRIBED') return
         // Messages may have been missed while disconnected (or between load() and the first join).
-        if (rejoined) void conv().reloadAfterLake()
-        else void conv().refreshLatest()
+        if (rejoined) {
+          void conv().reloadAfterLake()
+          void profiles().load(memberIds)
+        } else void conv().refreshLatest()
       },
-    })
+    }, { memberIds })
   }, [conversationId, myId])
 }

@@ -13,6 +13,8 @@ export interface ConversationHandlers {
   onTypingStop(space: Space, userId: string): void
   onLake(): void
   onReadPosition(rp: ReadPosition): void
+  /** A member's profiles row changed. The full row, `lock_pin` included: the receiver must drop it. */
+  onProfile(row: Record<string, unknown>): void
   onStatus(s: RealtimeStatus, rejoined: boolean): void
 }
 
@@ -30,7 +32,7 @@ const LAKE_DEBOUNCE_MS = 250
 /**
  * Owns the one private `conv:<id>` channel per device. Message, typing and lake broadcasts for both
  * spaces travel on it, plus postgres_changes on messages, sessions and read positions as a safety net
- * (which also covers inserts from a cached old app).
+ * (which also covers inserts from a cached old app), and on the members' profiles.
  *
  * StrictMode-safe: the channel is created synchronously, a generation counter silences callbacks from
  * a channel that has been left, and a second join for the same conversation reuses the first.
@@ -45,7 +47,11 @@ export function createConversationRealtime(client: RealtimeClientLike) {
     if (client.getChannels().includes(ch)) client.forgetChannel(ch)
   }
 
-  function joinConversation(conversationId: string, handlers: ConversationHandlers): () => void {
+  function joinConversation(
+    conversationId: string,
+    handlers: ConversationHandlers,
+    { memberIds = [] }: { memberIds?: string[] } = {},
+  ): () => void {
     if (current && current.id === conversationId) return current.leave
     current?.leave()
 
@@ -107,6 +113,16 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'read_positions', filter }, (payload) => {
         if (live()) handlers.onReadPosition(payload.new as ReadPosition)
       })
+    // The members' profiles (name, avatar, status, presence override, last seen), live for the header.
+    if (memberIds.length > 0) {
+      channel.on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=in.(${memberIds.join(',')})` },
+        (payload) => {
+          if (live()) handlers.onProfile(payload.new as Record<string, unknown>)
+        },
+      )
+    }
 
     const leave = () => {
       if (!current || current.generation !== gen) return
