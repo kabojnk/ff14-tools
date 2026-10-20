@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { MediaViewer } from '@/components/chat/MediaViewer'
+import { MediaViewer } from '@/components/gallery/MediaViewer'
 import Markdown from '@/components/chat2/Markdown'
 import { useEmojiStore } from '@/stores/emojiStore'
 import { Portal } from '@/components/ui/Portal'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { MediaGallery } from '@/components/gallery/MediaGallery'
 import { SPACE_LABEL } from '@/lib/spaces'
-import type { MediaItem, Message, Space } from '@/types'
+import { useJumpStore } from '@/stores/jumpStore'
+import type { Message, Space } from '@/types'
 
 export type InfoTab = 'media' | 'pins' | 'search'
 
@@ -65,22 +66,43 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
     void unpinMessage(messageId)
   }
 
-  const handleSearch = async () => {
+  // The query whose results are showing: a space change (a jump from the gallery's "Both") re-runs it there.
+  const [ranQuery, setRanQuery] = useState<string | null>(null)
+  const searchSeq = useRef(0)
+  const runSearch = useCallback(
+    async (q: string) => {
+      const seq = ++searchSeq.current
+      setRanQuery(q)
+      setSearchLoading(true)
+      const { data } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .eq('space', space)
+        .eq('deleted', false)
+        .ilike('content', `%${q}%`)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (seq !== searchSeq.current) return // a newer search (or the same one in the new space) answers instead
+      setSearchResults((data as Message[]) ?? [])
+      setSearchLoading(false)
+    },
+    [conversationId, space],
+  )
+  const handleSearch = () => {
     const q = searchQuery.trim()
-    if (!q) return
-    setSearchLoading(true)
-    const { data } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .eq('space', space)
-      .eq('deleted', false)
-      .ilike('content', `%${q}%`)
-      .order('created_at', { ascending: false })
-      .limit(50)
-    setSearchResults((data as Message[]) ?? [])
-    setSearchLoading(false)
+    if (q) void runSearch(q)
   }
+  const searchedSpace = useRef(space)
+  useEffect(() => {
+    if (searchedSpace.current === space) return
+    searchedSpace.current = space
+    if (ranQuery) void runSearch(ranQuery)
+  }, [space, ranQuery, runSearch])
+
+  /** Pins and search results show their message in the chat (AppShell closes the panel on phones). */
+  const jump = (message: Message) =>
+    useJumpStore.getState().request({ messageId: message.id, space: message.space, created_at: message.created_at })
 
   useEffect(() => {
     if (activeTab === 'search') {
@@ -148,6 +170,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
                   <PinnedMessageCard
                     key={msg.id}
                     message={msg}
+                    onShow={() => jump(msg)}
                     onUnpin={() => handleUnpin(msg.id)}
                   />
                 ))}
@@ -195,7 +218,7 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
               {!searchLoading && searchResults.length > 0 && (
                 <div className="divide-y divide-[color:var(--line)]">
                   {searchResults.map((msg) => (
-                    <SearchResultCard key={msg.id} message={msg} query={searchQuery} />
+                    <SearchResultCard key={msg.id} message={msg} query={ranQuery ?? searchQuery} onShow={() => jump(msg)} />
                   ))}
                 </div>
               )}
@@ -207,28 +230,28 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
   return panel ? body : <Portal>{body}</Portal>
 }
 
-/** The Media tab: the gallery, opening a tapped photo, video or GIF in the viewer. */
+/** The Media tab: the gallery, opening a tapped photo, video or GIF in the viewer, with "Show in chat". */
 function MediaTab({ conversationId, space, scrollRoot }: { conversationId: string; space: Space; scrollRoot: Element | null }) {
-  // The viewer shows one item for now; the swipeable viewer will take the whole list (onOpen's second argument).
-  const [viewer, setViewer] = useState<MediaItem | null>(null)
   return (
-    <>
-      <MediaGallery
-        conversationId={conversationId}
-        space={space}
-        scrollRoot={scrollRoot}
-        onOpen={(index, items) => setViewer(items[index] ?? null)}
-      />
-      {viewer && (
+    <MediaGallery
+      conversationId={conversationId}
+      space={space}
+      scrollRoot={scrollRoot}
+      renderViewer={({ items, index, hasMore, loading, loadMore, onClose }) => (
         <MediaViewer
-          url={viewer.url}
-          filename={viewer.filename ?? ''}
-          type={viewer.kind as 'image' | 'gif' | 'video'}
-          spoiler={viewer.spoiler}
-          onClose={() => setViewer(null)}
+          items={items}
+          index={index}
+          hasMore={hasMore}
+          loading={loading}
+          onLoadMore={loadMore}
+          onClose={onClose}
+          onShowInChat={(item) => {
+            onClose()
+            useJumpStore.getState().request({ messageId: item.message_id, space: item.space, created_at: item.created_at })
+          }}
         />
       )}
-    </>
+    />
   )
 }
 
@@ -240,20 +263,36 @@ function EmptyState({ label }: { label: string }) {
   )
 }
 
-function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: () => void }) {
+/** A pinned message. Tapping it shows it in the chat; links inside still open. */
+function PinnedMessageCard({ message, onShow, onUnpin }: { message: Message; onShow: () => void; onUnpin: () => void }) {
   const emoji = useEmojiStore((s) => s.lookup)
   const date = new Date(message.created_at)
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
 
   return (
-    <div className="flex items-start gap-3 px-4 py-3">
+    <div data-pin-card className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-hover">
       <div className="mt-0.5 flex-shrink-0 text-muted">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="12" y1="17" x2="12" y2="22" />
           <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
         </svg>
       </div>
-      <div className="min-w-0 flex-1">
+      {/* A div with the button role: the rendered message may hold links, which can't sit inside a <button>. */}
+      <div
+        role="button"
+        tabIndex={0}
+        title="Show in chat"
+        onClick={(e) => {
+          if ((e.target as Element).closest('a')) return
+          onShow()
+        }}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+          e.preventDefault()
+          onShow()
+        }}
+        className="min-w-0 flex-1 cursor-pointer rounded text-left"
+      >
         <div className="mb-1 flex items-baseline gap-2">
           <span className="text-xs text-muted">{dateStr}</span>
         </div>
@@ -277,7 +316,8 @@ function PinnedMessageCard({ message, onUnpin }: { message: Message; onUnpin: ()
   )
 }
 
-function SearchResultCard({ message, query }: { message: Message; query: string }) {
+/** A search result: a button that shows the message in the chat. */
+function SearchResultCard({ message, query, onShow }: { message: Message; query: string; onShow: () => void }) {
   const date = new Date(message.created_at)
   const dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -292,14 +332,14 @@ function SearchResultCard({ message, query }: { message: Message; query: string 
   }
 
   return (
-    <div className="px-4 py-3">
-      <div className="mb-1 text-xs text-muted">{dateStr}</div>
+    <button type="button" data-search-result title="Show in chat" onClick={onShow} className="block w-full px-4 py-3 text-left transition-colors hover:bg-hover">
+      <span className="mb-1 block text-xs text-muted">{dateStr}</span>
       {message.content && (
-        <p className="text-sm text-secondary">{highlight(message.content)}</p>
+        <span className="block text-sm text-secondary">{highlight(message.content)}</span>
       )}
       {message.attachments?.length > 0 && (
-        <div className="mt-1 text-xs text-muted italic">📎 Attachment</div>
+        <span className="mt-1 block text-xs text-muted italic">📎 Attachment</span>
       )}
-    </div>
+    </button>
   )
 }

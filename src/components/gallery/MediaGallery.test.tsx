@@ -27,7 +27,7 @@ const { useMediaGallery, main, fallback } = vi.hoisted(() => {
 })
 vi.mock('@/hooks/useMediaGallery', () => ({ useMediaGallery }))
 
-import { MediaGallery } from '@/components/gallery/MediaGallery'
+import { MediaGallery, type GalleryViewerProps } from '@/components/gallery/MediaGallery'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore } from '@/stores/profileStore'
 
@@ -148,6 +148,29 @@ describe('MediaGallery', () => {
     const { onOpen } = renderGallery()
     await userEvent.click(document.querySelectorAll('[data-media-item]')[2] as HTMLElement)
     expect(onOpen).toHaveBeenCalledWith(2, items)
+  })
+
+  it('hands the viewer the live list: new pages, hasMore and loadMore', async () => {
+    const loadMore = vi.fn()
+    const items = [item(), item({ kind: 'file' }), item({ kind: 'video' })]
+    main.current = gallery({ items, hasMore: true, loadMore })
+    const renderViewer = vi.fn((_props: GalleryViewerProps) => <div data-testid="viewer" />)
+    const { rerender } = render(<MediaGallery conversationId="conv" space="main" renderViewer={renderViewer} />)
+    expect(renderViewer).not.toHaveBeenCalled()
+    await userEvent.click(document.querySelectorAll('[data-media-item]')[1] as HTMLElement)
+    expect(screen.getByTestId('viewer')).toBeInTheDocument()
+    expect(renderViewer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ items: [items[0], items[2]], index: 1, hasMore: true, loading: false, loadMore }),
+    )
+
+    const more = item()
+    main.current = gallery({ items: [...items, more], hasMore: false, loadMore })
+    rerender(<MediaGallery conversationId="conv" space="main" renderViewer={renderViewer} />)
+    expect(renderViewer).toHaveBeenLastCalledWith(expect.objectContaining({ items: [items[0], items[2], more], index: 1, hasMore: false }))
+
+    const last = renderViewer.mock.calls[renderViewer.mock.calls.length - 1]
+    act(() => last[0].onClose())
+    expect(screen.queryByTestId('viewer')).toBeNull()
   })
 
   it('shows a link’s site large, and the address, sender and date small', () => {

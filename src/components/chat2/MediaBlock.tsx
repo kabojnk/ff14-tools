@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileText, ImageOff, Play } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
-import { MediaViewer } from '@/components/chat/MediaViewer'
+import { MediaViewer, type ViewerItem } from '@/components/gallery/MediaViewer'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatDuration } from '@/lib/gallery'
 import { formatSize } from '@/lib/media'
-import type { Attachment } from '@/types'
+import { useMessageStore } from '@/stores/messageStore'
+import type { Attachment, Message } from '@/types'
 
 type Visual = Attachment & { type: 'image' | 'video' | 'gif' }
 
@@ -35,7 +36,30 @@ export function MediaBlock({ messageId, attachments, overlay }: MediaBlockProps)
   const extra = visual.length - shown.length
   const hidden = (index: number) => attachments[index].spoiler && !revealed.has(index)
   const reveal = (index: number) => setRevealed((prev) => new Set(prev).add(index))
-  const open = viewer === null ? null : attachments[viewer]
+  // The viewer goes through this message's photos, videos and GIFs (no "Show in chat": you're there).
+  const viewerItems = useMemo<ViewerItem[]>(
+    () =>
+      viewer === null
+        ? []
+        : attachments.flatMap((a, index) => {
+            if (!isVisual(a)) return []
+            const m = findMessage(messageId)
+            return [
+              {
+                id: `${messageId}:${index}`,
+                message_id: messageId,
+                url: a.url,
+                filename: a.filename,
+                kind: a.type,
+                spoiler: !!a.spoiler,
+                space: m?.space,
+                created_at: m?.created_at,
+                author_id: m?.author_id,
+              },
+            ]
+          }),
+    [viewer, attachments, messageId],
+  )
 
   return (
     <div data-media={messageId} className="flex flex-col gap-1">
@@ -73,8 +97,12 @@ export function MediaBlock({ messageId, attachments, overlay }: MediaBlockProps)
       ))}
       {overlay && shown.length === 0 && <div className="self-end">{overlay}</div>}
 
-      {open && isVisual(open) && (
-        <MediaViewer url={open.url} filename={open.filename} type={open.type} onClose={() => setViewer(null)} />
+      {viewer !== null && viewerItems.length > 0 && (
+        <MediaViewer
+          items={viewerItems}
+          index={Math.max(0, viewerItems.findIndex((i) => i.id === `${messageId}:${viewer}`))}
+          onClose={() => setViewer(null)}
+        />
       )}
     </div>
   )
@@ -215,6 +243,15 @@ function FileRow({ attachment: a }: { attachment: Attachment }) {
       </span>
     </a>
   )
+}
+
+/** The loaded message with this id (any space): the viewer's sender, space and time. */
+function findMessage(id: string): Message | undefined {
+  for (const list of Object.values(useMessageStore.getState().messages)) {
+    const m = list.find((x) => x.id === id)
+    if (m) return m
+  }
+  return undefined
 }
 
 const stop = (fn: () => void) => (e: { stopPropagation: () => void }) => {

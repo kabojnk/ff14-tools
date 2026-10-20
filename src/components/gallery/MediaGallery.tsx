@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { FileText, ImageOff, Link2, Mic, Play } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
 import { MediaFilters } from '@/components/chat/MediaFilters'
@@ -10,11 +10,25 @@ import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore } from '@/stores/profileStore'
 import type { MediaItem, Space } from '@/types'
 
+/** What the gallery hands its viewer while one is open: the live list it was opened from. */
+export interface GalleryViewerProps {
+  /** Every loaded photo, video and GIF of that list, in gallery order; grows as pages arrive. */
+  items: MediaItem[]
+  /** The one tapped. */
+  index: number
+  hasMore: boolean
+  loading: boolean
+  loadMore: () => void
+  onClose: () => void
+}
+
 export interface MediaGalleryProps {
   conversationId: string
   space: Space
   /** A thumbnail was tapped: its index among `visualItems` (every loaded photo, video and GIF, in gallery order). */
-  onOpen: (index: number, visualItems: MediaItem[]) => void
+  onOpen?: (index: number, visualItems: MediaItem[]) => void
+  /** Renders the viewer while a thumbnail is open, kept up to date with the gallery's pages and deletions. */
+  renderViewer?: (props: GalleryViewerProps) => ReactNode
   /** The scroll container the gallery sits in: the root for infinite scroll and for "in view". Null: the viewport. */
   scrollRoot?: Element | null
 }
@@ -31,7 +45,7 @@ const METADATA_TIMEOUT_MS = 8000
  * GIFs, then file and link rows. With an extension filter the matches get a "1 file · .pmp" header, and fewer
  * than 3 matches bring in a dimmed "Without the filter" section. Scrolling to the end loads the next page.
  */
-export function MediaGallery({ conversationId, space, onOpen, scrollRoot = null }: MediaGalleryProps) {
+export function MediaGallery({ conversationId, space, onOpen, renderViewer, scrollRoot = null }: MediaGalleryProps) {
   const [kind, setKind] = useState<MediaFilterKind>('all')
   const [extension, setExtension] = useState('')
   const [scope, setScope] = useState<MediaScope>('space')
@@ -51,12 +65,21 @@ export function MediaGallery({ conversationId, space, onOpen, scrollRoot = null 
   const now = new Date()
 
   const visual = useMemo(() => main.items.filter(isVisual), [main.items])
-  const open = (item: MediaItem) => onOpen(visual.indexOf(item), visual)
-
   const fallbackItems = useMemo(() => {
     const shown = new Set(main.items.map((i) => i.id))
     return fallback.items.filter((i) => !shown.has(i.id))
   }, [fallback.items, main.items])
+  const fallbackVisual = useMemo(() => fallbackItems.filter(isVisual), [fallbackItems])
+
+  // The open viewer: which list it came from and where. `key` gives each opening a fresh viewer.
+  const [viewer, setViewer] = useState<{ list: 'main' | 'fallback'; index: number; key: number } | null>(null)
+  const openIn = (list: 'main' | 'fallback', item: MediaItem) => {
+    const items = list === 'main' ? visual : fallbackVisual
+    const index = items.indexOf(item)
+    onOpen?.(index, items)
+    setViewer((v) => ({ list, index, key: (v?.key ?? 0) + 1 }))
+  }
+  const open = (item: MediaItem) => openIn('main', item)
   const showFallback = ext !== null && !main.loading && !main.error && main.items.length < FALLBACK_BELOW && fallbackItems.length > 0
 
   const emptyLabel =
@@ -118,7 +141,7 @@ export function MediaGallery({ conversationId, space, onOpen, scrollRoot = null 
             <SectionHeader>Without the filter</SectionHeader>
             {fallbackItems.some(isVisual) && (
               <div className="grid grid-cols-3 gap-[3px]">
-                {fallbackItems.filter(isVisual).map((i, index, all) => thumb(i, () => onOpen(index, all), true))}
+                {fallbackVisual.map((i) => thumb(i, () => openIn('fallback', i), true))}
               </div>
             )}
             {fallbackItems.filter((i) => !isVisual(i)).map((i) => row(i, true))}
@@ -131,6 +154,16 @@ export function MediaGallery({ conversationId, space, onOpen, scrollRoot = null 
           <Sentinel root={scrollRoot} loading={main.loading} loadMore={main.loadMore} />
         )}
       </div>
+
+      {viewer && renderViewer && (
+        <Fragment key={viewer.key}>
+          {renderViewer(
+            viewer.list === 'main'
+              ? { items: visual, index: viewer.index, hasMore: main.hasMore && !main.error, loading: main.loading, loadMore: main.loadMore, onClose: () => setViewer(null) }
+              : { items: fallbackVisual, index: viewer.index, hasMore: false, loading: false, loadMore: () => {}, onClose: () => setViewer(null) },
+          )}
+        </Fragment>
+      )}
     </div>
   )
 }

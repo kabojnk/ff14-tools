@@ -4,6 +4,7 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useUiStore } from '@/stores/uiStore'
 import { useComposerStore } from '@/stores/composerStore'
 import { useStatusStore } from '@/stores/statusStore'
+import { useJumpStore } from '@/stores/jumpStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useKeyboardViewport } from '@/hooks/useKeyboardViewport'
@@ -17,7 +18,7 @@ import { LeftColumn } from '@/components/layout/LeftColumn'
 import { ConversationList } from '@/components/layout/ConversationList'
 import { MeRow } from '@/components/layout/MeRow'
 import { SlideOver } from '@/components/layout/SlideOver'
-import type { Message } from '@/types'
+import type { Message, Space } from '@/types'
 
 /**
  * Phone: straight into the chat; the header's back chevron leads to the conversation list.
@@ -32,6 +33,8 @@ export function AppShell() {
   const conversationLoading = useConversationStore((s) => s.loading)
   const activeSpace = useConversationStore((s) => s.activeSpace)
   const loadConversation = useConversationStore((s) => s.load)
+  const setActiveSpace = useConversationStore((s) => s.setActiveSpace)
+  const pendingJump = useJumpStore((s) => s.pending)
   // null until the person navigates: then the default follows the number of conversations.
   const [chosenView, setChosenView] = useState<PhoneView | null>(null)
   const [infoTab, setInfoTab] = useState<InfoTab>('media')
@@ -64,8 +67,30 @@ export function AppShell() {
 
   const conversationId = conversation?.id ?? null
 
-  // Reset reply and info panel when the space changes
+  // A jump to a message ("Show in chat", a pin, a search result): switch to its space; MessageList takes it from
+  // there. Phones close the info panel (and the viewer in it) to show the chat; the desktop panel stays open, so
+  // you can go through several results.
+  const jumpSpaceRef = useRef<Space | null>(null)
+  const isDesktopRef = useRef(isDesktop)
+  isDesktopRef.current = isDesktop
+  const activeSpaceRef = useRef(activeSpace)
+  activeSpaceRef.current = activeSpace
   useEffect(() => {
+    if (!pendingJump) return
+    if (!isDesktopRef.current) setShowInfo(false)
+    if (pendingJump.space !== activeSpaceRef.current) {
+      jumpSpaceRef.current = pendingJump.space
+      setActiveSpace(pendingJump.space)
+    }
+  }, [pendingJump, setActiveSpace])
+
+  // A manual space change resets the reply, the edit and the info panel. One caused by a jump keeps them.
+  useEffect(() => {
+    if (jumpSpaceRef.current === activeSpace) {
+      jumpSpaceRef.current = null
+      return
+    }
+    jumpSpaceRef.current = null
     setReplyTo(null)
     setShowInfo(false)
     useComposerStore.getState().cancelEdit()

@@ -7,6 +7,7 @@ import { useTypingStore } from '@/stores/typingStore'
 import { PROFILE_COLUMNS, useProfileStore } from '@/stores/profileStore'
 import { useReactionStore } from '@/stores/reactionStore'
 import { useEmojiStore } from '@/stores/emojiStore'
+import { useJumpStore } from '@/stores/jumpStore'
 import { HAS_PIN_KEY } from '@/stores/uiStore'
 import type { Profile } from '@/types'
 import type { User, Session } from '@supabase/supabase-js'
@@ -96,6 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     useProfileStore.getState().reset()
     useReactionStore.getState().reset()
     useEmojiStore.getState().reset()
+    useJumpStore.getState().reset()
     // Every logout path comes through here: the next login on this device must not launch locked.
     try {
       localStorage.removeItem(HAS_PIN_KEY)

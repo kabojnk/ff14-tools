@@ -6,6 +6,7 @@ import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useEmojiStore } from '@/stores/emojiStore'
+import { useJumpStore } from '@/stores/jumpStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -34,6 +35,8 @@ const AT_BOTTOM_PX = 150
 const PIN_WINDOW_MS = 700
 /** Older pages loaded while looking for a reply's original. */
 const MAX_REPLY_PAGES = 10
+/** A safety cap for jumps from outside the list (gallery, pins, search), which page back by time instead. */
+const MAX_JUMP_PAGES = 200
 
 /**
  * Where each space was left: 'bottom' or a scrollTop. The list remounts per space, so switching tabs
@@ -292,28 +295,86 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
   const onUnpin = useCallback((id: string) => void unpinMessage(id), [unpinMessage])
   const onBroadcastDelete = useCallback((id: string) => sendMessageEvent('delete', { id, space }), [space])
 
+  const findRow = useCallback(
+    (id: string) => containerRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`) ?? null,
+    [],
+  )
+
+  /**
+   * Centres a found row and flashes it. The list is no longer "at the bottom", and the position is remembered,
+   * so the 400 ms re-pin, the ResizeObserver and a later return to this space don't scroll it away.
+   */
+  const reveal = useCallback(
+    (el: HTMLElement, id: string) => {
+      const c = containerRef.current
+      if (!c) return
+      atBottomRef.current = false
+      pinnedUntilRef.current = 0
+      const top = Math.max(0, el.offsetTop - (c.clientHeight - el.offsetHeight) / 2)
+      scrollMemory.set(key, top)
+      c.scrollTo({ top, behavior: 'smooth' })
+      setFlashId(id)
+    },
+    [key],
+  )
+
   /** Scrolls to a reply's original and flashes it, loading older pages (up to 10) until it's found. */
   const onJump = useCallback(
     async (id: string) => {
-      const find = () => containerRef.current?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(id)}"]`) ?? null
-      let el = find()
+      let el = findRow(id)
       for (let page = 0; !el && page < MAX_REPLY_PAGES; page++) {
         const more = await useMessageStore.getState().fetchOlder(conversationId, space)
         await nextFrame()
         await nextFrame()
-        el = find()
+        el = findRow(id)
         if (!more) break
       }
       if (!el) {
         setNotice("Couldn't find the original message")
         return
       }
-      atBottomRef.current = false
-      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
-      setFlashId(id)
+      reveal(el, id)
     },
-    [conversationId, space],
+    [conversationId, space, findRow, reveal],
   )
+
+  /**
+   * A jump from outside the list ("Show in chat", a pin, a search result): pages back until the oldest loaded
+   * message is older than the target's time (or the history ends), then flashes it, or says it's gone.
+   */
+  const jumpTo = useCallback(
+    async (id: string, createdAt: string) => {
+      const target = time(createdAt)
+      const loadedPast = () => {
+        const oldest = (useMessageStore.getState().messages[key] ?? []).find((m) => !m.localState)
+        // Strictly older: messages sharing the target's time may sit on the next page back.
+        return !oldest || time(oldest.created_at) < target
+      }
+      let el = findRow(id)
+      for (let page = 0; !el && !loadedPast() && page < MAX_JUMP_PAGES; page++) {
+        const more = await useMessageStore.getState().fetchOlder(conversationId, space)
+        await nextFrame()
+        await nextFrame()
+        el = findRow(id)
+        if (!more) break
+      }
+      if (!el) {
+        setNotice("Couldn't find that message. It may have been deleted.")
+        return
+      }
+      reveal(el, id)
+    },
+    [conversationId, space, key, findRow, reveal],
+  )
+
+  // Taken only once the list has opened (after the open-position layout effect), so the jump wins over it.
+  // A jump that switched space is taken by the new list as soon as it opens.
+  const pendingJump = useJumpStore((s) => s.pending)
+  useEffect(() => {
+    if (!ready || !opened || !pendingJump) return
+    const request = useJumpStore.getState().take(space)
+    if (request) void jumpTo(request.messageId, request.created_at)
+  }, [ready, opened, pendingJump, space, jumpTo])
 
   const unseen = useMemo(
     () => messages.filter((m) => m.author_id !== myId && time(m.created_at) > seenUpTo).length,

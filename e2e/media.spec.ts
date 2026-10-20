@@ -21,7 +21,7 @@ function extensionBox(user: ChatUser) {
   return user.page.getByPlaceholder('extension, e.g. zip').filter({ visible: true })
 }
 
-/** Stands in for an upload: Bea posts an image in Schist, in the current session. */
+/** Stands in for an upload: Bea posts an image in Schist, in the current session. Returns the message id. */
 async function beaPostsImageInSchist() {
   const id = randomUUID()
   const { error } = await serviceClient().from('messages').insert({
@@ -38,7 +38,35 @@ async function beaPostsImageInSchist() {
   })
   if (error) throw new Error(error.message)
   created.push(id)
+  return id
 }
+
+/** An old Main message from Bea (two days ago) with `fillers` newer messages after it, so the list must page back to it. */
+async function oldMessageBehind(fillers: number) {
+  const content = `Jump target ${randomUUID().slice(0, 8)}`
+  const now = Date.now()
+  const row = (content: string, at: number) => ({
+    id: randomUUID(),
+    conversation_id: IDS.conversation,
+    space: 'main',
+    session_id: IDS.sessions.current,
+    author_id: IDS.users.bea,
+    content,
+    attachments: [],
+    type: 'text',
+    created_at: new Date(at).toISOString(),
+  })
+  const target = row(content, now - 2 * 86_400_000)
+  // Newer than the seed, so the first page holds only fillers.
+  const rows = [target, ...Array.from({ length: fillers }, (_, i) => row(`Filler ${i}`, now - 30_000 + i * 10))]
+  const { error } = await serviceClient().from('messages').insert(rows)
+  if (error) throw new Error(error.message)
+  created.push(...rows.map((r) => r.id))
+  return { id: target.id, content }
+}
+
+const row = (user: ChatUser, id: string) => user.page.locator(`[data-realtime] [data-message-id="${id}"]`)
+const viewer = (user: ChatUser) => user.page.getByRole('dialog', { name: 'Media viewer' })
 
 test.describe('Media gallery', () => {
   test('the extension filter ignores dots and case', async ({ alice }) => {
@@ -121,5 +149,78 @@ test.describe('Media gallery', () => {
 
     await chip(alice, 'This space').click()
     await expect(alice.mediaItems).toHaveCount(1)
+  })
+
+  test('Show in chat from Both switches to Schist and flashes the message', async ({ alice }) => {
+    const id = await beaPostsImageInSchist()
+    await alice.openChat('Main')
+    await alice.openInfoPanel('Media')
+    await chip(alice, 'Both').click()
+    await expect(alice.mediaItems).toHaveCount(4)
+    await alice.mediaItems.filter({ has: alice.page.locator('img[alt="schist-shot.png"]') }).click()
+
+    const v = viewer(alice)
+    await expect(v).toBeVisible()
+    await expect(v.getByText('Bea', { exact: true })).toBeVisible()
+    await expect(v.getByText(/^Schist · /)).toBeVisible()
+    await v.getByRole('button', { name: 'Show in chat' }).click()
+
+    await expect(v).toBeHidden()
+    await expect(alice.spaceButton('Schist')).toHaveAttribute('aria-selected', 'true')
+    await expect(row(alice, id)).toHaveClass(/msg-flash/)
+    // Desktop keeps the panel open, following the space; phones close it to show the chat.
+    const panelTitle = alice.page.getByRole('heading', { name: 'Schist', exact: true })
+    if (await alice.isPhone()) await expect(panelTitle).toBeHidden()
+    else await expect(panelTitle).toBeVisible()
+  })
+
+  test('the viewer counts the loaded photos and moves with the arrows or a swipe', async ({ alice }) => {
+    await alice.openChat('Main')
+    await alice.openInfoPanel('Media')
+    await expect(alice.mediaItems).toHaveCount(3)
+    await alice.mediaItems.first().click()
+    const v = viewer(alice)
+    const count = v.getByTestId('viewer-count')
+    await expect(count).toHaveText('1 of 3')
+    await expect(v.getByRole('button', { name: 'Previous' })).toBeDisabled()
+
+    if (await alice.isPhone()) {
+      const stage = v.locator('[data-viewer-stage]')
+      const box = (await stage.boundingBox())!
+      const y = box.y + box.height / 2
+      const swipe = { pointerType: 'touch', isPrimary: true, pointerId: 7, button: 0 }
+      await stage.dispatchEvent('pointerdown', { ...swipe, clientX: box.x + box.width * 0.8, clientY: y })
+      await stage.dispatchEvent('pointerup', { ...swipe, clientX: box.x + box.width * 0.2, clientY: y })
+    } else {
+      await v.getByRole('button', { name: 'Next' }).click()
+    }
+    await expect(count).toHaveText('2 of 3')
+    await alice.page.keyboard.press('ArrowRight')
+    await expect(count).toHaveText('3 of 3')
+    await expect(v.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await v.getByRole('button', { name: 'Close' }).click()
+    await expect(v).toBeHidden()
+  })
+
+  test('a search result pages back to an old message and flashes it', async ({ alice }) => {
+    const target = await oldMessageBehind(60)
+    await alice.openChat('Main')
+    await expect(row(alice, target.id)).toHaveCount(0) // not on the first page
+    await alice.openInfoPanel('Search')
+    const box = alice.page.getByPlaceholder('Search messages…').filter({ visible: true })
+    await box.fill(target.content)
+    await box.press('Enter')
+    await alice.page.getByRole('button', { name: new RegExp(target.content) }).filter({ visible: true }).click()
+
+    await expect(row(alice, target.id)).toHaveClass(/msg-flash/)
+    await expect(row(alice, target.id)).toBeInViewport()
+  })
+
+  test('a pinned message jumps to its row', async ({ alice }) => {
+    await alice.openChat('Main')
+    await alice.openInfoPanel('Pins')
+    // In the panel: the conversation list's row also shows the newest message, Seed: pinned note.
+    await alice.page.locator('[data-pin-card]').getByRole('button', { name: /Seed: pinned note/ }).filter({ visible: true }).click()
+    await expect(alice.messageRow('Seed: pinned note')).toHaveClass(/msg-flash/)
   })
 })
