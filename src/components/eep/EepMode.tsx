@@ -3,23 +3,22 @@ import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
 import { getRandomDuties, getDifficultyColor, type FF14Duty } from '@/lib/ff14data'
 import { PinPad } from '@/components/pin/PinPad'
+import { logOut } from '@/lib/logout'
 
 interface EepModeProps {
   onLoginClick?: () => void
 }
 
 export function EepMode({ onLoginClick }: EepModeProps) {
-  const { setEepMode, eepPassphrase, pinLength, pinLocked, unlockPin, clearPin, verifyPin } = useUiStore()
-  const { user, signOut } = useAuthStore()
+  const { setEepMode, eepPassphrase, pinLength, pinLocked, unlockPin, verifyPin } = useUiStore()
+  const user = useAuthStore((s) => s.user)
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
   const [showPinPad, setShowPinPad] = useState(false)
 
-  const handleLogout = async () => {
-    await signOut()
-    clearPin()
-    // Reset eepMode so the next login opens straight to chat, not eep
-    setEepMode(false)
+  // Signs out, clears the PIN and resets eepMode so the next login opens straight to chat.
+  const handleLogout = () => {
+    void logOut()
   }
 
   const rollContent = useCallback(() => {

@@ -6,6 +6,9 @@ vi.mock('@/lib/supabase', () => ({
   supabase: { from: vi.fn(), rpc: vi.fn(), auth: { signOut: vi.fn() } },
 }))
 
+const { mockLogOut } = vi.hoisted(() => ({ mockLogOut: vi.fn() }))
+vi.mock('@/lib/logout', () => ({ logOut: mockLogOut }))
+
 import { EepMode } from '@/components/eep/EepMode'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -55,5 +58,14 @@ describe('EepMode passphrase', () => {
     enterPassphrase(PASSPHRASE)
     expect(useUiStore.getState().eepMode).toBe(true)
     expect(screen.getByTestId('pin-dots')).toBeInTheDocument()
+  })
+})
+
+describe('EepMode Logout', () => {
+  it('logs out through the shared logOut()', () => {
+    mockLogOut.mockReset().mockResolvedValue(undefined)
+    render(<EepMode />)
+    fireEvent.click(screen.getByRole('button', { name: 'Logout' }))
+    expect(mockLogOut).toHaveBeenCalledTimes(1)
   })
 })
