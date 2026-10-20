@@ -204,4 +204,35 @@ describe('messageStore', () => {
       expect(await useMessageStore.getState().fetchOlder('conv-1', 'main')).toBe(false)
     })
   })
+  describe('setAttachmentSpoiler', () => {
+    const withMedia = (): Message => ({
+      ...msg('m1', 'main'),
+      attachments: [
+        { url: 'a.png', type: 'image', filename: 'a.png', size: 1, spoiler: false },
+        { url: 'b.png', type: 'image', filename: 'b.png', size: 1, spoiler: false },
+      ],
+    })
+    const flags = () => useMessageStore.getState().messages[MAIN][0].attachments.map((a) => a.spoiler)
+
+    it('marks the item at once and calls set_attachment_spoiler', async () => {
+      useMessageStore.getState().addMessage(MAIN, withMedia())
+      let resolve!: (v: unknown) => void
+      mockRpc.mockReturnValue(new Promise((r) => (resolve = r)))
+      const done = useMessageStore.getState().setAttachmentSpoiler(MAIN, 'm1', 1, true)
+      expect(flags()).toEqual([false, true])
+      expect(mockRpc).toHaveBeenCalledWith('set_attachment_spoiler', { p_message: 'm1', p_index: 1, p_spoiler: true })
+      resolve({ data: null, error: null })
+      expect(await done).toBe(true)
+      expect(flags()).toEqual([false, true])
+    })
+
+    it('rolls the item back when the RPC fails, leaving the other items alone', async () => {
+      useMessageStore.getState().addMessage(MAIN, withMedia())
+      mockRpc.mockResolvedValue({ data: null, error: { code: '42501', message: 'no' } })
+      const done = useMessageStore.getState().setAttachmentSpoiler(MAIN, 'm1', 0, true)
+      expect(flags()).toEqual([true, false])
+      expect(await done).toBe(false)
+      expect(flags()).toEqual([false, false])
+    })
+  })
 })

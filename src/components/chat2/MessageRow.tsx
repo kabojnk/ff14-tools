@@ -4,7 +4,8 @@ import { DateChip } from '@/components/chat2/DateChip'
 import { MessageReactions } from '@/components/chat2/Reactions'
 import { ReplyStrip } from '@/components/chat2/ReplyStrip'
 import type { EmojiLookup } from '@/components/chat2/Markdown'
-import { LegacyMessageExtras } from '@/components/chat/legacy/LegacyMessageExtras'
+import { MessageActions } from '@/components/chat2/MessageActions'
+import { LegacyInlineEdit } from '@/components/chat/legacy/LegacyInlineEdit'
 import { supabase } from '@/lib/supabase'
 import type { Tick } from '@/lib/chat'
 import { useMessageStore } from '@/stores/messageStore'
@@ -24,6 +25,7 @@ interface MessageRowProps {
   pinned: boolean
   /** spaceKey(conversationId, space) of the list. */
   spaceKey: string
+  isDesktop: boolean
   emoji: EmojiLookup
   onHighlight: () => void
   onRetry: (id: string) => void
@@ -32,11 +34,13 @@ interface MessageRowProps {
   onPin: (id: string) => void
   onUnpin: (id: string) => void
   onSetReply?: (message: Message) => void
+  /** A short notice over the list (a failed action). */
+  onNotice: (text: string) => void
 }
 
 const MOTION_CLASS = { in: 'msg-in', sent: 'msg-sent' } as const
 
-/** One message in the list: a system note, or a bubble aligned to its side, with the legacy extras around it and its reactions under it. */
+/** One message in the list: a system note, or a bubble aligned to its side, with its actions around it and its reactions under it. */
 export const MessageRow = memo(function MessageRow(props: MessageRowProps) {
   const { message, mine, runStart, tick, motion, flash, pinned, spaceKey, emoji, onHighlight, onRetry, onJump } = props
   const original = useReplyOriginal(message.reply_to, spaceKey)
@@ -77,18 +81,23 @@ export const MessageRow = memo(function MessageRow(props: MessageRowProps) {
       {message.localState ? (
         bubble
       ) : (
-        <LegacyMessageExtras
+        <MessageActions
           message={message}
-          isOwn={mine}
+          mine={mine}
+          pinned={pinned}
           spaceKey={spaceKey}
-          isPinned={pinned}
-          onBroadcastDelete={props.onBroadcastDelete}
+          isDesktop={props.isDesktop}
+          emoji={emoji}
+          onSetReply={props.onSetReply}
           onPin={props.onPin}
           onUnpin={props.onUnpin}
-          onSetReply={props.onSetReply}
+          onBroadcastDelete={props.onBroadcastDelete}
+          onNotice={props.onNotice}
         >
-          {bubble}
-        </LegacyMessageExtras>
+          <LegacyInlineEdit message={message} spaceKey={spaceKey}>
+            {bubble}
+          </LegacyInlineEdit>
+        </MessageActions>
       )}
       {!message.localState && <MessageReactions messageId={message.id} mine={mine} />}
     </div>

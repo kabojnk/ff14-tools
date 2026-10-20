@@ -224,13 +224,34 @@
 .rx-pop {
   animation: rx-pop 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
 }
+/* Sheets slide up over a fading dim (design §10). */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.sheet-up {
+  animation: sheet-up 220ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.sheet-dim {
+  animation: msg-fade 160ms ease-out both;
+}
+/* A long-pressed bubble lifts (design §6). */
+@keyframes lift {
+  from { transform: none; }
+  to { transform: scale(1.02); }
+}
+.lift {
+  animation: lift 160ms ease-out both;
+}
 @media (prefers-reduced-motion: reduce) {
   .msg-in,
   .msg-sent,
+  .sheet-up,
   .rx-pop {
     animation: msg-fade 160ms ease-out both;
   }
-  .typing-dot {
+  .typing-dot,
+  .lift {
     animation: none;
   }
 }

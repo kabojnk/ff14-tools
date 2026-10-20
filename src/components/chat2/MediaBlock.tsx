@@ -46,6 +46,7 @@ export function MediaBlock({ messageId, attachments, overlay }: MediaBlockProps)
           {shown.map(({ a, index }, i) => (
             <MediaCell
               key={index}
+              index={index}
               attachment={a}
               hidden={hidden(index)}
               single={shown.length === 1}
@@ -79,6 +80,8 @@ export function MediaBlock({ messageId, attachments, overlay }: MediaBlockProps)
 }
 
 interface MediaCellProps {
+  /** Its index in the message's attachments: what a long-press's spoiler action applies to. */
+  index: number
   attachment: Visual
   hidden: boolean
   single: boolean
@@ -89,7 +92,7 @@ interface MediaCellProps {
   onOpen: () => void
 }
 
-function MediaCell({ attachment: a, hidden, single, wide, more, onReveal, onOpen }: MediaCellProps) {
+function MediaCell({ index, attachment: a, hidden, single, wide, more, onReveal, onOpen }: MediaCellProps) {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const [duration, setDuration] = useState<number | null>(null)
   const [gifPlaying, setGifPlaying] = useState(false)
@@ -100,6 +103,7 @@ function MediaCell({ attachment: a, hidden, single, wide, more, onReveal, onOpen
 
   return (
     <div
+      data-media-index={index}
       data-spoiler={a.spoiler ? (hidden ? 'hidden' : 'revealed') : undefined}
       className={`relative overflow-hidden bg-black/20 ${wide ? 'col-span-2' : ''}`}
     >

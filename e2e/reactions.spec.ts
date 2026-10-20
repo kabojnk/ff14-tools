@@ -28,14 +28,19 @@ const chip = (user: ChatUser, text: string, emoji: string, count: number) =>
   user.messageRow(text).getByRole('button', { name: `${emoji} ${count}`, exact: true })
 
 /**
- * The first reaction on a message, from its action toolbar (interim: the legacy toolbar until Task 10's
- * hover toolbar and long-press sheet replace it).
+ * The first reaction on a message: from the hover toolbar's React button (desktop), or from the quick
+ * bar above a long-pressed bubble (phones).
  */
 async function reactFromToolbar(user: ChatUser, text: string, emoji: string) {
-  const row = user.messageRow(text)
-  await row.locator('.group').first().hover()
-  await row.getByTitle('Add Reaction').click()
-  await row.getByRole('button', { name: emoji, exact: true }).click()
+  const bubble = user.messageRow(text).locator('[data-bubble]')
+  if (await user.isPhone()) {
+    await user.longPress(bubble)
+  } else {
+    await bubble.hover()
+    await user.messageRow(text).getByRole('toolbar', { name: 'Message actions' }).getByRole('button', { name: 'React' }).click()
+  }
+  await user.page.getByRole('toolbar', { name: 'Quick reactions' }).getByRole('button', { name: `React with ${emoji}` }).click()
+  await expect(user.page.getByRole('dialog', { name: 'Message actions' })).toBeHidden()
 }
 
 test.describe('reactions', () => {

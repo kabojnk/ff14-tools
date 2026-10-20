@@ -11,6 +11,12 @@ interface MessageState {
   fetchMessages: (conversationId: string, space: Space) => Promise<void>
   editMessage: (messageId: string, newContent: string, key: string) => Promise<void>
   deleteMessage: (messageId: string, key: string) => Promise<void>
+  /**
+   * Marks (or unmarks) one photo, video or GIF of any message as a spoiler: at once here, then through
+   * set_attachment_spoiler (members may do it on either person's messages). Rolled back on failure.
+   * Resolves to whether it worked. The other device hears it as a messages UPDATE (an `edit`).
+   */
+  setAttachmentSpoiler: (key: string, messageId: string, index: number, spoiler: boolean) => Promise<boolean>
   /** Loads the page before the oldest loaded message. Resolves to whether there may be more. */
   fetchOlder: (conversationId: string, space: Space) => Promise<boolean>
   /** Adds the message (or merges a realtime echo into my pending one with the same id). */
@@ -120,6 +126,33 @@ export const useMessageStore = create<MessageState>((set, get) => {
       if (!error) {
         get().removeMessage(key, messageId)
       }
+    },
+
+    setAttachmentSpoiler: async (key, messageId, index, spoiler) => {
+      const setFlag = (value: boolean) =>
+        set((state) => {
+          const existing = state.messages[key] ?? []
+          const i = existing.findIndex((m) => m.id === messageId)
+          if (i === -1 || !existing[i].attachments[index]) return state
+          const next = existing.slice()
+          next[i] = {
+            ...existing[i],
+            attachments: existing[i].attachments.map((a, j) => (j === index ? { ...a, spoiler: value } : a)),
+          }
+          return { messages: { ...state.messages, [key]: next } }
+        })
+
+      setFlag(spoiler)
+      const { error } = await supabase.rpc('set_attachment_spoiler', {
+        p_message: messageId,
+        p_index: index,
+        p_spoiler: spoiler,
+      })
+      if (error) {
+        setFlag(!spoiler)
+        return false
+      }
+      return true
     },
 
     addMessage: (key, message) => {

@@ -357,6 +357,7 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
                   flash={flashId === message.id}
                   pinned={pinnedIds.has(message.id)}
                   spaceKey={key}
+                  isDesktop={isDesktop}
                   emoji={emoji}
                   onHighlight={repin}
                   onRetry={onRetry}
@@ -365,6 +366,7 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
                   onPin={onPin}
                   onUnpin={onUnpin}
                   onSetReply={onSetReply}
+                  onNotice={setNotice}
                 />
               </Fragment>
             )

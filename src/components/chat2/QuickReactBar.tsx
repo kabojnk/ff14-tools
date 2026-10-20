@@ -25,17 +25,19 @@ interface QuickReactBarProps {
   align?: 'start' | 'end'
   /** Extra classes for positioning. */
   className?: string
+  /** A press outside doesn't close it (it sits over a long-press sheet, which closes both). */
+  ignoreOutside?: boolean
 }
 
 /** Six recent emoji plus "+" for the full picker (custom emoji included). Closes on Escape or a press outside. */
-export function QuickReactBar({ onPick, onClose, emoji, align = 'start', className = '' }: QuickReactBarProps) {
+export function QuickReactBar({ onPick, onClose, emoji, align = 'start', className = '', ignoreOutside = false }: QuickReactBarProps) {
   const ref = useRef<HTMLDivElement>(null)
   const [recent] = useState(recentEmoji)
   const [full, setFull] = useState(false)
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+      if (!ignoreOutside && ref.current && !ref.current.contains(e.target as Node)) onClose()
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -46,7 +48,7 @@ export function QuickReactBar({ onPick, onClose, emoji, align = 'start', classNa
       document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [onClose])
+  }, [onClose, ignoreOutside])
 
   const pick = (e: string) => {
     onPick(e)

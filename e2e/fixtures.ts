@@ -1,4 +1,4 @@
-import { test as base, expect, type Page, type TestInfo, type Browser, type BrowserContextOptions } from '@playwright/test'
+import { test as base, expect, type Page, type TestInfo, type Browser, type BrowserContextOptions, type Locator } from '@playwright/test'
 import { EEP_HEADING, USERS, type SeedUser, type UserKey } from './users'
 import { stubExternalServices } from './stubs'
 
@@ -31,6 +31,38 @@ export class ChatUser {
   /** The row (bubble, ticks, extras) of a message in the open space's list, by its exact text. */
   messageRow(text: string) {
     return this.page.locator('[data-realtime] [data-message-id]').filter({ has: this.page.getByText(text, { exact: true }) })
+  }
+
+  /** Whether this device is in the phone layout (long-press sheet) rather than desktop (hover toolbar). */
+  async isPhone() {
+    return (await this.page.locator('[data-layout="phone"]').count()) > 0
+  }
+
+  /** A finger held on `target` past the long-press delay (pointer events, as on iOS). */
+  async longPress(target: Locator) {
+    await target.scrollIntoViewIfNeeded()
+    await target.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true, button: 0 })
+    await this.page.waitForTimeout(600)
+    await target.dispatchEvent('pointerup', { pointerType: 'touch', isPrimary: true, button: 0 })
+  }
+
+  /**
+   * Opens a message's actions on `target` (the bubble, or one photo in it) and returns where its items
+   * are: the long-press sheet on phones (buttons), the hover toolbar's ⋯ menu on desktop (menuitems).
+   */
+  async openMessageActions(target: Locator): Promise<(name: string) => Locator> {
+    if (await this.isPhone()) {
+      await this.longPress(target)
+      const sheet = this.page.getByRole('dialog', { name: 'Message actions' })
+      await expect(sheet).toBeVisible()
+      return (name) => sheet.getByRole('button', { name, exact: true })
+    }
+    await target.hover()
+    const row = target.locator('xpath=ancestor-or-self::*[@data-message-id][1]')
+    await row.getByRole('toolbar', { name: 'Message actions' }).getByRole('button', { name: 'More actions' }).click()
+    const menu = this.page.getByRole('menu', { name: 'More actions' })
+    await expect(menu).toBeVisible()
+    return (name) => menu.getByRole('menuitem', { name, exact: true })
   }
 
   /** The scrolling message list of the open space. */
