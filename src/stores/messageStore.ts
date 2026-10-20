@@ -9,7 +9,8 @@ interface MessageState {
   loading: boolean
 
   fetchMessages: (conversationId: string, space: Space) => Promise<void>
-  editMessage: (messageId: string, newContent: string, key: string) => Promise<void>
+  /** Saves an edit; resolves to the saved row, or null if it failed. */
+  editMessage: (messageId: string, newContent: string, key: string) => Promise<Message | null>
   deleteMessage: (messageId: string, key: string) => Promise<void>
   /**
    * Marks (or unmarks) one photo, video or GIF of any message as a spoiler: at once here, then through
@@ -115,9 +116,9 @@ export const useMessageStore = create<MessageState>((set, get) => {
         .select()
         .single()
 
-      if (!error && data) {
-        get().updateMessage(key, data as Message)
-      }
+      if (error || !data) return null
+      get().updateMessage(key, data as Message)
+      return data as Message
     },
 
     deleteMessage: async (messageId, key) => {

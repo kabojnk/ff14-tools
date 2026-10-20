@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
-const { sendOutgoing, uploadFile, sendTyping, stopTyping } = vi.hoisted(() => ({
+const { sendOutgoing, uploadFile, sendTyping, stopTyping, sendMessageEvent } = vi.hoisted(() => ({
+  sendMessageEvent: vi.fn(),
   sendOutgoing: vi.fn(async () => {}),
   uploadFile: vi.fn(),
   sendTyping: vi.fn(),
@@ -13,6 +14,10 @@ vi.mock('@/lib/supabase', () => ({
   supabase: { from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }) },
 }))
 vi.mock('@/lib/chat/outbox', async (orig) => ({ ...(await orig<typeof import('@/lib/chat/outbox')>()), sendOutgoing }))
+vi.mock('@/lib/conversationRealtime', async (orig) => ({
+  ...(await orig<typeof import('@/lib/conversationRealtime')>()),
+  sendMessageEvent,
+}))
 vi.mock('@/lib/bunny', async (orig) => ({ ...(await orig<typeof import('@/lib/bunny')>()), uploadFile }))
 vi.mock('@/hooks/useTyping', () => ({ useTyping: () => ({ typingUsers: [], sendTyping, stopTyping }) }))
 
@@ -46,7 +51,7 @@ function msg(overrides: Partial<Message> = {}): Message {
 }
 
 const dragTheLake = vi.fn(async () => {})
-const editMessage = vi.fn(async () => {})
+const editMessage = vi.fn(async (id: string, content: string, _key: string) => ({ id, content }) as unknown as Message)
 
 function setup(props: Partial<React.ComponentProps<typeof Composer>> = {}) {
   const onCancelReply = vi.fn()
@@ -66,6 +71,7 @@ beforeEach(() => {
   stopTyping.mockClear()
   dragTheLake.mockClear()
   editMessage.mockClear()
+  sendMessageEvent.mockClear()
   useAuthStore.setState({ user: { id: 'me' } as User })
   useConversationStore.setState({ dragTheLake })
   useMessageStore.setState({ editMessage })
@@ -237,6 +243,7 @@ describe('Composer: editing', () => {
       enter(editor)
     })
     expect(editMessage).toHaveBeenCalledWith('mine', 'new text', 'conv-1:main')
+    expect(sendMessageEvent).toHaveBeenCalledWith('edit', { id: 'mine', content: 'new text' })
     expect(sendOutgoing).not.toHaveBeenCalled()
     expect(useComposerStore.getState().editing).toBeNull()
     expect(screen.queryByText('Editing message')).not.toBeInTheDocument()

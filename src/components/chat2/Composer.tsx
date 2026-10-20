@@ -7,6 +7,7 @@ import { PendingAttachments } from '@/components/chat2/PendingAttachments'
 import { useTyping } from '@/hooks/useTyping'
 import { messagePreview } from '@/lib/chat/preview'
 import { sendOutgoing } from '@/lib/chat/outbox'
+import { sendMessageEvent } from '@/lib/conversationRealtime'
 import { discardUpload, retryUpload, startUpload } from '@/lib/chat/uploads'
 import { SPACE_LABEL, spaceKey } from '@/lib/spaces'
 import { useAuthStore } from '@/stores/authStore'
@@ -109,7 +110,11 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
     const text = editText
     const target = editing
     cancelEdit()
-    if (text.trim() && text !== target.content) await useMessageStore.getState().editMessage(target.id, text, key)
+    if (text.trim() && text !== target.content) {
+      const saved = await useMessageStore.getState().editMessage(target.id, text, key)
+      // Like new messages and deletes, an edit is broadcast too; its database change is the safety net.
+      if (saved) sendMessageEvent('edit', saved)
+    }
     textareaRef.current?.focus()
   }
 
