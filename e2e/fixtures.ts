@@ -152,18 +152,22 @@ export class ChatUser {
     return this.page.locator('[data-realtime]').getByRole('status', { name: `${nickname} is typing`, exact: true }).filter({ visible: true })
   }
 
-  /** Opens User Settings from your row (on phones, the list screen's top bar). */
-  async openSettings() {
-    await this.showList()
-    await this.meRow.getByTitle('User settings').click()
+  /** The Settings sheet (phones) or dialog (desktop). */
+  get settings() {
+    return this.page.getByRole('dialog', { name: 'Settings', exact: true })
   }
 
-  /** Opens User Settings on the Security tab (desktop) or screen (mobile: gear → Security). */
+  /** Opens Settings from the gear in your row (on phones, the list screen's top bar). */
+  async openSettings() {
+    await this.showList()
+    await this.meRow.getByRole('button', { name: 'User settings', exact: true }).click()
+    await expect(this.settings).toBeVisible()
+  }
+
+  /** Opens Settings on Security & privacy: the phone row that pushes it, or the desktop nav item. */
   async openSecurity() {
     await this.openSettings()
-    const gear = this.page.getByTitle('Settings', { exact: true }).filter({ visible: true })
-    if ((await gear.count()) > 0) await gear.first().click()
-    await this.page.getByRole('button', { name: 'Security', exact: true }).filter({ visible: true }).first().click()
+    await this.settings.getByRole('button', { name: 'Security & privacy', exact: true }).filter({ visible: true }).first().click()
     await expect(this.page.getByText('App Lock PIN').filter({ visible: true })).toBeVisible()
   }
 
@@ -183,11 +187,16 @@ export class ChatUser {
     return item
   }
 
-  /** Opens the status picker from your avatar (on phones, on the list screen). */
-  async openStatusPicker() {
+  /** The profile and status editor sheet. */
+  get profileEditor() {
+    return this.page.getByRole('dialog', { name: 'Profile', exact: true })
+  }
+
+  /** Opens the profile and status editor from your avatar (on phones, on the list screen). */
+  async openProfileEditor() {
     await this.showList()
     await this.meRow.getByTitle('Set status').click()
-    await expect(this.page.getByRole('heading', { name: 'Set Status' })).toBeVisible()
+    await expect(this.profileEditor.getByRole('heading', { name: 'Profile', exact: true })).toBeVisible()
   }
 
   /** Drag the Lake from the header's ⋮ menu. */
@@ -196,10 +205,23 @@ export class ChatUser {
     await (await this.chatMenuItem('Drag the Lake')).click()
   }
 
-  /** Fill the Lake from Settings → Security (open it first with openSecurity). */
+  /**
+   * Expands a lake row in Settings → Security & privacy ("Fill the Lake" or "Change lake password";
+   * open it first with openSecurity) and returns its form's region. A row already open stays open.
+   */
+  async lakeRow(name: 'Fill the Lake' | 'Change lake password') {
+    const row = this.page.locator('button[aria-expanded]').and(this.page.getByRole('button', { name, exact: true })).filter({ visible: true }).first()
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.click()
+    const region = this.page.getByRole('region', { name, exact: true }).filter({ visible: true })
+    await expect(region).toBeVisible()
+    return region
+  }
+
+  /** Fill the Lake from Settings → Security & privacy (open it first with openSecurity). */
   async fillTheLake(password: string) {
-    await this.page.getByLabel('Lake password', { exact: true }).filter({ visible: true }).fill(password)
-    await this.page.getByRole('button', { name: 'Fill the Lake' }).filter({ visible: true }).click()
+    const region = await this.lakeRow('Fill the Lake')
+    await region.getByLabel('Lake password', { exact: true }).fill(password)
+    await region.getByRole('button', { name: 'Fill the Lake', exact: true }).click()
   }
 
   /** Items in the info panel's media tab (thumbnails, file rows and link rows). */

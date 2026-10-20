@@ -41,6 +41,7 @@ import { ConversationList } from '@/components/layout/ConversationList'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useProfileStore } from '@/stores/profileStore'
+import { useStatusStore } from '@/stores/statusStore'
 
 const CONV = { id: 'conv-1', title: null, archived: false, created_by: null, created_at: '2026-01-01T00:00:00Z' }
 const initialConv = useConversationStore.getState()
@@ -105,6 +106,25 @@ describe('ConversationList', () => {
     render(<ConversationList onOpen={onOpen} />)
     fireEvent.click(await screen.findByRole('button', { name: /Bea/ }))
     expect(onOpen).toHaveBeenCalled()
+  })
+
+  it("shows the partner's status pill next to her name, live", async () => {
+    useStatusStore.setState({
+      definitions: [
+        { id: 'raiding', label: 'Raiding', color: '#ec4899', position: 1, legacy_key: null, created_by: null, created_at: '', updated_at: '' },
+      ],
+    })
+    withConversation()
+    render(<ConversationList />)
+    const row = await screen.findByRole('button', { name: /Bea/ })
+    expect(row.querySelector('[data-status-pill]')).toBeNull()
+    act(() => useProfileStore.getState().apply({ id: 'bea', status_id: 'raiding' }))
+    const pill = row.querySelector('[data-status-pill]') as HTMLElement
+    expect(pill.querySelector('[data-status-label]')).toHaveTextContent('Raiding')
+    // On the top line, between the name and the time.
+    const top = pill.closest('[data-row-top]') as HTMLElement
+    expect(top).toHaveTextContent('Bea')
+    expect(top.querySelector('small')).not.toBeNull()
   })
 
   it('says so when there is no conversation', () => {

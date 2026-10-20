@@ -37,7 +37,7 @@ test.describe('Presence', () => {
 })
 
 test.describe('Presence after logging in', () => {
-  test('a fresh login goes online, and the status picker changes the dot', async ({ browser, bea }, testInfo) => {
+  test('a fresh login goes online, and the profile editor changes the dot', async ({ browser, bea }, testInfo) => {
     // Not the saved login: this device signs in on the login screen, so the profile arrives after the user.
     const { context, user: alice } = await openUser(browser, testInfo, 'alice', { storageState: undefined })
     try {
@@ -56,9 +56,10 @@ test.describe('Presence after logging in', () => {
       await expect(myDot).toHaveAttribute('data-presence', 'online')
       await expect(beaSees).toHaveText('online', { timeout: 5_000 })
 
-      await alice.meRow.locator('button[title="Set status"]').click()
-      await alice.page.getByRole('button', { name: 'Away', exact: true }).click()
-      await alice.page.getByRole('button', { name: 'Save', exact: true }).click()
+      await alice.openProfileEditor()
+      await alice.profileEditor.getByRole('radiogroup', { name: 'Show me as' }).getByRole('radio', { name: 'Away' }).click()
+      await alice.profileEditor.getByRole('button', { name: 'Save', exact: true }).click()
+      await expect(alice.profileEditor).toHaveCount(0)
       await expect(myDot).toHaveAttribute('data-presence', 'away')
       await expect(beaSees).toHaveText('away', { timeout: 5_000 })
     } finally {

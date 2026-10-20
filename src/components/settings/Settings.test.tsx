@@ -112,6 +112,23 @@ describe('Settings on phones', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
+  it('moves focus into a pushed section, and back to its row on Back', async () => {
+    renderSettings()
+    await userEvent.click(screen.getByRole('button', { name: 'Security & privacy' }))
+    const section = screen.getByTestId('settings-section')
+    expect(section).toContainElement(document.activeElement as HTMLElement)
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('button', { name: 'Security & privacy' })).toHaveFocus()
+  })
+
+  it('focuses a section with no controls itself, and Esc back returns to its row', async () => {
+    renderSettings()
+    await userEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    expect(screen.getByTestId('settings-section')).toHaveFocus()
+    esc()
+    expect(screen.getByRole('button', { name: 'Notifications' })).toHaveFocus()
+  })
+
   it('Esc in a pushed section goes Back; Esc at the top closes', async () => {
     const { onClose } = renderSettings()
     await userEvent.click(screen.getByRole('button', { name: 'Appearance' }))
@@ -190,6 +207,12 @@ describe('Settings on desktop', () => {
     const confirm = screen.getByRole('alertdialog', { name: 'Log out of this device?' })
     await userEvent.click(within(confirm).getByRole('button', { name: 'Log out' }))
     expect(mockLogOut).toHaveBeenCalledTimes(1)
+  })
+
+  it('has no sheet header bar above the two columns, but is still named "Settings"', () => {
+    renderSettings()
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Settings' })).toBeNull()
   })
 
   it('Esc closes', () => {

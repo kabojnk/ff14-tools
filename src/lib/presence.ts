@@ -73,7 +73,7 @@ export function displayed(
   return live
 }
 
-/** The profiles.presence_override value for a StatusPicker choice. Online clears it. */
+/** The profiles.presence_override value for the profile editor's "Show me as" choice. Online clears it. */
 export function overrideFor(choice: Presence): PresenceOverride | null {
   if (choice === 'away') return 'away'
   if (choice === 'offline') return 'invisible'

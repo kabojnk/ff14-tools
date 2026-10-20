@@ -163,8 +163,8 @@ function ChangeLakePasswordForm() {
 
 /**
  * Security & privacy → The lake: "Fill the Lake" and "Change lake password", each a disclosure row
- * that expands its form inline (logic moved unchanged from LakeSettings). A form stays open after
- * success, with its fields cleared and the result line showing.
+ * that expands its form inline. A form stays open after success, with its fields cleared and the
+ * result line showing.
  */
 export function LakeRows() {
   return (

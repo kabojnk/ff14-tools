@@ -19,7 +19,7 @@ interface SecuritySectionProps {
 /**
  * Settings → Security & privacy: the app lock PIN, read receipts, the lake and (on phones) Log out.
  *
- * The PIN wizard moved here unchanged from UserSettings. It lives in this section, so the section
+ * The PIN wizard (PinStep flow and PinPad) lives in this section, so the section
  * must stay mounted while it runs; unmounting it (closing Settings) closes the PinPad and saves
  * nothing.
  */

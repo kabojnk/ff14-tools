@@ -256,4 +256,20 @@ describe('Sheet', () => {
     render(<Sheet title="Profile" width={560} onClose={() => {}}>body</Sheet>)
     expect(screen.getByRole('dialog')).toHaveStyle({ width: '560px' })
   })
+
+  it('hides its header on desktop only with hideHeaderOnDesktop, keeping the dialog named', () => {
+    const media = stubMatchMedia(true)
+    render(
+      <Sheet title="Settings" hideHeaderOnDesktop onClose={() => {}} action={{ label: 'Done', onClick: () => {} }}>
+        body
+      </Sheet>,
+    )
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Settings' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
+
+    media.setDesktop(false)
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Done' })).toBeVisible()
+  })
 })

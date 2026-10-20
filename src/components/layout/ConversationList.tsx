@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { usePartner } from '@/hooks/usePartner'
 import { Avatar } from '@/components/ui/Avatar'
+import { StatusPill } from '@/components/chat2/StatusPill'
 import type { Space } from '@/types'
 
 /**
@@ -54,14 +55,14 @@ interface ConversationListProps {
   activeHighlight?: boolean
 }
 
-/** The conversation rows: avatar with presence, name, newest message across both spaces, time, unread badge. */
+/** The conversation rows: avatar with presence, name and status pill, newest message across both spaces, time, unread badge. */
 export function ConversationList({ onOpen, activeHighlight = false }: ConversationListProps) {
   const myId = useAuthStore((s) => s.user?.id ?? null)
   const conversation = useConversationStore((s) => s.conversation)
   const loading = useConversationStore((s) => s.loading)
   const latest = useConversationStore((s) => s.latest)
   const readAt = useConversationStore((s) => s.readAt)
-  const { id: partnerId, profile: partner, presence } = usePartner()
+  const { id: partnerId, profile: partner, presence, status } = usePartner()
 
   const unreadSpaces = SPACES.filter((space) =>
     isUnread({ latestAt: latest[space]?.at ?? null, latestAuthorId: latest[space]?.authorId ?? null, lastReadAt: readAt[space], myId }),
@@ -96,10 +97,12 @@ export function ConversationList({ onOpen, activeHighlight = false }: Conversati
       >
         <Avatar name={name} url={partner?.avatar_url} size={40} presence={partnerId ? presence : undefined} />
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-1.5">
-            <span className="truncate text-[13.5px] font-semibold text-[color:var(--fg)]">{name}</span>
+          <span data-row-top className="flex items-center gap-1.5">
+            <span className="min-w-0 truncate text-[13.5px] font-semibold text-[color:var(--fg)]">{name}</span>
+            {/* Shrinks (and truncates) well before the name does; the time never shrinks. */}
+            {status && <StatusPill label={status.label} color={status.color} className="min-w-0 shrink-[999]" />}
             {newest && (
-              <small className={`flex-none text-[11px] ${unread ? 'text-[color:var(--accent)]' : 'text-[color:var(--muted)]'}`}>
+              <small className={`ml-auto flex-none pl-1 text-[11px] ${unread ? 'text-[color:var(--accent)]' : 'text-[color:var(--muted)]'}`}>
                 {listTimeLabel(newest.at, new Date())}
               </small>
             )}

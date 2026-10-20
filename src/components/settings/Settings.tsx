@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Bell, ChevronRight, Info, Lock, LogOut, Palette, User, X, type LucideIcon } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useStatusStore } from '@/stores/statusStore'
@@ -27,6 +27,8 @@ const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
 
 const labelOf = (id: SettingsSection) => SECTIONS.find((s) => s.id === id)?.label ?? ''
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
+
 interface SettingsProps {
   onClose: () => void
   /** "Edit profile" (phones) or "Profile" (desktop nav). The caller closes Settings and opens the profile editor. */
@@ -54,6 +56,25 @@ export function Settings({ onClose, onEditProfile }: SettingsProps) {
   const pushed = !isDesktop && section !== null
 
   const back = () => setSection(null)
+
+  // Phones: a pushed section takes focus (its first control, else the section itself), and Back
+  // gives it to the row that pushed it. A breakpoint flip keeps the section and moves nothing.
+  const contentRef = useRef<HTMLDivElement>(null)
+  const prevSection = useRef(section)
+  useEffect(() => {
+    const prev = prevSection.current
+    prevSection.current = section
+    if (isDesktop || prev === section) return
+    const content = contentRef.current
+    if (!content) return
+    if (section !== null) {
+      const first = Array.from(content.querySelectorAll<HTMLElement>(FOCUSABLE)).find((el) => el.tabIndex >= 0)
+      ;(first ?? content).focus()
+    } else if (prev !== null) {
+      content.querySelector<HTMLElement>(`[data-section-row="${prev}"]`)?.focus()
+    }
+  }, [section, isDesktop])
+
   const askLogOut = () => setConfirmingLogOut(true)
 
   return (
@@ -65,10 +86,11 @@ export function Settings({ onClose, onEditProfile }: SettingsProps) {
       onEscape={confirmingLogOut ? () => setConfirmingLogOut(false) : pushed ? back : onClose}
       action={isDesktop || pushed ? undefined : { label: 'Done', onClick: onClose }}
       width={760}
+      hideHeaderOnDesktop
     >
       <div
         className={
-          isDesktop ? 'grid h-[min(470px,calc(90vh-50px))] grid-cols-[190px_minmax(0,1fr)]' : 'flex flex-col'
+          isDesktop ? 'grid h-[min(520px,calc(90vh-2px))] grid-cols-[190px_minmax(0,1fr)]' : 'flex flex-col'
         }
       >
         {isDesktop && (
@@ -93,7 +115,12 @@ export function Settings({ onClose, onEditProfile }: SettingsProps) {
               </button>
             </div>
           )}
-          <div className={isDesktop ? 'min-h-0 flex-1 overflow-y-auto px-5 pb-5' : 'px-3 pb-3.5 pt-3'}>
+          <div
+            ref={contentRef}
+            data-testid={shown ? 'settings-section' : undefined}
+            tabIndex={pushed ? -1 : undefined}
+            className={`outline-none ${isDesktop ? 'min-h-0 flex-1 overflow-y-auto px-5 pb-5' : 'px-3 pb-3.5 pt-3'}`}
+          >
             {shown === null && <PhoneHome onOpen={setSection} onEditProfile={onEditProfile} />}
             {shown === 'appearance' && <AppearanceSection />}
             {shown === 'security' && <SecuritySection onLogOut={isDesktop ? undefined : askLogOut} />}
@@ -152,7 +179,7 @@ function PhoneHome({
       </button>
       <Group>
         {SECTIONS.map((s) => (
-          <SectionRow key={s.id} icon={s.icon} label={s.label} value={values[s.id]} onClick={() => onOpen(s.id)} />
+          <SectionRow key={s.id} id={s.id} icon={s.icon} label={s.label} value={values[s.id]} onClick={() => onOpen(s.id)} />
         ))}
       </Group>
     </div>
@@ -161,11 +188,13 @@ function PhoneHome({
 
 /** Named exactly by its label (e2e finds "Security & privacy"); the value is its description. */
 function SectionRow({
+  id,
   icon,
   label,
   value,
   onClick,
 }: {
+  id: SettingsSection
   icon: LucideIcon
   label: string
   value: string
@@ -174,7 +203,7 @@ function SectionRow({
   const labelId = useId()
   const valueId = useId()
   return (
-    <button type="button" aria-labelledby={labelId} aria-describedby={valueId} onClick={onClick} className={buttonRowClass}>
+    <button type="button" data-section-row={id} aria-labelledby={labelId} aria-describedby={valueId} onClick={onClick} className={buttonRowClass}>
       <span className={tileClass}>
         <Icon icon={icon} size={15} />
       </span>

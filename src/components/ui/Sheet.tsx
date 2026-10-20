@@ -18,6 +18,11 @@ interface SheetProps {
   action?: { label: string; onClick: () => void; disabled?: boolean }
   /** Desktop width in px (default 440). */
   width?: number
+  /**
+   * Desktop only: leave out the header bar (title, leading and action), for a dialog that draws its
+   * own (Settings). The hidden title still names the dialog.
+   */
+  hideHeaderOnDesktop?: boolean
   children: ReactNode
 }
 
@@ -56,6 +61,7 @@ export function Sheet({
   onEscape,
   action,
   width = 440,
+  hideHeaderOnDesktop = false,
   children,
 }: SheetProps) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
@@ -131,6 +137,7 @@ export function Sheet({
           }`}
         >
           <header
+            hidden={isDesktop && hideHeaderOnDesktop}
             className={`grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-[color:var(--line)] bg-[color:var(--bar)] px-3.5 pb-2.5 ${
               isDesktop ? 'pt-3' : 'pt-[max(10px,env(safe-area-inset-top))]'
             }`}

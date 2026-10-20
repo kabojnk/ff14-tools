@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { rowClass } from '@/components/settings/Group'
 
-/** Security & privacy → Privacy: the read receipts switch (moved from LakeSettings). */
+/** Security & privacy → Privacy: the read receipts switch. */
 export function ReadReceiptsRow() {
   const profile = useAuthStore((s) => s.profile)
   const labelId = useId()
