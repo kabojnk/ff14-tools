@@ -20,6 +20,10 @@ Run on a real iPhone, using the app installed to the home screen, at the end of 
 | 14 | Long-pressing a photo, video or GIF offers Mark as spoiler / Remove spoiler for that item; the other phone blurs or unblurs it live. A long-press on a photo doesn't also open it full screen. | |
 | 15 | Return in the message box adds a new line and never sends, with a Bluetooth keyboard too; the round Send button sends and the keyboard stays open. The box grows to 6 lines, then scrolls. | |
 | 16 | Attaching a photo shows its thumbnail with a spinner; the eye toggle marks it as a spoiler and the other phone shows it blurred. Editing a message opens it in the box under "Editing message"; the tick saves it. | |
+| 17 | The red **Eep!** button in the chat header shows the FF14 page at once; the passphrase (or the blue dot and PIN) brings the chat back. | |
+| 18 | With a PIN set, launching the app from the home screen opens on the FF14 page, locked; the PIN unlocks it. Without a PIN it opens on the chat. | |
+| 19 | In the chat, the status bar matches the chosen theme's bar (check a light and a dark theme; it follows a theme switch). On the FF14 page it always has the disguise's own colour, never a hint of the chat theme. | |
+| 20 | Turning the phone to landscape keeps the phone layout (one screen at a time, Send button), even though it is wider than the desktop breakpoint. | |
 
 ## Known open issues
 

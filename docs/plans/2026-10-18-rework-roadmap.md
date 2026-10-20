@@ -1,7 +1,7 @@
 # Chat Rework — Roadmap
 
 **Date:** 2026-10-18
-**Status:** Active. Sub-projects 1 and 2 built; sub-project 3 next.
+**Status:** Active. Sub-projects 1 and 2 built; sub-project 3a (core chat) built 2026-10-19; 3b and 4 next.
 
 ## Goal
 
@@ -19,7 +19,7 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 |---|---|---|---|
 | 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild (**built 2026-10-19**) | — | `2026-10-18-test-foundation-design.md` |
 | 2 | Data model: channels → conversations (**built 2026-10-19**; expand only, contract pending) | 1 | `2026-10-19-conversations-data-model-design.md`, plan `2026-10-19-conversations-data-model-plan.md` |
-| 3 | Chat UX rebuild (Messenger-style, polished, mobile-first): look approved; built as 3a (core chat) then 3b (profile, gallery, emoji, settings) | 1, 2 | `2026-10-19-redesign-design.md` |
+| 3 | Chat UX rebuild (Messenger-style, polished, mobile-first): look approved; built as 3a (core chat: **built 2026-10-19**) then 3b (profile, gallery, emoji, settings) | 1, 2 | `2026-10-19-redesign-design.md`, plan `2026-10-19-redesign-3a-plan.md` |
 | 4 | iOS: research done; **decided: Capacitor wrapper + TestFlight internal testing**, built after 3a | — | `2026-10-19-ios-native-research.md` |
 
 ## Requirements captured for later sub-projects
@@ -52,6 +52,8 @@ Original requirements:
 - Production `reactions` lacks `REPLICA IDENTITY FULL` (the old `00009` migration was never applied), so reaction-removal events may not carry the row. Decide whether to add it as a migration.
 
 ### Sub-project 3: UX
+3a is built: the Cozy layout (conversation list + chat on desktop, one screen at a time on phones), eleven themes, header with per-device presence, message list with runs, date chips, ticks and the new-messages divider, Discord-style reactions on the conversation channel, long-press and hover actions with spoilers after posting, and the autocorrect-safe composer. Device checks: `docs/testing/iphone-checklist.md` (items 13–20 are new). Theme screenshot baselines come from CI (SETUP.md). Swipe-to-reply is deferred to a device experiment. 3b (profile, gallery, emoji, settings) is next.
+
 - **Carried over from sub-project 2:**
   - Seen marker: show where the other person has read up to (read receipts are stored and respect the `read_receipts` setting; nothing displays them yet).
   - Status pill: show the shared coloured status next to names consistently.
