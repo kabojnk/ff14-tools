@@ -1,6 +1,11 @@
 import { afterDevicesClose, expect, openUser, test } from './fixtures'
 import { restore } from './supabase'
 
+// Deletes the messages these tests send, and undoes the ⋮ menu's drag.
+afterDevicesClose(async () => {
+  await restore()
+})
+
 test('messages arrive live for the other person, both ways', async ({ alice, bea }) => {
   await alice.openChat()
   await bea.openChat()
@@ -85,10 +90,6 @@ test('a slash command does not leave a typing indicator behind', async ({ alice,
 })
 
 test.describe('the ⋮ menu', () => {
-  afterDevicesClose(async () => {
-    await restore()
-  })
-
   test('the ⋮ menu’s Drag the Lake clears both spaces', async ({ alice, bea }) => {
     await bea.openChat('Schist')
     await expect(bea.message('Seed: schist hello')).toBeVisible()

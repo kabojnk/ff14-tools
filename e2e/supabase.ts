@@ -70,14 +70,26 @@ export async function snapshotSeedMessages({ ifMissing = false } = {}) {
 }
 
 /**
- * Puts back any seeded message a test (or a test that failed half-way) changed: deleted, edited,
- * moved to another session, marked as a spoiler, or gone. Untouched rows are not written.
+ * Deletes every message a test sent into the seed sessions, and puts back any seeded message a test
+ * (or a test that failed half-way) changed: deleted, edited, moved to another session, marked as a
+ * spoiler, or gone. Untouched rows are not written.
+ *
+ * Left behind, test messages pile up run after run until the seed history falls off the first page the
+ * app loads (50 per space), and every test that looks for a seeded message fails.
  */
 export async function restoreSeedMessages() {
+  const svc = serviceClient()
+  check(
+    'test messages',
+    (await svc
+      .from('messages')
+      .delete()
+      .in('session_id', Object.keys(SEED_SESSION_VISIBILITY))
+      .or(`id.lt.${SEED_MESSAGE_IDS[0]},id.gt.${SEED_MESSAGE_IDS[1]}`)).error,
+  )
   if (!existsSync(SEED_MESSAGES_FILE)) return
   const seed = JSON.parse(readFileSync(SEED_MESSAGES_FILE, 'utf8')) as Row[]
   if (seed.length === 0) return
-  const svc = serviceClient()
   const { data, error } = await seedMessages()
   check('seed messages', error)
   const now = new Map(((data ?? []) as Row[]).map((r) => [r.id as string, r]))
