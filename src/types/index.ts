@@ -121,7 +121,7 @@ export interface CustomEmoji {
   id: string
   name: string
   image_url: string
-  uploaded_by: string
+  uploaded_by: string | null
   created_at: string
 }
 

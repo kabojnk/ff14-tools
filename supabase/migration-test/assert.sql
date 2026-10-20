@@ -63,6 +63,13 @@ begin
   -- 3a columns start empty
   if exists (select 1 from public.messages where reply_to is not null) then raise exception 'legacy messages have no reply links'; end if;
   if exists (select 1 from public.profiles where presence_override is not null or last_seen_at is not null) then raise exception 'presence columns must start empty'; end if;
+
+  -- 3b custom emoji: one insert policy (the adder is the signed-in user), name format NOT VALID, live updates
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'custom_emoji' and policyname = 'Members add their own custom emoji' and cmd = 'INSERT') then raise exception 'custom_emoji insert policy missing'; end if;
+  if exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'custom_emoji' and policyname = 'Authenticated users can upload custom emoji') then raise exception 'old custom_emoji insert policy must be gone'; end if;
+  select count(*) into n from pg_policies where schemaname = 'public' and tablename = 'custom_emoji' and cmd = 'INSERT'; if n <> 1 then raise exception 'custom_emoji: expected 1 insert policy, got %', n; end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.custom_emoji'::regclass and conname = 'custom_emoji_name_format' and not convalidated) then raise exception 'custom_emoji_name_format must exist and be NOT VALID'; end if;
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'custom_emoji') then raise exception 'custom_emoji must be in supabase_realtime'; end if;
 end $$;
 
 -- What a member actually sees (RLS + invoker RPCs)
