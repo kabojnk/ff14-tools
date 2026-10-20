@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { MediaBlock } from '@/components/chat2/MediaBlock'
 import type { Attachment } from '@/types'
@@ -12,6 +12,35 @@ const img = (n: number, spoiler = false): Attachment => ({
 })
 
 describe('MediaBlock', () => {
+  it('holds a sized skeleton while an image loads, then shows the image', () => {
+    const { container } = render(<MediaBlock messageId="m1" attachments={[img(1)]} />)
+    const cell = container.querySelector('[data-media-index="0"]')!
+    expect(cell).toHaveAttribute('data-media-state', 'loading')
+    expect(container.querySelector('[data-media-skeleton]')).not.toBeNull()
+
+    fireEvent.load(screen.getByRole('img', { name: 'p1.png' }))
+    expect(cell).toHaveAttribute('data-media-state', 'loaded')
+    expect(container.querySelector('[data-media-skeleton]')).toBeNull()
+  })
+
+  it('shows a sized "couldn\'t load" tile instead of a broken image', () => {
+    const { container } = render(<MediaBlock messageId="m1" attachments={[img(1)]} />)
+    fireEvent.error(screen.getByRole('img', { name: 'p1.png' }))
+    const cell = container.querySelector('[data-media-index="0"]')!
+    expect(cell).toHaveAttribute('data-media-state', 'error')
+    expect(screen.queryByRole('img', { name: 'p1.png' })).toBeNull()
+    expect(screen.getByText("Couldn't load")).toBeInTheDocument()
+    expect(within(cell as HTMLElement).getByText('p1.png')).toBeInTheDocument()
+  })
+
+  it('shows a "couldn\'t load" tile for a video that fails', () => {
+    const video: Attachment = { url: 'https://cdn/v.mp4', type: 'video', filename: 'v.mp4', size: 1, spoiler: false }
+    const { container } = render(<MediaBlock messageId="m1" attachments={[video]} />)
+    fireEvent.error(container.querySelector('video')!)
+    expect(container.querySelector('[data-media-index="0"]')).toHaveAttribute('data-media-state', 'error')
+    expect(container.querySelector('video')).toBeNull()
+  })
+
   it('shows one image fitted to the bubble', () => {
     render(<MediaBlock messageId="m1" attachments={[img(1)]} />)
     expect(screen.getByRole('img', { name: 'p1.png' })).toHaveAttribute('src', 'https://cdn/p1.png')

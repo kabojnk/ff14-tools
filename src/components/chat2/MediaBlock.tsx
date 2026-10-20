@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react'
-import { FileText, Play } from 'lucide-react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { FileText, ImageOff, Play } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
 import { MediaViewer } from '@/components/chat/MediaViewer'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -94,20 +94,38 @@ interface MediaCellProps {
 
 function MediaCell({ index, attachment: a, hidden, single, wide, more, onReveal, onOpen }: MediaCellProps) {
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  // Images hold a sized skeleton until they load, so the time and ticks have room; a failed load gets a
+  // tile the same size. Videos only track failure: iOS may never load a video's metadata before a tap.
+  const [load, setLoad] = useState<'loading' | 'loaded' | 'error'>(a.type === 'video' ? 'loaded' : 'loading')
+  const imgRef = useRef<HTMLImageElement>(null)
+  useEffect(() => {
+    // A cached image can finish before React attaches onLoad.
+    const el = imgRef.current
+    if (el?.complete) setLoad(el.naturalWidth > 0 ? 'loaded' : 'error')
+  }, [])
   const [duration, setDuration] = useState<number | null>(null)
   const [gifPlaying, setGifPlaying] = useState(false)
   const blur = hidden ? 'scale-110 blur-[24px] brightness-50' : ''
   const fit = single ? 'block max-h-80 w-full min-w-40 object-cover' : `block h-full w-full object-cover ${wide ? 'aspect-[2/1]' : 'aspect-square'}`
   // GIFs autoplay (an <img> loops by itself), except under reduced motion: then they wait for a tap.
   const gifPaused = a.type === 'gif' && reducedMotion && !gifPlaying
+  const box = single ? 'h-36 w-60 max-w-full' : `w-full ${wide ? 'aspect-[2/1]' : 'aspect-square'}`
+  const loading = load === 'loading' && !gifPaused
 
   return (
     <div
       data-media-index={index}
       data-spoiler={a.spoiler ? (hidden ? 'hidden' : 'revealed') : undefined}
+      data-media-state={load}
       className={`relative overflow-hidden bg-black/20 ${wide ? 'col-span-2' : ''}`}
     >
-      {a.type === 'video' ? (
+      {load === 'error' ? (
+        <div className={`${box} flex flex-col items-center justify-center gap-1 px-3 pb-5 text-center ${blur}`}>
+          <Icon icon={ImageOff} size={24} strokeWidth={1.5} />
+          <span className="text-xs font-semibold">Couldn't load</span>
+          <span className="max-w-full truncate text-[11px] opacity-70">{a.filename}</span>
+        </div>
+      ) : a.type === 'video' ? (
         <video
           src={a.url}
           preload="metadata"
@@ -118,15 +136,28 @@ function MediaCell({ index, attachment: a, hidden, single, wide, more, onReveal,
             const d = e.currentTarget.duration
             if (Number.isFinite(d)) setDuration(d)
           }}
+          onError={() => setLoad('error')}
           className={`${fit} ${blur}`}
         />
       ) : gifPaused ? (
         <div className={`${fit} flex aspect-video items-center justify-center text-sm font-bold text-white/80`}>GIF</div>
       ) : (
-        <img src={a.url} alt={a.filename} loading="lazy" draggable={false} className={`${fit} ${blur}`} />
+        <>
+          {loading && <div data-media-skeleton aria-hidden="true" className={`${box} motion-safe:animate-pulse`} />}
+          <img
+            ref={imgRef}
+            src={a.url}
+            alt={a.filename}
+            loading="lazy"
+            draggable={false}
+            onLoad={() => setLoad('loaded')}
+            onError={() => setLoad('error')}
+            className={`${loading ? 'absolute inset-0 h-full w-full object-cover opacity-0' : fit} ${blur}`}
+          />
+        </>
       )}
 
-      {a.type === 'video' && !hidden && (
+      {a.type === 'video' && load !== 'error' && !hidden && (
         <span
           data-play-badge
           aria-hidden="true"
@@ -151,7 +182,7 @@ function MediaCell({ index, attachment: a, hidden, single, wide, more, onReveal,
         </button>
       ) : gifPaused ? (
         <button type="button" aria-label={`Play ${a.filename}`} onClick={stop(() => setGifPlaying(true))} className="absolute inset-0" />
-      ) : (
+      ) : load === 'error' ? null : (
         <button type="button" aria-label={`Open ${a.filename}`} onClick={stop(onOpen)} className="absolute inset-0" />
       )}
     </div>
