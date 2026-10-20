@@ -1,5 +1,6 @@
 const KEY = 'recentEmoji'
-const MAX = 6
+/** Picks kept per device (the picker's Recent tab). Custom emoji are stored as `:name:`. */
+const MAX = 24
 
 /** The quick bar before anything has been used. */
 export const DEFAULT_RECENT = ['❤️', '😂', '👍', '😮', '😢', '🔥']
@@ -13,14 +14,19 @@ function read(): string[] {
   }
 }
 
-/** Six emoji for the quick-react bar: the most recently used first, topped up with the defaults. */
-export function recentEmoji(): string[] {
-  const list = read()
+/** `count` emoji (six by default) for the quick-react bar: the most recently used first, topped up with the defaults. */
+export function recentEmoji(count = 6): string[] {
+  const list = read().slice(0, count)
   for (const e of DEFAULT_RECENT) if (!list.includes(e)) list.push(e)
-  return list.slice(0, MAX)
+  return list.slice(0, count)
 }
 
-/** Remembers a reaction I just added (per device). */
+/** Only real picks (no defaults), latest first, up to 24: the picker's Recent tab. */
+export function recentEmojiList(): string[] {
+  return read().slice(0, MAX)
+}
+
+/** Remembers an emoji I just used (per device). */
 export function noteRecentEmoji(emoji: string) {
   const list = [emoji, ...read().filter((e) => e !== emoji)].slice(0, MAX)
   try {
