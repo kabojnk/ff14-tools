@@ -2,8 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MediaItem } from '@/types'
 
-const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }))
-vi.mock('@/lib/supabase', () => ({ supabase: { rpc } }))
+const { rpc, from, inIds } = vi.hoisted(() => {
+  const inIds = vi.fn()
+  return { rpc: vi.fn(), inIds, from: vi.fn(() => ({ select: () => ({ in: inIds }) })) }
+})
+vi.mock('@/lib/supabase', () => ({ supabase: { rpc, from } }))
 
 import { useMediaGallery, type MediaGalleryOptions } from '@/hooks/useMediaGallery'
 
@@ -37,6 +40,11 @@ const base: MediaGalleryOptions = { conversationId: 'conv', space: 'main', scope
 beforeEach(() => {
   rpc.mockReset()
   rpc.mockResolvedValue({ data: [], error: null })
+  inIds.mockReset()
+  inIds.mockImplementation(async (_col: string, ids: string[]) => ({
+    data: ids.map((id) => ({ id, author_id: `author-of-${id}` })),
+    error: null,
+  }))
 })
 
 afterEach(() => {
@@ -164,5 +172,80 @@ describe('useMediaGallery', () => {
     await waitFor(() => expect(result.current.error).toBe('nope'))
     expect(result.current.items).toEqual([])
     expect(result.current.loading).toBe(false)
+  })
+
+  it('takes a page size from limit', async () => {
+    rpc.mockResolvedValue({ data: [item(1), item(2)], error: null })
+    const { result } = renderHook(() => useMediaGallery({ ...base, limit: 2 }))
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    expect(rpc.mock.calls[0][1]).toMatchObject({ p_limit: 2 })
+    expect(result.current.hasMore).toBe(true)
+  })
+
+  it('does nothing while disabled, and fetches once enabled', async () => {
+    const { result, rerender } = renderHook((o: MediaGalleryOptions) => useMediaGallery(o), {
+      initialProps: { ...base, enabled: false },
+    })
+    await act(async () => {})
+    expect(rpc).not.toHaveBeenCalled()
+    expect(result.current.loading).toBe(false)
+    expect(result.current.items).toEqual([])
+
+    rpc.mockResolvedValue({ data: [item(1)], error: null })
+    rerender({ ...base, enabled: true })
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+  })
+
+  it('clears its items when disabled again', async () => {
+    rpc.mockResolvedValue({ data: [item(1)], error: null })
+    const { result, rerender } = renderHook((o: MediaGalleryOptions) => useMediaGallery(o), { initialProps: base })
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    rerender({ ...base, enabled: false })
+    await waitFor(() => expect(result.current.items).toEqual([]))
+  })
+
+  it('fills in each item’s author with one messages query per page', async () => {
+    rpc.mockResolvedValue({ data: [item(1), item(2)], error: null })
+    const { result } = renderHook(() => useMediaGallery(base))
+    await waitFor(() => expect(result.current.items).toHaveLength(2))
+    expect(from).toHaveBeenCalledWith('messages')
+    expect(inIds).toHaveBeenCalledTimes(1)
+    expect(inIds).toHaveBeenCalledWith('id', ['m-1', 'm-2'])
+    expect(result.current.items.map((i) => i.author_id)).toEqual(['author-of-m-1', 'author-of-m-2'])
+  })
+
+  it('still shows the page when the author lookup fails', async () => {
+    rpc.mockResolvedValue({ data: [item(1)], error: null })
+    inIds.mockImplementation(async () => ({ data: null, error: { message: 'nope' } }))
+    const { result } = renderHook(() => useMediaGallery(base))
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    expect(result.current.items[0].author_id).toBeUndefined()
+    expect(result.current.error).toBeNull()
+  })
+
+  it('retry repeats a failed first page', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { message: 'nope' } }).mockResolvedValueOnce({ data: [item(1)], error: null })
+    const { result } = renderHook(() => useMediaGallery(base))
+    await waitFor(() => expect(result.current.error).toBe('nope'))
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.items).toHaveLength(1))
+    expect(result.current.error).toBeNull()
+  })
+
+  it('retry repeats a failed later page, keeping what was loaded', async () => {
+    const page1 = Array.from({ length: 60 }, (_, i) => item(100 - i))
+    rpc
+      .mockResolvedValueOnce({ data: page1, error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: 'nope' } })
+      .mockResolvedValueOnce({ data: [item(1)], error: null })
+    const { result } = renderHook(() => useMediaGallery(base))
+    await waitFor(() => expect(result.current.items).toHaveLength(60))
+    act(() => result.current.loadMore())
+    await waitFor(() => expect(result.current.error).toBe('nope'))
+    expect(result.current.items).toHaveLength(60)
+    act(() => result.current.retry())
+    await waitFor(() => expect(result.current.items).toHaveLength(61))
+    expect(rpc.mock.calls[2][1]).toMatchObject({ p_before_id: page1[59].id })
+    expect(result.current.error).toBeNull()
   })
 })

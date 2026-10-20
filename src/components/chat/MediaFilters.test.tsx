@@ -35,7 +35,7 @@ describe('MediaFilters', () => {
 
   it('reports typing in the extension box', async () => {
     const props = setup()
-    await userEvent.type(screen.getByPlaceholderText('Extension (e.g. zip)'), 'z')
+    await userEvent.type(screen.getByPlaceholderText('extension, e.g. zip'), 'z')
     expect(props.onExtensionChange).toHaveBeenCalledWith('z')
   })
 

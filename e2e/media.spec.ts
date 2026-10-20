@@ -18,7 +18,7 @@ function chip(user: ChatUser, name: string) {
 }
 
 function extensionBox(user: ChatUser) {
-  return user.page.getByPlaceholder('Extension (e.g. zip)').filter({ visible: true })
+  return user.page.getByPlaceholder('extension, e.g. zip').filter({ visible: true })
 }
 
 /** Stands in for an upload: Bea posts an image in Schist, in the current session. */
@@ -52,6 +52,10 @@ test.describe('Media gallery', () => {
       await expect(alice.mediaItems).toHaveCount(1)
       await expect(alice.mediaItems.first()).toContainText('raid.PMP')
     }
+    // Fewer than 3 matches: a header over them, and recent files without the filter, dimmed and not counted.
+    await expect(alice.page.getByText('1 file · .pmp').filter({ visible: true })).toBeVisible()
+    await expect(alice.page.getByText('Without the filter').filter({ visible: true })).toBeVisible()
+    await expect(alice.page.locator('[data-media-fallback]').filter({ visible: true })).toContainText('notes.zip')
 
     // From All, an extension searches every kind.
     await chip(alice, 'All').click()
@@ -64,13 +68,14 @@ test.describe('Media gallery', () => {
     await expect(alice.mediaItems).toHaveCount(3) // image, video, gif
   })
 
-  test('Links lists the host and opens in a new tab', async ({ alice }) => {
+  test('Links lists the site, address and sender, and opens in a new tab', async ({ alice }) => {
     await alice.openChat()
     await alice.openInfoPanel('Media')
     await chip(alice, 'Links').click()
     await expect(alice.mediaItems).toHaveCount(1)
     const link = alice.mediaItems.first()
     await expect(link).toContainText('example.com')
+    await expect(link).toContainText('example.com/guide · Bea · ')
     await expect(link).toHaveAttribute('href', 'https://example.com/guide')
     await expect(link).toHaveAttribute('target', '_blank')
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer')

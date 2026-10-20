@@ -3,6 +3,7 @@ import { FileText, ImageOff, Play } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
 import { MediaViewer } from '@/components/chat/MediaViewer'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { formatDuration } from '@/lib/gallery'
 import { formatSize } from '@/lib/media'
 import type { Attachment } from '@/types'
 
@@ -219,9 +220,4 @@ function FileRow({ attachment: a }: { attachment: Attachment }) {
 const stop = (fn: () => void) => (e: { stopPropagation: () => void }) => {
   e.stopPropagation()
   fn()
-}
-
-function formatDuration(s: number): string {
-  const total = Math.round(s)
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }

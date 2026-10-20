@@ -5,10 +5,8 @@ import Markdown from '@/components/chat2/Markdown'
 import { useEmojiStore } from '@/stores/emojiStore'
 import { Portal } from '@/components/ui/Portal'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
-import { MediaFilters } from '@/components/chat/MediaFilters'
-import { useMediaGallery } from '@/hooks/useMediaGallery'
+import { MediaGallery } from '@/components/gallery/MediaGallery'
 import { SPACE_LABEL } from '@/lib/spaces'
-import { formatSize, linkHost, type MediaFilterKind, type MediaScope } from '@/lib/media'
 import type { MediaItem, Message, Space } from '@/types'
 
 export type InfoTab = 'media' | 'pins' | 'search'
@@ -34,6 +32,8 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
   const [searchResults, setSearchResults] = useState<Message[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  // The scroll area: the gallery's infinite scroll and its "in view" checks are rooted here.
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
 
   const { pinnedIds, unpinMessage } = usePinnedMessages(conversationId)
 
@@ -134,9 +134,9 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={setScrollEl} className="flex-1 overflow-y-auto">
           {/* ── Media tab ── */}
-          {activeTab === 'media' && <MediaTab conversationId={conversationId} space={space} />}
+          {activeTab === 'media' && <MediaTab conversationId={conversationId} space={space} scrollRoot={scrollEl} />}
 
           {/* ── Pins tab ── */}
           {activeTab === 'pins' && (
@@ -207,137 +207,26 @@ export function ChannelInfoPanel({ conversationId, space, initialTab = 'media', 
   return panel ? body : <Portal>{body}</Portal>
 }
 
-const VISUAL_KINDS = new Set<MediaItem['kind']>(['image', 'video', 'gif'])
-
-function MediaTab({ conversationId, space }: { conversationId: string; space: Space }) {
-  const [kind, setKind] = useState<MediaFilterKind>('all')
-  const [extension, setExtension] = useState('')
-  const [scope, setScope] = useState<MediaScope>('space')
-  const [viewer, setViewer] = useState<{ url: string; filename: string; type: 'image' | 'gif' | 'video'; spoiler: boolean } | null>(null)
-  const { items, loading, hasMore, loadMore } = useMediaGallery({ conversationId, space, scope, kind, extension })
-
-  const visual = items.filter((i) => VISUAL_KINDS.has(i.kind))
-  const files = items.filter((i) => i.kind === 'file' || i.kind === 'audio')
-  const links = items.filter((i) => i.kind === 'link')
-
-  const emptyLabel =
-    kind === 'voice'
-      ? 'No voice memos yet'
-      : kind !== 'all' || extension.trim()
-        ? 'Nothing matches these filters.'
-        : scope === 'both'
-          ? 'No media yet.'
-          : 'No media in this space yet.'
-
+/** The Media tab: the gallery, opening a tapped photo, video or GIF in the viewer. */
+function MediaTab({ conversationId, space, scrollRoot }: { conversationId: string; space: Space; scrollRoot: Element | null }) {
+  // The viewer shows one item for now; the swipeable viewer will take the whole list (onOpen's second argument).
+  const [viewer, setViewer] = useState<MediaItem | null>(null)
   return (
     <>
-      <MediaFilters
-        kind={kind}
-        onKindChange={setKind}
-        extension={extension}
-        onExtensionChange={setExtension}
-        scope={scope}
-        onScopeChange={setScope}
+      <MediaGallery
+        conversationId={conversationId}
+        space={space}
+        scrollRoot={scrollRoot}
+        onOpen={(index, items) => setViewer(items[index] ?? null)}
       />
-
-      {items.length === 0 ? (
-        loading ? <div className="py-12 text-center text-sm text-muted">Loading…</div> : <EmptyState label={emptyLabel} />
-      ) : (
-        <>
-          {visual.length > 0 && (
-            <div className="grid grid-cols-3 gap-0.5 p-0.5">
-              {visual.map((item) => (
-                <button
-                  key={`${item.id}:${item.spoiler}`}
-                  data-media-item={item.kind}
-                  data-spoiler={item.spoiler ? '' : undefined}
-                  onClick={() =>
-                    setViewer({ url: item.url, filename: item.filename ?? '', type: item.kind as 'image' | 'gif' | 'video', spoiler: item.spoiler })
-                  }
-                  className="relative aspect-square overflow-hidden bg-tertiary"
-                >
-                  {item.kind === 'video' ? (
-                    <div className="flex h-full w-full items-center justify-center bg-tertiary text-muted">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </div>
-                  ) : (
-                    <img
-                      src={item.url}
-                      alt={item.filename ?? ''}
-                      className={`h-full w-full object-cover ${item.spoiler ? 'scale-110 blur-[16px] brightness-50' : ''}`}
-                      loading="lazy"
-                      draggable={false}
-                    />
-                  )}
-                  {item.spoiler && (
-                    <span className="absolute left-1 top-1 rounded-full bg-black/60 px-1.5 text-[9px] font-bold tracking-wider text-white">
-                      SPOILER
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {files.length > 0 && (
-            <div className="divide-y divide-[color:var(--line)]">
-              {files.map((item) => (
-                <a
-                  key={item.id}
-                  data-media-item={item.kind}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover"
-                >
-                  {item.extension && (
-                    <span className="flex-shrink-0 rounded-[3px] bg-tertiary px-1.5 py-0.5 text-[10px] font-bold uppercase text-secondary">
-                      {item.extension}
-                    </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-sm text-primary">{item.filename ?? item.url}</span>
-                  <span className="flex-shrink-0 text-xs text-muted">{formatSize(item.size)}</span>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {links.length > 0 && (
-            <div className="divide-y divide-[color:var(--line)]">
-              {links.map((item) => (
-                <a
-                  key={item.id}
-                  data-media-item={item.kind}
-                  href={item.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block px-4 py-3 transition-colors hover:bg-hover"
-                >
-                  <span className="block truncate text-sm font-medium text-primary">{linkHost(item.url)}</span>
-                  <span className="block truncate text-xs text-brand">{item.url}</span>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {hasMore && (
-            <div className="flex justify-center py-3">
-              <button
-                onClick={loadMore}
-                disabled={loading}
-                className="rounded-[3px] px-3 py-1.5 text-sm font-medium text-brand hover:underline disabled:opacity-50"
-              >
-                {loading ? 'Loading…' : 'Load more'}
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
       {viewer && (
-        <MediaViewer url={viewer.url} filename={viewer.filename} type={viewer.type} spoiler={viewer.spoiler} onClose={() => setViewer(null)} />
+        <MediaViewer
+          url={viewer.url}
+          filename={viewer.filename ?? ''}
+          type={viewer.kind as 'image' | 'gif' | 'video'}
+          spoiler={viewer.spoiler}
+          onClose={() => setViewer(null)}
+        />
       )}
     </>
   )
