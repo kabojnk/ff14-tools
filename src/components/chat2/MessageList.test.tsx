@@ -138,4 +138,29 @@ describe('MessageList jumps from outside the list', () => {
     ask()
     await waitFor(() => expect(scrollTo).toHaveBeenCalled())
   })
+
+  it('stays on the jumped-to message while the scroll there starts near the bottom (a new message does not pull it back)', async () => {
+    const { all } = seed(PAGE * 3)
+    const { container } = render(<MessageList conversationId="conv" space="schist" />)
+    await waitFor(() => expect(row(all[all.length - 1].id)).not.toBeNull())
+    const list = container.querySelector<HTMLElement>('[data-space-list]')!
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => 5000 })
+    Object.defineProperty(list, 'clientHeight', { configurable: true, get: () => 500 })
+
+    const target = all[2]
+    act(() => useJumpStore.getState().request({ messageId: target.id, space: 'schist', created_at: target.created_at }))
+    await waitFor(() => expect(row(target.id)?.className).toContain('msg-flash'))
+    scrollTo.mockClear()
+
+    // The smooth scroll's first frames: still within 150 px of the bottom.
+    act(() => {
+      list.scrollTop = 4450
+      list.dispatchEvent(new Event('scroll'))
+    })
+    // A message from Bea arrives meanwhile.
+    act(() => useMessageStore.setState((s) => ({ messages: { ...s.messages, [KEY]: [...s.messages[KEY], { ...msg(99), author_id: 'bea' }] } })))
+    await act(async () => {})
+
+    expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ top: 5000 }))
+  })
 })

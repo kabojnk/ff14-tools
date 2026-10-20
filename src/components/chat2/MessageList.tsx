@@ -33,6 +33,12 @@ interface MessageListProps {
 const AT_BOTTOM_PX = 150
 /** After a programmatic scroll to the bottom, count as at the bottom while it animates. */
 const PIN_WINDOW_MS = 700
+/**
+ * After a jump scrolls to a message: how long the list stays on it. Covers the smooth scroll and the flash.
+ * Meanwhile the scroll's first frames (still near the bottom) don't count as being at the bottom, and content
+ * that grows (rows paged in above, images, highlighting) re-centres the message instead of re-pinning the bottom.
+ */
+const REVEAL_HOLD_MS = 1500
 /** Older pages loaded while looking for a reply's original. */
 const MAX_REPLY_PAGES = 10
 /** A safety cap for jumps from outside the list (gallery, pins, search), which page back by time instead. */
@@ -43,6 +49,19 @@ const MAX_JUMP_PAGES = 200
  * comes back to the same place. Module-level: it outlives the component, not the page.
  */
 const scrollMemory = new Map<string, number | 'bottom'>()
+
+/** Where a row sits centred in the list. */
+const centredTop = (c: HTMLElement, el: HTMLElement) => Math.max(0, el.offsetTop - (c.clientHeight - el.offsetHeight) / 2)
+
+type Reveal = { id: string; until: number } | null
+
+/** The message a jump is still holding on, if any (clears an expired hold). */
+function held(ref: { current: Reveal }): Reveal {
+  const r = ref.current
+  if (r && Date.now() < r.until) return r
+  ref.current = null
+  return null
+}
 
 const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
 const time = (iso: string) => Date.parse(iso)
@@ -69,6 +88,8 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
   const dividerRef = useRef<HTMLDivElement>(null)
   const atBottomRef = useRef(true)
   const pinnedUntilRef = useRef(0)
+  /** The message a jump is scrolling to, held until `until` or the person scrolls. */
+  const revealRef = useRef<Reveal>(null)
   const openedRef = useRef(false)
   const [opened, setOpened] = useState(false)
   const [far, setFar] = useState(false)
@@ -122,6 +143,7 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
     const c = containerRef.current
     if (!c) return
     atBottomRef.current = true
+    revealRef.current = null
     if (behavior === 'smooth') {
       // The scroll events while it animates aren't the person leaving the bottom.
       pinnedUntilRef.current = Date.now() + PIN_WINDOW_MS
@@ -131,11 +153,24 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
     }
   }, [])
 
-  /** Keeps the bottom in view when content grows (images, code highlighting, the keyboard) if it was there. */
+  /**
+   * Keeps the bottom in view when content grows (images, code highlighting, the keyboard) if it was there,
+   * or keeps a message a jump just went to centred.
+   */
   const repin = useCallback(() => {
     const c = containerRef.current
-    if (c && openedRef.current && atBottomRef.current) c.scrollTop = c.scrollHeight
-  }, [])
+    if (!c || !openedRef.current) return
+    const r = held(revealRef)
+    if (r) {
+      const el = c.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(r.id)}"]`)
+      if (!el) return
+      const top = centredTop(c, el)
+      scrollMemory.set(key, top)
+      c.scrollTo({ top, behavior: 'smooth' })
+      return
+    }
+    if (atBottomRef.current) c.scrollTop = c.scrollHeight
+  }, [key])
 
   /** The newest message whose top is inside the viewport: everything up to it has been seen. */
   const updateSeen = useCallback(() => {
@@ -236,14 +271,28 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
     if (!c) return
     const onScroll = () => {
       const dist = c.scrollHeight - c.scrollTop - c.clientHeight
-      atBottomRef.current = dist <= AT_BOTTOM_PX || Date.now() < pinnedUntilRef.current
-      if (openedRef.current) scrollMemory.set(key, dist <= AT_BOTTOM_PX ? 'bottom' : c.scrollTop)
+      if (held(revealRef)) {
+        // On the way to a jumped-to message: where it ends up is already remembered.
+        atBottomRef.current = false
+      } else {
+        atBottomRef.current = dist <= AT_BOTTOM_PX || Date.now() < pinnedUntilRef.current
+        if (openedRef.current) scrollMemory.set(key, dist <= AT_BOTTOM_PX ? 'bottom' : c.scrollTop)
+      }
       setFar(dist > c.clientHeight)
       updateSeen()
       checkReadRef.current()
     }
+    // The person taking over ends a jump's hold.
+    const release = () => {
+      revealRef.current = null
+    }
+    const inputs = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const
     c.addEventListener('scroll', onScroll, { passive: true })
-    return () => c.removeEventListener('scroll', onScroll)
+    for (const type of inputs) c.addEventListener(type, release, { passive: true })
+    return () => {
+      c.removeEventListener('scroll', onScroll)
+      for (const type of inputs) c.removeEventListener(type, release)
+    }
   }, [key, updateSeen])
 
   // A new message at the end: follow it if we were at the bottom, or if it's mine being sent.
@@ -302,7 +351,8 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
 
   /**
    * Centres a found row and flashes it. The list is no longer "at the bottom", and the position is remembered,
-   * so the 400 ms re-pin, the ResizeObserver and a later return to this space don't scroll it away.
+   * so the 400 ms re-pin, the ResizeObserver and a later return to this space don't scroll it away. The hold
+   * (REVEAL_HOLD_MS) keeps it there while the smooth scroll runs and the content above settles.
    */
   const reveal = useCallback(
     (el: HTMLElement, id: string) => {
@@ -310,7 +360,8 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
       if (!c) return
       atBottomRef.current = false
       pinnedUntilRef.current = 0
-      const top = Math.max(0, el.offsetTop - (c.clientHeight - el.offsetHeight) / 2)
+      revealRef.current = { id, until: Date.now() + REVEAL_HOLD_MS }
+      const top = centredTop(c, el)
       scrollMemory.set(key, top)
       c.scrollTo({ top, behavior: 'smooth' })
       setFlashId(id)

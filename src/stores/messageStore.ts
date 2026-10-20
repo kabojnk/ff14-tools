@@ -160,7 +160,19 @@ export const useMessageStore = create<MessageState>((set, get) => {
       set((state) => {
         const existing = state.messages[key] ?? []
         const i = existing.findIndex((m) => m.id === message.id)
-        if (i === -1) return { messages: { ...state.messages, [key]: [...existing, message] } }
+        if (i === -1) {
+          // A change can arrive late (realtime lags behind the database, or a rejoin replays it), after a
+          // fetch that already covers its time. Older than everything loaded: it's history that paging back
+          // fetches in order (keeping it would also move fetchOlder's cursor past the rows in between).
+          // Otherwise it goes in time order (my unsent ones by their local time); the usual newest one still goes last.
+          const at = Date.parse(message.created_at)
+          const oldest = existing.find((m) => !m.localState)
+          if (oldest && at < Date.parse(oldest.created_at)) return state
+          let j = existing.findIndex((m) => !m.localState && Date.parse(m.created_at) > at)
+          if (j === -1) j = existing.findIndex((m) => m.localState && Date.parse(m.created_at) > at)
+          const next = j === -1 ? [...existing, message] : [...existing.slice(0, j), message, ...existing.slice(j)]
+          return { messages: { ...state.messages, [key]: next } }
+        }
         // The echo of my own pending message: the server row replaces it. Otherwise a duplicate.
         if (!existing[i].localState) return state
         return { messages: { ...state.messages, [key]: replaceAt(existing, i, message) } }
