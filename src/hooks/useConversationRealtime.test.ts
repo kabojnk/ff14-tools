@@ -63,6 +63,15 @@ describe('useConversationRealtime typing', () => {
     expect(typing.schist.map((t) => t.user_id)).toEqual(['u2'])
   })
 
+  it("a message's second copy (the database change after the broadcast) leaves their new typing alone", () => {
+    rt.handlers!.onTyping('main', bea)
+    rt.handlers!.onMessage(message({ id: 'm9', space: 'main' }), 'new')
+    expect(useTypingStore.getState().typing.main).toEqual([])
+    rt.handlers!.onTyping('main', bea) // they start on the next one…
+    rt.handlers!.onMessage(message({ id: 'm9', space: 'main' }), 'new') // …and the late copy arrives
+    expect(useTypingStore.getState().typing.main.map((t) => t.user_id)).toEqual(['u2'])
+  })
+
   it('clears the indicator on an explicit typing stop', () => {
     rt.handlers!.onTyping('schist', bea)
     rt.handlers!.onTypingStop('schist', 'u2')
@@ -84,8 +93,19 @@ describe('useConversationRealtime profiles', () => {
   })
 
   it('reloads the profiles after a rejoin (updates may have been missed)', () => {
-    useConversationStore.setState({ reloadAfterLake: vi.fn(async () => {}) })
+    useConversationStore.setState({ reloadAfterLake: vi.fn(async () => {}), refreshPartnerReadAt: vi.fn(async () => {}) })
     rt.handlers!.onStatus('SUBSCRIBED', true)
     expect(db.loads).toEqual([['u1', 'u2'], ['u1', 'u2']])
+  })
+})
+
+describe('useConversationRealtime read positions', () => {
+  it.each([false, true])('catches up on the partner read positions once live (rejoined: %s)', (rejoined) => {
+    const refreshPartnerReadAt = vi.fn(async () => {})
+    useConversationStore.setState({ reloadAfterLake: vi.fn(async () => {}), refreshLatest: vi.fn(async () => {}), refreshPartnerReadAt })
+    rt.handlers!.onStatus('JOINING', false)
+    expect(refreshPartnerReadAt).not.toHaveBeenCalled()
+    rt.handlers!.onStatus('SUBSCRIBED', rejoined)
+    expect(refreshPartnerReadAt).toHaveBeenCalledWith('u1')
   })
 })

@@ -3,7 +3,12 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }))
 
-import { createConversationRealtime, type ConversationHandlers, type RealtimeClientLike } from '@/lib/conversationRealtime'
+import {
+  createConversationRealtime,
+  POSTGRES_READY_TIMEOUT_MS,
+  type ConversationHandlers,
+  type RealtimeClientLike,
+} from '@/lib/conversationRealtime'
 
 type Listener = { type: string; filter: Record<string, unknown>; cb: (p: unknown) => void }
 
@@ -31,6 +36,13 @@ class FakeChannel {
   }
   emitBroadcast(event: string, payload: unknown) {
     for (const l of this.listeners) if (l.type === 'broadcast' && l.filter.event === event) l.cb({ payload })
+  }
+  emitSystem(payload: unknown) {
+    for (const l of this.listeners) if (l.type === 'system') l.cb(payload)
+  }
+  /** Realtime's confirmation that this join's postgres_changes are live. */
+  postgresOk() {
+    this.emitSystem({ extension: 'postgres_changes', status: 'ok', message: 'Subscribed to PostgreSQL' })
   }
   emitPg(table: string, event: string, payload: unknown) {
     for (const l of this.listeners)
@@ -91,9 +103,11 @@ describe('conversationRealtime', () => {
 
     // Late callbacks from the first channel are ignored.
     created[0].statusCb?.('SUBSCRIBED')
+    created[0].postgresOk()
     created[0].emitBroadcast('lake', {})
     expect(h1.onStatus).not.toHaveBeenCalledWith('SUBSCRIBED', expect.anything())
     created[1].statusCb?.('SUBSCRIBED')
+    created[1].postgresOk()
     expect(h2.onStatus).toHaveBeenCalledWith('SUBSCRIBED', false)
   })
 
@@ -126,14 +140,90 @@ describe('conversationRealtime', () => {
     rt.joinConversation('c1', h)
     expect(h.onStatus).toHaveBeenCalledWith('JOINING', false)
     created[0].statusCb?.('SUBSCRIBED')
+    created[0].postgresOk()
     created[0].statusCb?.('CHANNEL_ERROR')
     created[0].statusCb?.('SUBSCRIBED')
+    created[0].postgresOk()
     expect(h.onStatus.mock.calls).toEqual([
       ['JOINING', false],
       ['SUBSCRIBED', false],
       ['CHANNEL_ERROR', false],
       ['SUBSCRIBED', true],
     ])
+  })
+
+  it('is SUBSCRIBED only once Realtime confirms the database changes too (they lag the join when cold)', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    created[0].statusCb?.('SUBSCRIBED')
+    expect(h.onStatus.mock.calls).toEqual([['JOINING', false]])
+    created[0].emitSystem({ extension: 'broadcast', status: 'ok' })
+    expect(h.onStatus.mock.calls).toEqual([['JOINING', false]])
+    created[0].postgresOk()
+    expect(h.onStatus.mock.calls).toEqual([
+      ['JOINING', false],
+      ['SUBSCRIBED', false],
+    ])
+    // A repeated confirmation does not report again.
+    created[0].postgresOk()
+    expect(h.onStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('each rejoin waits for its own confirmation', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    created[0].statusCb?.('SUBSCRIBED')
+    created[0].postgresOk()
+    created[0].statusCb?.('TIMED_OUT')
+    created[0].statusCb?.('SUBSCRIBED')
+    expect(h.onStatus).not.toHaveBeenCalledWith('SUBSCRIBED', true)
+    created[0].postgresOk()
+    expect(h.onStatus).toHaveBeenLastCalledWith('SUBSCRIBED', true)
+  })
+
+  it('a confirmation that beats the join reply still counts', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    created[0].postgresOk()
+    created[0].statusCb?.('SUBSCRIBED')
+    expect(h.onStatus).toHaveBeenLastCalledWith('SUBSCRIBED', false)
+  })
+
+  it('a failed database subscription still goes live (broadcasts work) and says why', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    created[0].statusCb?.('SUBSCRIBED')
+    created[0].emitSystem({ extension: 'postgres_changes', status: 'error', message: 'nope' })
+    expect(h.onStatus).toHaveBeenLastCalledWith('SUBSCRIBED', false)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('without a confirmation, goes live after a timeout; leaving cancels it', () => {
+    vi.useFakeTimers()
+    const { client, created } = fakeClient()
+    const rt = createConversationRealtime(client)
+    const h = handlers()
+    const leave = rt.joinConversation('c1', h)
+    created[0].statusCb?.('SUBSCRIBED')
+    vi.advanceTimersByTime(POSTGRES_READY_TIMEOUT_MS - 1)
+    expect(h.onStatus).not.toHaveBeenCalledWith('SUBSCRIBED', false)
+    vi.advanceTimersByTime(1)
+    expect(h.onStatus).toHaveBeenLastCalledWith('SUBSCRIBED', false)
+
+    const h2 = handlers()
+    rt.joinConversation('c2', h2)
+    created[1].statusCb?.('SUBSCRIBED')
+    leave() // already left by the switch: a no-op
+    rt.leaveConversation()
+    vi.advanceTimersByTime(POSTGRES_READY_TIMEOUT_MS)
+    expect(h2.onStatus).not.toHaveBeenCalledWith('SUBSCRIBED', false)
+    vi.useRealTimers()
   })
 
   it('routes broadcasts and database changes to the handlers', () => {

@@ -17,6 +17,7 @@ export interface ConversationHandlers {
   onProfile(row: Record<string, unknown>): void
   /** A reaction row came or went. A DELETE carries only the primary key, and reaches every subscriber. */
   onReaction(event: 'INSERT' | 'DELETE', row: Partial<Reaction> & { id: string }): void
+  /** SUBSCRIBED only once broadcasts AND postgres_changes are live (see joinConversation). */
   onStatus(s: RealtimeStatus, rejoined: boolean): void
 }
 
@@ -30,6 +31,11 @@ export interface RealtimeClientLike {
 }
 
 const LAKE_DEBOUNCE_MS = 250
+/**
+ * How long a joined channel waits for Realtime to confirm its postgres_changes before calling itself
+ * subscribed anyway (broadcasts work from the join; only the database safety nets would still be late).
+ */
+export const POSTGRES_READY_TIMEOUT_MS = 10_000
 
 /**
  * Owns the one private `conv:<id>` channel per device. Message, typing and lake broadcasts for both
@@ -67,6 +73,26 @@ export function createConversationRealtime(client: RealtimeClientLike) {
     const gen = ++generation
     const live = () => gen === generation
     let joinedBefore = false
+    // A join is live only when both have happened: the join reply (SUBSCRIBED, broadcasts flow) and
+    // Realtime's "Subscribed to PostgreSQL" system message (postgres_changes flow). The second comes
+    // later: a few ms on a warm server, seconds on a cold one (after a restart, Realtime first starts its
+    // replication for the tenant), and changes committed in between are never delivered.
+    let joined = false
+    let postgresReady = false
+    let reported = false
+    let readyTimer: ReturnType<typeof setTimeout> | null = null
+    const clearReadyTimer = () => {
+      if (readyTimer) clearTimeout(readyTimer)
+      readyTimer = null
+    }
+    const reportIfReady = () => {
+      if (!live() || !joined || !postgresReady || reported) return
+      reported = true
+      clearReadyTimer()
+      const rejoined = joinedBefore
+      joinedBefore = true
+      handlers.onStatus('SUBSCRIBED', rejoined)
+    }
 
     const lake = () => {
       if (lakeTimer) clearTimeout(lakeTimer)
@@ -96,6 +122,12 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       })
       .on('broadcast', { event: 'lake' }, () => {
         if (live()) lake()
+      })
+      .on('system', {}, (payload: { extension?: string; status?: string; message?: string }) => {
+        if (!live() || payload?.extension !== 'postgres_changes') return
+        if (payload.status !== 'ok') console.warn('Realtime database changes unavailable:', payload.message)
+        postgresReady = true
+        reportIfReady()
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter }, (payload) => {
         if (!live()) return
@@ -141,6 +173,7 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       current = null
       if (lakeTimer) clearTimeout(lakeTimer)
       lakeTimer = null
+      clearReadyTimer()
       drop(channel)
     }
     current = { id: conversationId, generation: gen, channel, leave }
@@ -149,10 +182,22 @@ export function createConversationRealtime(client: RealtimeClientLike) {
     channel.subscribe((status) => {
       if (!live()) return
       if (status === 'SUBSCRIBED') {
-        const rejoined = joinedBefore
-        joinedBefore = true
-        handlers.onStatus('SUBSCRIBED', rejoined)
+        joined = true
+        if (!postgresReady && !readyTimer) {
+          clearReadyTimer()
+          readyTimer = setTimeout(() => {
+            readyTimer = null
+            postgresReady = true
+            reportIfReady()
+          }, POSTGRES_READY_TIMEOUT_MS)
+        }
+        reportIfReady()
       } else {
+        // The next join gets its own confirmation.
+        joined = false
+        postgresReady = false
+        reported = false
+        clearReadyTimer()
         handlers.onStatus(status as RealtimeStatus, false)
       }
     })
