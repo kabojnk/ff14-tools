@@ -13,17 +13,7 @@ afterDevicesClose(async () => {
     const { error } = await svc.from('messages').delete().eq('conversation_id', IDS.conversation).in('content', sentTexts.splice(0))
     if (error) throw new Error(error.message)
   }
-  // Put the seed photo back unmarked (only if a test left it marked).
-  const { data, error } = await svc.from('messages').select('attachments').eq('id', SEED_IMAGE).single()
-  if (error) throw new Error(error.message)
-  const attachments = (data as { attachments: { spoiler: boolean }[] }).attachments
-  if (attachments.some((a) => a.spoiler)) {
-    const { error: e } = await svc
-      .from('messages')
-      .update({ attachments: attachments.map((a) => ({ ...a, spoiler: false })) })
-      .eq('id', SEED_IMAGE)
-    if (e) throw new Error(e.message)
-  }
+  // restore() also puts the seed photo back unmarked if a test left it marked.
   await restore()
 })
 

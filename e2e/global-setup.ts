@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { ENV_FILE } from './supabase'
+import { ENV_FILE, snapshotSeedMessages } from './supabase'
 
 function parseEnv(text: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -31,5 +31,8 @@ export default async function globalSetup() {
 
   if (process.env.E2E_SKIP_RESET !== '1') {
     execSync('npx --yes supabase@2 db reset', { stdio: 'inherit' })
+    await snapshotSeedMessages()
+  } else {
+    await snapshotSeedMessages({ ifMissing: true })
   }
 }

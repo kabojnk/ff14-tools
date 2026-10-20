@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterDevicesClose, expect, test } from './fixtures'
-import { restore, serviceClient } from './supabase'
+import { readEverything, restore, serviceClient } from './supabase'
 import { IDS } from './users'
 
 // Messages this file created: deleted (with anything sent under these texts) after each test.
@@ -41,6 +41,8 @@ async function beaReadAt(space: 'main' | 'schist'): Promise<number> {
 
 test.describe('Cozy message list', () => {
   test('my message shows ✓ once sent, then ✓✓ after Bea opens the space', async ({ alice, bea }) => {
+    // Only the new message is unread, so Bea's Main opens at the bottom (with it in view).
+    await readEverything('bea', 'main')
     await bea.openChat('Schist')
     await alice.openChat('Main')
 
@@ -59,6 +61,7 @@ test.describe('Cozy message list', () => {
   test("with Bea's read receipts off, my message stays at ✓ after she reads it", async ({ alice, bea }) => {
     const { error } = await serviceClient().from('profiles').update({ read_receipts: false }).eq('id', IDS.users.bea)
     if (error) throw new Error(error.message)
+    await readEverything('bea', 'main')
 
     await bea.openChat('Schist')
     await alice.openChat('Main')
@@ -67,11 +70,11 @@ test.describe('Cozy message list', () => {
     const tick = alice.messageRow(text).locator('[data-tick]')
     await expect(tick).toHaveAttribute('data-tick', 'sent')
 
-    const sentAt = Date.now() - 5_000
+    const readBefore = await beaReadAt('main')
     await bea.openSpace('Main')
     await expect(bea.message(text)).toBeVisible()
     // Bea's read really landed on the server…
-    await expect.poll(() => beaReadAt('main'), { timeout: 5_000 }).toBeGreaterThan(sentAt)
+    await expect.poll(() => beaReadAt('main'), { timeout: 5_000 }).toBeGreaterThan(readBefore)
     // …and Alice still sees a single tick.
     await alice.page.waitForTimeout(1_000)
     await expect(tick).toHaveAttribute('data-tick', 'sent')

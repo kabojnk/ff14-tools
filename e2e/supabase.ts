@@ -1,9 +1,15 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { IDS, USERS, type UserKey } from './users'
 
 /** The local stack's API URL and keys, written by global-setup on every run (gitignored). */
 export const ENV_FILE = 'e2e/.auth/env.json'
+/** The seeded messages as they were right after the last reset, written by global-setup (gitignored). */
+export const SEED_MESSAGES_FILE = 'e2e/.auth/seed-messages.json'
+/** Every seeded message has an ID in this range (supabase/seed.sql: cccccccc-…). */
+const SEED_MESSAGE_IDS = ['cccccccc-0000-0000-0000-000000000000', 'cccccccc-ffff-ffff-ffff-ffffffffffff'] as const
+const seedMessages = () =>
+  serviceClient().from('messages').select('*').gte('id', SEED_MESSAGE_IDS[0]).lte('id', SEED_MESSAGE_IDS[1]).order('id')
 
 function env(): { apiUrl: string; anonKey: string; serviceRoleKey: string } {
   return JSON.parse(readFileSync(ENV_FILE, 'utf8'))
@@ -26,6 +32,18 @@ export async function userClient(key: UserKey): Promise<SupabaseClient> {
   return client
 }
 
+/**
+ * Marks everything in a space read for a user, as if they had scrolled to the bottom just now. The seed
+ * has no read positions, so on a fresh database the whole history is unread and the list opens at the
+ * new-messages divider near the top (and, rightly, marks nothing read until it is scrolled down).
+ */
+export async function readEverything(key: UserKey, space: 'main' | 'schist') {
+  const { error } = await serviceClient()
+    .from('read_positions')
+    .upsert({ conversation_id: IDS.conversation, user_id: IDS.users[key], space, last_read_at: new Date().toISOString() })
+  if (error) throw new Error(`read everything (${key}, ${space}): ${error.message}`)
+}
+
 /** bcrypt hash of LAKE_PASSWORD ('test-lake-password'); pgcrypto's crypt() verifies any bf hash. */
 const LAKE_PASSWORD_HASH = '$2a$06$XA9SA7Zf/i882ZaICzf7V.KBpRyjrgh2atYOndw5EbZYpMg5cfEPm'
 
@@ -36,6 +54,41 @@ const SEED_SESSION_VISIBILITY: Record<string, boolean> = {
 
 function check(what: string, error: { message: string } | null) {
   if (error) throw new Error(`restore ${what}: ${error.message}`)
+}
+
+type Row = Record<string, unknown>
+
+/**
+ * Records the seeded messages for restoreSeedMessages. global-setup calls it right after a reset; with
+ * E2E_SKIP_RESET=1 it keeps the record from the last reset (or, if there is none, takes one now).
+ */
+export async function snapshotSeedMessages({ ifMissing = false } = {}) {
+  if (ifMissing && existsSync(SEED_MESSAGES_FILE)) return
+  const { data, error } = await seedMessages()
+  if (error) throw new Error(`snapshot seed messages: ${error.message}`)
+  writeFileSync(SEED_MESSAGES_FILE, JSON.stringify(data, null, 2))
+}
+
+/**
+ * Puts back any seeded message a test (or a test that failed half-way) changed: deleted, edited,
+ * moved to another session, marked as a spoiler, or gone. Untouched rows are not written.
+ */
+export async function restoreSeedMessages() {
+  if (!existsSync(SEED_MESSAGES_FILE)) return
+  const seed = JSON.parse(readFileSync(SEED_MESSAGES_FILE, 'utf8')) as Row[]
+  if (seed.length === 0) return
+  const svc = serviceClient()
+  const { data, error } = await seedMessages()
+  check('seed messages', error)
+  const now = new Map(((data ?? []) as Row[]).map((r) => [r.id as string, r]))
+  const same = (a: Row, b: Row) => Object.keys(a).every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]))
+  const missing = seed.filter((r) => !now.has(r.id as string))
+  if (missing.length) check('missing seed messages', (await svc.from('messages').insert(missing)).error)
+  for (const row of seed) {
+    const current = now.get(row.id as string)
+    if (!current || same(row, current)) continue
+    check(`seed message ${row.id as string}`, (await svc.from('messages').update(row).eq('id', row.id as string)).error)
+  }
 }
 
 /**
@@ -73,6 +126,7 @@ export async function restoreStatuses() {
  * - Alice's and Bea's PINs (through set_pin, as each user, only if verify_pin says they changed)
  * - the lake password
  * - sessions: the seed sessions as seeded; any session a test created (a drag) deleted, with its messages
+ * - the seeded messages (restoreSeedMessages)
  * - read receipts on
  * - statuses (restoreStatuses)
  *
@@ -83,8 +137,28 @@ export async function restoreStatuses() {
  * blanket rewrite here made the NEXT test miss changes.
  */
 export async function restore() {
-  const svc = serviceClient()
+  // Each step runs even if an earlier one failed, sessions and messages first: a test that failed
+  // half-way must not leave the seed history hidden or changed for every test after it.
+  const steps: [string, () => Promise<void>][] = [
+    ['sessions', restoreSessions],
+    ['seed messages', restoreSeedMessages],
+    ['lake password', restoreLakePassword],
+    ['read receipts', restoreReadReceipts],
+    ['statuses', restoreStatuses],
+    ['PINs', restorePins],
+  ]
+  const failures: string[] = []
+  for (const [name, step] of steps) {
+    try {
+      await step()
+    } catch (e) {
+      failures.push(`${name}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+  if (failures.length) throw new Error(`restore failed:\n${failures.join('\n')}`)
+}
 
+async function restorePins() {
   for (const key of Object.keys(USERS) as UserKey[]) {
     const client = await userClient(key)
     const { data: same, error } = await client.rpc('verify_pin', { p_pin: USERS[key].pin })
@@ -92,12 +166,17 @@ export async function restore() {
     if (!same) check(`${key} PIN`, (await client.rpc('set_pin', { p_pin: USERS[key].pin })).error)
     await client.auth.signOut({ scope: 'local' })
   }
+}
 
+async function restoreLakePassword() {
   check(
     'lake password',
-    (await svc.from('private_secrets').update({ value_hash: LAKE_PASSWORD_HASH }).eq('key', 'lake_password')).error,
+    (await serviceClient().from('private_secrets').update({ value_hash: LAKE_PASSWORD_HASH }).eq('key', 'lake_password')).error,
   )
+}
 
+async function restoreSessions() {
+  const svc = serviceClient()
   // Sessions a test created (drags, change_sheets) are deleted with their messages rather than hidden:
   // left to pile up, every Fill (and every restore) rewrote dozens of them at once.
   const seedIds = Object.keys(SEED_SESSION_VISIBILITY)
@@ -112,15 +191,15 @@ export async function restore() {
     if (s.visible === visible) continue
     check('session visibility', (await svc.from('sessions').update({ visible }).eq('id', s.id)).error)
   }
+}
 
+async function restoreReadReceipts() {
   check(
     'read receipts',
-    (await svc
+    (await serviceClient()
       .from('profiles')
       .update({ read_receipts: true })
       .in('id', [IDS.users.alice, IDS.users.bea])
       .eq('read_receipts', false)).error,
   )
-
-  await restoreStatuses()
 }
