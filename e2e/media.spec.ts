@@ -154,6 +154,10 @@ test.describe('Media gallery', () => {
   test('Show in chat from Both switches to Schist and flashes the message', async ({ alice }) => {
     const id = await beaPostsImageInSchist()
     await alice.openChat('Main')
+    // A reply started in Main must not follow the jump into Schist.
+    const item = await alice.openMessageActions(alice.messageRow('Seed: hi Bea').locator('[data-bubble]'))
+    await item('Reply').click()
+    await expect(alice.page.getByText('Replying to').filter({ visible: true })).toBeVisible()
     await alice.openInfoPanel('Media')
     await chip(alice, 'Both').click()
     await expect(alice.mediaItems).toHaveCount(4)
@@ -168,6 +172,7 @@ test.describe('Media gallery', () => {
     await expect(v).toBeHidden()
     await expect(alice.spaceButton('Schist')).toHaveAttribute('aria-selected', 'true')
     await expect(row(alice, id)).toHaveClass(/msg-flash/)
+    await expect(alice.page.getByText('Replying to')).toHaveCount(0)
     // Desktop keeps the panel open, following the space; phones close it to show the chat.
     const panelTitle = alice.page.getByRole('heading', { name: 'Schist', exact: true })
     if (await alice.isPhone()) await expect(panelTitle).toBeHidden()

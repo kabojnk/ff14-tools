@@ -84,15 +84,13 @@ export function AppShell() {
     }
   }, [pendingJump, setActiveSpace])
 
-  // A manual space change resets the reply, the edit and the info panel. One caused by a jump keeps them.
+  // A space change resets the reply and the edit (a reply must not be sent into the other space). A manual change
+  // also closes the info panel; one caused by a jump keeps it open.
   useEffect(() => {
-    if (jumpSpaceRef.current === activeSpace) {
-      jumpSpaceRef.current = null
-      return
-    }
+    const byJump = jumpSpaceRef.current === activeSpace
     jumpSpaceRef.current = null
     setReplyTo(null)
-    setShowInfo(false)
+    if (!byJump) setShowInfo(false)
     useComposerStore.getState().cancelEdit()
   }, [activeSpace, conversationId])
 
