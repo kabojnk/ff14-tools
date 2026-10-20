@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
@@ -10,8 +10,19 @@ const { sendOutgoing, uploadFile, sendTyping, stopTyping, sendMessageEvent } = v
   stopTyping: vi.fn(),
 }))
 
-vi.mock('@/lib/supabase', () => ({
-  supabase: { from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }) },
+vi.mock('@/lib/supabase', () => {
+  const channel = { on: () => channel, subscribe: () => channel }
+  return {
+    supabase: {
+      from: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
+      channel: () => channel,
+      removeChannel: () => {},
+    },
+  }
+})
+vi.mock('@/lib/emoji/data', async (orig) => ({
+  ...(await orig<typeof import('@/lib/emoji/data')>()),
+  loadEmoji: () => Promise.resolve([{ emoji: '😀', label: 'grinning face', tags: [], tab: 'smileys' }]),
 }))
 vi.mock('@/lib/chat/outbox', async (orig) => ({ ...(await orig<typeof import('@/lib/chat/outbox')>()), sendOutgoing }))
 vi.mock('@/lib/conversationRealtime', async (orig) => ({
@@ -293,6 +304,76 @@ describe('Composer: editing', () => {
     sendTyping.mockClear()
     type(screen.getByRole('textbox', { name: 'Edit message' }), 'x')
     expect(sendTyping).not.toHaveBeenCalled()
+  })
+})
+
+describe('Composer: emoji', () => {
+  const pickerEmoji = () => within(screen.getByRole('dialog', { name: 'Emoji picker' })).getByRole('button', { name: 'grinning face' })
+  const caretAt = (box: HTMLTextAreaElement, at: number) => {
+    box.setSelectionRange(at, at)
+    fireEvent.select(box)
+  }
+
+  it('phone: inserts at the caret without focusing the field (the keyboard stays down), and keeps picking', async () => {
+    const { box } = setup({ isDesktop: false })
+    type(box, 'abcd')
+    caretAt(box, 2)
+    fireEvent.blur(box)
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an emoji' }))
+    await act(async () => {})
+    fireEvent.click(pickerEmoji())
+    fireEvent.click(pickerEmoji())
+    expect(box.value).toBe('ab😀😀cd')
+    expect(box.selectionStart).toBe('ab😀😀'.length)
+    expect(box.selectionEnd).toBe('ab😀😀'.length)
+    expect(box).not.toHaveFocus()
+    expect(screen.getByRole('dialog', { name: 'Emoji picker' })).toBeInTheDocument()
+  })
+
+  it('phone: the panel sits in the layout below the composer, not over it', async () => {
+    const { container, box } = setup({ isDesktop: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an emoji' }))
+    await act(async () => {})
+    const picker = screen.getByRole('dialog', { name: 'Emoji picker' })
+    expect(picker.previousElementSibling).toBe(container.querySelector('[data-composer]'))
+    // Tapping into the field brings the keyboard back instead.
+    fireEvent.focus(box)
+    expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull()
+  })
+
+  it('desktop: inserts at the caret, replacing a selection, and puts the caret after it', async () => {
+    const { box } = setup()
+    type(box, 'hello world')
+    box.setSelectionRange(6, 11)
+    fireEvent.select(box)
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an emoji' }))
+    await act(async () => {})
+    fireEvent.click(pickerEmoji())
+    expect(box.value).toBe('hello 😀')
+    expect(box).toHaveFocus()
+    expect(box.selectionStart).toBe('hello 😀'.length)
+  })
+
+  it('inserts into the message being edited', async () => {
+    useComposerStore.setState({ editing: msg({ author_id: 'me', content: 'hi' }) })
+    setup()
+    const box = screen.getByRole('textbox', { name: 'Edit message' }) as HTMLTextAreaElement
+    caretAt(box, 2)
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an emoji' }))
+    await act(async () => {})
+    fireEvent.click(pickerEmoji())
+    expect(box.value).toBe('hi😀')
+  })
+
+  it('Escape with the picker open closes it, not the edit', async () => {
+    useComposerStore.setState({ editing: msg({ author_id: 'me', content: 'hi' }) })
+    setup()
+    const box = screen.getByRole('textbox', { name: 'Edit message' })
+    fireEvent.click(screen.getByRole('button', { name: 'Pick an emoji' }))
+    await act(async () => {})
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull()
+    expect(useComposerStore.getState().editing).not.toBeNull()
   })
 })
 

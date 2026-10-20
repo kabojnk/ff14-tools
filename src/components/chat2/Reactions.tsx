@@ -52,7 +52,7 @@ export function Reactions({ chips, side, isDesktop, emoji, whoReacted, onToggle 
       {picking && (
         <QuickReactBar
           emoji={emoji}
-          align={side === 'me' ? 'end' : 'start'}
+          isDesktop={isDesktop}
           onPick={onToggle}
           onClose={closePicker}
           className={`!absolute bottom-full mb-1 ${side === 'me' ? 'right-0' : 'left-0'}`}

@@ -37,7 +37,8 @@ export function ActionSheet({ actions, onClose, onHeight }: ActionSheetProps) {
 
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      // Not when something over the sheet (the emoji picker) already handled this Escape.
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
@@ -442,7 +443,7 @@ export function MessageActions({
           {reacting && (
             <QuickReactBar
               emoji={emoji}
-              align={mine ? 'end' : 'start'}
+              isDesktop
               onPick={react}
               onClose={closeReacting}
               className={`!absolute bottom-full mb-1 ${mine ? 'right-0' : 'left-0'}`}
@@ -483,7 +484,7 @@ export function MessageActions({
           >
             <QuickReactBar
               emoji={emoji}
-              align={mine ? 'end' : 'start'}
+              isDesktop={false}
               onPick={react}
               onClose={closeSheet}
               ignoreOutside

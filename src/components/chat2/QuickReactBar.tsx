@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
-import { EmojiPicker } from '@/components/chat/EmojiPicker'
+import { EmojiPicker } from '@/components/emoji/EmojiPicker'
 import type { EmojiLookup } from '@/components/chat2/Markdown'
 import { recentEmoji } from '@/lib/recentEmoji'
 
@@ -21,26 +21,36 @@ interface QuickReactBarProps {
   onPick: (emoji: string) => void
   onClose: () => void
   emoji: EmojiLookup
-  /** Which edge the full picker lines up with: the bubble's side. */
-  align?: 'start' | 'end'
   /** Extra classes for positioning. */
   className?: string
   /** A press outside doesn't close it (it sits over a long-press sheet, which closes both). */
   ignoreOutside?: boolean
+  /** The layout, for the full picker (popover or bottom panel); otherwise the media query decides. */
+  isDesktop?: boolean
 }
 
-/** Six recent emoji plus "+" for the full picker (custom emoji included). Closes on Escape or a press outside. */
-export function QuickReactBar({ onPick, onClose, emoji, align = 'start', className = '', ignoreOutside = false }: QuickReactBarProps) {
+/**
+ * Six recent emoji plus "More emoji" for the full picker (custom emoji included). Closes on Escape or a
+ * press outside. While the full picker is open, those are the picker's: Escape or a press outside closes
+ * just the picker, and presses inside it (a portal) never count as outside the bar.
+ */
+export function QuickReactBar({ onPick, onClose, emoji, className = '', ignoreOutside = false, isDesktop }: QuickReactBarProps) {
   const ref = useRef<HTMLDivElement>(null)
+  const moreRef = useRef<HTMLButtonElement>(null)
   const [recent] = useState(recentEmoji)
   const [full, setFull] = useState(false)
+  const closeFull = useCallback(() => setFull(false), [])
 
   useEffect(() => {
+    if (full) return // paused: the picker handles Escape and outside presses
     const onDown = (e: PointerEvent) => {
-      if (!ignoreOutside && ref.current && !ref.current.contains(e.target as Node)) onClose()
+      const t = e.target as Node
+      if (ignoreOutside || !ref.current || ref.current.contains(t)) return
+      if (t instanceof Element && t.closest('[data-emoji-picker]')) return
+      onClose()
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
     }
     document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
@@ -48,7 +58,7 @@ export function QuickReactBar({ onPick, onClose, emoji, align = 'start', classNa
       document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [onClose, ignoreOutside])
+  }, [onClose, ignoreOutside, full])
 
   const pick = (e: string) => {
     onPick(e)
@@ -74,6 +84,7 @@ export function QuickReactBar({ onPick, onClose, emoji, align = 'start', classNa
           </button>
         ))}
         <button
+          ref={moreRef}
           type="button"
           aria-label="More emoji"
           aria-expanded={full}
@@ -83,12 +94,7 @@ export function QuickReactBar({ onPick, onClose, emoji, align = 'start', classNa
           <Icon icon={Plus} size={18} />
         </button>
       </div>
-      {full && (
-        // EmojiPicker places itself above its parent's right edge; this box puts that edge on the bubble's side.
-        <div className={`absolute bottom-full h-0 w-80 max-w-[calc(100vw-32px)] ${align === 'end' ? 'right-0' : 'left-0'}`}>
-          <EmojiPicker onSelect={pick} onClose={() => setFull(false)} />
-        </div>
-      )}
+      {full && <EmojiPicker mode="reaction" anchorRef={moreRef} isDesktop={isDesktop} onPick={pick} onClose={closeFull} />}
     </div>
   )
 }

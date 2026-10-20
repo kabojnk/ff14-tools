@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Paperclip, Pencil, Reply, SendHorizontal, Smile, X, type LucideIcon } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
-import { EmojiPicker } from '@/components/chat/EmojiPicker'
+import { EmojiPicker } from '@/components/emoji/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
 import { PendingAttachments } from '@/components/chat2/PendingAttachments'
 import { useTyping } from '@/hooks/useTyping'
@@ -68,6 +68,17 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const gifButtonRef = useRef<HTMLButtonElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const emojiButtonRef = useRef<HTMLButtonElement>(null)
+  /**
+   * Where emoji go: the field's selection, kept up to date on select, keyup and blur (and moved past each
+   * insert), because on a phone the field isn't focused while the picker is open.
+   */
+  const caretRef = useRef<{ start: number; end: number } | null>(null)
+  /** The caret to restore once an insert has rendered. */
+  const pendingCaretRef = useRef<number | null>(null)
+  /** Phones: the picker takes the keyboard's place under the composer, and the field stays unfocused. */
+  const phonePicker = showEmoji && !isDesktop
 
   // IME composition (and iOS predictive text): Safari fires compositionend *before* the keydown of the
   // Enter that committed it, so an Enter in the same tick as a compositionend still belongs to it.
@@ -94,6 +105,22 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   useEffect(() => resize(), [value, resize])
   useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
 
+  // After an emoji insert: the caret goes after it. Desktop focuses the field; phones leave it unfocused,
+  // so the keyboard stays down while picking.
+  useLayoutEffect(() => {
+    const at = pendingCaretRef.current
+    const el = textareaRef.current
+    if (at === null || !el) return
+    pendingCaretRef.current = null
+    if (isDesktop) el.focus()
+    el.setSelectionRange(at, at)
+  }, [value, isDesktop])
+
+  const rememberCaret = () => {
+    const el = textareaRef.current
+    if (el) caretRef.current = { start: el.selectionStart, end: el.selectionEnd }
+  }
+
   // Starting an edit puts the caret at the end of the message.
   useEffect(() => {
     if (!editFor) return
@@ -115,7 +142,8 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
       // Like new messages and deletes, an edit is broadcast too; its database change is the safety net.
       if (saved) sendMessageEvent('edit', saved)
     }
-    textareaRef.current?.focus()
+    caretRef.current = null
+    if (!phonePicker) textareaRef.current?.focus()
   }
 
   const send = () => {
@@ -150,7 +178,9 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
       type: 'text',
       replyTo: replyTo?.id ?? null,
     })
-    textareaRef.current?.focus()
+    caretRef.current = null
+    // Phones with the picker open: keep the keyboard down (focusing would swap the picker for it).
+    if (!phonePicker) textareaRef.current?.focus()
   }
 
   const submit = () => {
@@ -160,6 +190,7 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
 
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = e.target.value
+    caretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
     if (editing) {
       setEditText(next)
       return
@@ -172,6 +203,8 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Escape') {
+      // The emoji picker took this one (it closes first).
+      if (e.defaultPrevented) return
       if (editing) {
         e.preventDefault()
         cancelEdit()
@@ -225,12 +258,37 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
     })
   }
 
+  /** Inserts at the caret (replacing a selection); the picker stays open to pick several. */
   const onEmoji = (emoji: string) => {
-    if (editing) setEditText((t) => t + emoji)
-    else setContent((c) => c + emoji)
-    setShowEmoji(false)
-    textareaRef.current?.focus()
+    const current = value
+    const sel = caretRef.current ?? { start: current.length, end: current.length }
+    const start = Math.min(sel.start, current.length)
+    const end = Math.min(Math.max(sel.end, start), current.length)
+    const next = current.slice(0, start) + emoji + current.slice(end)
+    const at = start + emoji.length
+    caretRef.current = { start: at, end: at }
+    pendingCaretRef.current = at
+    if (editing) setEditText(next)
+    else {
+      setContent(next)
+      sendTyping()
+    }
   }
+
+  const toggleEmoji = () => {
+    setShowGif(false)
+    if (showEmoji) {
+      setShowEmoji(false)
+      // Phones: back to the keyboard.
+      if (!isDesktop) textareaRef.current?.focus()
+      return
+    }
+    rememberCaret()
+    // Phones: the keyboard goes down and the picker takes its place.
+    if (!isDesktop) textareaRef.current?.blur()
+    setShowEmoji(true)
+  }
+  const closeEmoji = useCallback(() => setShowEmoji(false), [])
 
   const toggleSpoiler = (id: string) => {
     const item = attachments.find((a) => a.id === id)
@@ -238,130 +296,147 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   }
 
   return (
-    <div
-      data-composer
-      className="relative flex-shrink-0 border-t border-[color:var(--line)] bg-[color:var(--bar)] pt-2"
-      style={
-        isDesktop
-          ? { paddingLeft: '8%', paddingRight: '8%', paddingBottom: '10px' }
-          : {
-              paddingLeft: 'max(10px, env(safe-area-inset-left))',
-              paddingRight: 'max(10px, env(safe-area-inset-right))',
-              paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-            }
-      }
-      onDrop={(e) => {
-        e.preventDefault()
-        addFiles(e.dataTransfer.files)
-      }}
-      onDragOver={(e) => e.preventDefault()}
-    >
-      {editing ? (
-        <ContextBar icon={Pencil} title="Editing message" snippet={messagePreview(editing)} cancelLabel="Cancel edit" onCancel={cancelEdit} />
-      ) : replyTo ? (
-        <ContextBar
-          icon={Reply}
-          title="Replying to"
-          name={replyAuthor}
-          snippet={messagePreview(replyTo)}
-          cancelLabel="Cancel reply"
-          onCancel={() => onCancelReply?.()}
-        />
-      ) : null}
-
-      {!editing && (
-        <PendingAttachments
-          items={attachments}
-          onRemove={(id) => discardUpload(key, id)}
-          onRetry={(id) => retryUpload(key, conversationId, id)}
-          onToggleSpoiler={toggleSpoiler}
-        />
-      )}
-
-      <div className="flex items-end gap-2">
-        <div className="relative flex min-h-[38px] min-w-0 flex-1 items-end gap-1 rounded-[19px] border border-[color:var(--line)] bg-[color:var(--field)] px-1.5">
-          <FieldButton
-            label="Pick an emoji"
-            onClick={() => {
-              setShowEmoji((v) => !v)
-              setShowGif(false)
-            }}
-          >
-            <Icon icon={Smile} />
-          </FieldButton>
-
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={onChange}
-            onKeyDown={onKeyDown}
-            onCompositionStart={onCompositionStart}
-            onCompositionEnd={onCompositionEnd}
-            onPaste={onPaste}
-            placeholder={`Message #${SPACE_LABEL[space]}`}
-            aria-label={editing ? 'Edit message' : undefined}
-            rows={1}
-            autoComplete="off"
-            autoCorrect="on"
-            autoCapitalize="sentences"
-            spellCheck
-            enterKeyHint="send"
-            inputMode="text"
-            className={`min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 leading-5 text-[color:var(--fg)] outline-none placeholder:text-[color:var(--muted)] ${
-              isDesktop ? 'text-[15px]' : 'text-[16px]'
-            }`}
-            style={{ maxHeight: MAX_HEIGHT }}
+    <>
+      <div
+        ref={rootRef}
+        data-composer
+        className="relative flex-shrink-0 border-t border-[color:var(--line)] bg-[color:var(--bar)] pt-2"
+        style={
+          isDesktop
+            ? { paddingLeft: '8%', paddingRight: '8%', paddingBottom: '10px' }
+            : {
+                paddingLeft: 'max(10px, env(safe-area-inset-left))',
+                paddingRight: 'max(10px, env(safe-area-inset-right))',
+                // The picker under it handles the home-indicator inset.
+                paddingBottom: phonePicker ? '8px' : 'max(8px, env(safe-area-inset-bottom))',
+              }
+        }
+        onDrop={(e) => {
+          e.preventDefault()
+          addFiles(e.dataTransfer.files)
+        }}
+        onDragOver={(e) => e.preventDefault()}
+      >
+        {editing ? (
+          <ContextBar icon={Pencil} title="Editing message" snippet={messagePreview(editing)} cancelLabel="Cancel edit" onCancel={cancelEdit} />
+        ) : replyTo ? (
+          <ContextBar
+            icon={Reply}
+            title="Replying to"
+            name={replyAuthor}
+            snippet={messagePreview(replyTo)}
+            cancelLabel="Cancel reply"
+            onCancel={() => onCancelReply?.()}
           />
+        ) : null}
 
-          {!editing && (
-            <>
-              <FieldButton
-                buttonRef={gifButtonRef}
-                label="Search GIFs"
-                onClick={() => {
-                  setShowGif((v) => !v)
-                  setShowEmoji(false)
-                }}
-              >
-                <span className="text-[11px] font-bold leading-5">GIF</span>
-              </FieldButton>
-              <FieldButton label="Attach a file" onClick={() => fileInputRef.current?.click()}>
-                <Icon icon={Paperclip} />
-              </FieldButton>
-            </>
-          )}
+        {!editing && (
+          <PendingAttachments
+            items={attachments}
+            onRemove={(id) => discardUpload(key, id)}
+            onRetry={(id) => retryUpload(key, conversationId, id)}
+            onToggleSpoiler={toggleSpoiler}
+          />
+        )}
 
-          {showEmoji && <EmojiPicker onSelect={onEmoji} onClose={() => setShowEmoji(false)} />}
+        <div className="flex items-end gap-2">
+          <div className="relative flex min-h-[38px] min-w-0 flex-1 items-end gap-1 rounded-[19px] border border-[color:var(--line)] bg-[color:var(--field)] px-1.5">
+            <FieldButton buttonRef={emojiButtonRef} label="Pick an emoji" pressed={showEmoji} onClick={toggleEmoji}>
+              <Icon icon={Smile} />
+            </FieldButton>
+
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={onChange}
+              onKeyDown={onKeyDown}
+              onCompositionStart={onCompositionStart}
+              onCompositionEnd={onCompositionEnd}
+              onPaste={onPaste}
+              onSelect={rememberCaret}
+              onKeyUp={rememberCaret}
+              onBlur={rememberCaret}
+              onFocus={() => {
+                // Tapping into the field on a phone swaps the picker for the keyboard.
+                if (phonePicker) setShowEmoji(false)
+              }}
+              placeholder={`Message #${SPACE_LABEL[space]}`}
+              aria-label={editing ? 'Edit message' : undefined}
+              rows={1}
+              autoComplete="off"
+              autoCorrect="on"
+              autoCapitalize="sentences"
+              spellCheck
+              enterKeyHint="send"
+              inputMode="text"
+              className={`min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 leading-5 text-[color:var(--fg)] outline-none placeholder:text-[color:var(--muted)] ${
+                isDesktop ? 'text-[15px]' : 'text-[16px]'
+              }`}
+              style={{ maxHeight: MAX_HEIGHT }}
+            />
+
+            {!editing && (
+              <>
+                <FieldButton
+                  buttonRef={gifButtonRef}
+                  label="Search GIFs"
+                  onClick={() => {
+                    setShowGif((v) => !v)
+                    setShowEmoji(false)
+                  }}
+                >
+                  <span className="text-[11px] font-bold leading-5">GIF</span>
+                </FieldButton>
+                <FieldButton label="Attach a file" onClick={() => fileInputRef.current?.click()}>
+                  <Icon icon={Paperclip} />
+                </FieldButton>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={submit}
+            // Keeps the focus (and the phone keyboard) in the field.
+            onMouseDown={(e) => e.preventDefault()}
+            disabled={!canSubmit}
+            aria-label={editing ? 'Save edit' : 'Send'}
+            title={editing ? 'Save edit' : 'Send'}
+            className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full bg-[color:var(--accent)] text-[color:var(--on-accent)] transition-opacity disabled:opacity-40"
+          >
+            <Icon icon={editing ? Check : SendHorizontal} />
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={submit}
-          // Keeps the focus (and the phone keyboard) in the field.
-          onMouseDown={(e) => e.preventDefault()}
-          disabled={!canSubmit}
-          aria-label={editing ? 'Save edit' : 'Send'}
-          title={editing ? 'Save edit' : 'Send'}
-          className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full bg-[color:var(--accent)] text-[color:var(--on-accent)] transition-opacity disabled:opacity-40"
-        >
-          <Icon icon={editing ? Check : SendHorizontal} />
-        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          aria-label="Files to attach"
+          onChange={(e) => {
+            addFiles(e.target.files)
+            e.target.value = ''
+          }}
+          className="hidden"
+          accept="image/*,video/*,.pdf,.txt"
+        />
+        {showGif && <GifPicker anchorRef={gifButtonRef} onSelect={onGif} onClose={() => setShowGif(false)} />}
+        {showEmoji && isDesktop && (
+          <EmojiPicker mode="composer" isDesktop anchorRef={emojiButtonRef} insideRef={rootRef} onPick={onEmoji} onClose={closeEmoji} />
+        )}
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        aria-label="Files to attach"
-        onChange={(e) => {
-          addFiles(e.target.files)
-          e.target.value = ''
-        }}
-        className="hidden"
-        accept="image/*,video/*,.pdf,.txt"
-      />
-      {showGif && <GifPicker anchorRef={gifButtonRef} onSelect={onGif} onClose={() => setShowGif(false)} />}
-    </div>
+      {phonePicker && (
+        <EmojiPicker
+          mode="composer"
+          isDesktop={false}
+          phone="inline"
+          anchorRef={emojiButtonRef}
+          insideRef={rootRef}
+          onPick={onEmoji}
+          onClose={closeEmoji}
+        />
+      )}
+    </>
   )
 }
 
@@ -370,17 +445,21 @@ function FieldButton({
   onClick,
   children,
   buttonRef,
+  pressed,
 }: {
   label: string
   onClick: () => void
   children: React.ReactNode
   buttonRef?: React.Ref<HTMLButtonElement>
+  /** A toggle's state (aria-expanded), for the emoji button. */
+  pressed?: boolean
 }) {
   return (
     <button
       ref={buttonRef}
       type="button"
       onClick={onClick}
+      aria-expanded={pressed}
       aria-label={label}
       title={label}
       className="grid h-9 w-9 flex-none place-items-center rounded-full text-[color:var(--muted)] transition-colors hover:text-[color:var(--fg)]"
