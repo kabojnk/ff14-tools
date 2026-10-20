@@ -12,6 +12,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { chipsOf, useReactionStore } from '@/stores/reactionStore'
 import type { Message } from '@/types'
 import { buildActions, type ActionItem } from '@/components/chat2/messageActionItems'
+import { isDisguised } from '@/stores/uiStore'
 
 // ── Phone: the action sheet ──
 
@@ -38,7 +39,7 @@ export function ActionSheet({ actions, onClose, onHeight }: ActionSheetProps) {
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       // Not when something over the sheet (the emoji picker) already handled this Escape.
-      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+      if (e.key === 'Escape' && !e.defaultPrevented && !isDisguised()) onClose()
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)

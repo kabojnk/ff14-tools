@@ -4,6 +4,7 @@ import { Icon } from '@/components/ui/Icon'
 import { EmojiPicker } from '@/components/emoji/EmojiPicker'
 import type { EmojiLookup } from '@/components/chat2/Markdown'
 import { recentEmoji } from '@/lib/recentEmoji'
+import { isDisguised } from '@/stores/uiStore'
 
 const CUSTOM = /^:([\w-]+):$/
 
@@ -45,12 +46,12 @@ export function QuickReactBar({ onPick, onClose, emoji, className = '', ignoreOu
     if (full) return // paused: the picker handles Escape and outside presses
     const onDown = (e: PointerEvent) => {
       const t = e.target as Node
-      if (ignoreOutside || !ref.current || ref.current.contains(t)) return
+      if (ignoreOutside || isDisguised() || !ref.current || ref.current.contains(t)) return
       if (t instanceof Element && t.closest('[data-emoji-picker]')) return
       onClose()
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) onClose()
+      if (e.key === 'Escape' && !e.defaultPrevented && !isDisguised()) onClose()
     }
     document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)

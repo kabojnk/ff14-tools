@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Sheet } from './Sheet'
+import { useUiStore } from '@/stores/uiStore'
 
 /** A controllable matchMedia: `setDesktop(true)` flips DESKTOP_QUERY and notifies listeners. */
 function stubMatchMedia(initialDesktop: boolean) {
@@ -33,6 +34,18 @@ describe('Sheet', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     document.querySelectorAll('[data-pin-pad]').forEach((el) => el.remove())
+    act(() => useUiStore.setState({ eepMode: false }))
+  })
+
+  it('ignores Escape and Tab while the FF14 disguise is up', () => {
+    const onClose = vi.fn()
+    render(<Sheet title="Profile" onClose={onClose}><button>inside</button></Sheet>)
+    act(() => useUiStore.setState({ eepMode: true }))
+    esc()
+    expect(onClose).not.toHaveBeenCalled()
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.body.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(false)
   })
 
   it('renders the title as a heading that names the dialog', () => {

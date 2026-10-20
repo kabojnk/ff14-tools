@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
 import { StatusPill } from '@/components/chat2/StatusPill'
 import type { Presence, Profile, StatusDefinition } from '@/types'
+import { isDisguised } from '@/stores/uiStore'
 
 interface PartnerCardProps {
   name: string
@@ -23,10 +24,10 @@ export function PartnerCard({ name, profile, presence, status, variant, onClose 
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !isDisguised()) onClose()
     }
     const onPointerDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
+      if (!isDisguised() && !ref.current?.contains(e.target as Node)) onClose()
     }
     window.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onPointerDown)

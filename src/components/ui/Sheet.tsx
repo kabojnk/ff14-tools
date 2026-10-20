@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import { Portal } from '@/components/ui/Portal'
 import { Icon } from '@/components/ui/Icon'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { isDisguised } from '@/stores/uiStore'
 
 interface SheetProps {
   /** The heading; also the dialog's accessible name. */
@@ -87,7 +88,7 @@ export function Sheet({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (topmost() !== order || pinPadOpen()) return
+      if (topmost() !== order || pinPadOpen() || isDisguised()) return
       if (e.key === 'Escape') {
         if (e.defaultPrevented || handledEscapes.has(e)) return
         handledEscapes.add(e)

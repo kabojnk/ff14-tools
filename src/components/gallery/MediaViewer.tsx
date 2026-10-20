@@ -8,6 +8,7 @@ import { SPACE_LABEL } from '@/lib/spaces'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore } from '@/stores/profileStore'
 import type { MediaKind, Space } from '@/types'
+import { isDisguised } from '@/stores/uiStore'
 
 /** What the viewer shows: a gallery MediaItem fits as it is; the chat builds these from a message's attachments. */
 export interface ViewerItem {
@@ -107,7 +108,7 @@ export function MediaViewer<T extends ViewerItem>({ items, index, onClose, onSho
   // Bubble phase on document, never stopping propagation: AppShell's double-Esc shortcut still hears it.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector('[data-pin-pad]')) return
+      if (e.defaultPrevented || document.querySelector('[data-pin-pad]') || isDisguised()) return
       if (e.key === 'Escape') onCloseRef.current()
       else if (e.key === 'ArrowLeft') goRef.current(-1)
       else if (e.key === 'ArrowRight') goRef.current(1)

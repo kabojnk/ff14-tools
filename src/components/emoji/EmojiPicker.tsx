@@ -26,6 +26,7 @@ import { noteRecentEmoji, recentEmojiList } from '@/lib/recentEmoji'
 import { useEmojiStore } from '@/stores/emojiStore'
 import { useProfileStore } from '@/stores/profileStore'
 import type { CustomEmoji } from '@/types'
+import { isDisguised } from '@/stores/uiStore'
 
 export type EmojiPickerMode = 'composer' | 'reaction'
 
@@ -189,7 +190,7 @@ export function EmojiPicker({
       return dialog !== null && !rootRef.current?.contains(dialog) && !before.has(dialog)
     }
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || pinPadOpen() || inNewerDialog(e.target)) return
+      if (e.key !== 'Escape' || e.defaultPrevented || pinPadOpen() || isDisguised() || inNewerDialog(e.target)) return
       if (addingRef.current) return // the add flow's sheet is on top and takes it
       // Never stopPropagation: the double-Esc disguise shortcut on window must still see it.
       e.preventDefault()
@@ -199,7 +200,7 @@ export function EmojiPicker({
       const t = e.target as Node
       if (rootRef.current?.contains(t) || anchorRef?.current?.contains(t) || insideRef?.current?.contains(t)) return
       // The add flow's sheets (and a desktop sheet's backdrop) sit over the picker.
-      if (inNewerDialog(t) || pinPadOpen() || addingRef.current) return
+      if (inNewerDialog(t) || pinPadOpen() || isDisguised() || addingRef.current) return
       closeRef.current()
     }
     document.addEventListener('keydown', onKey, true)
