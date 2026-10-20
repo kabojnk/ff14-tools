@@ -202,6 +202,7 @@ export function PinPad({ mode, length = 6, verify, onSuccess, onCancel, title }:
       role="dialog"
       aria-modal="true"
       aria-label={heading}
+      data-pin-pad=""
       className={`fixed inset-0 z-[70] flex select-none flex-col items-center justify-center bg-black/55 backdrop-blur-2xl ${
         entry.status === 'success' ? 'pin-pad-exit' : ''
       }`}

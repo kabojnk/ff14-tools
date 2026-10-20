@@ -3,9 +3,19 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { readFileSync } from 'fs'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Read from package.json directly: the Dockerfile runs `vite build` without npm, so
+// npm_package_version would be empty there.
+const APP_VERSION = (JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string }).version
+
 export default defineConfig({
+  // Vitest applies these too, so components that read them work in unit tests.
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+  },
   plugins: [
     react(),
     tailwindcss(),
