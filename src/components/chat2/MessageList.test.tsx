@@ -7,8 +7,16 @@ vi.mock('@/lib/conversationRealtime', () => ({ sendMessageEvent: vi.fn(), sendTy
 vi.mock('@/hooks/usePinnedMessages', () => ({
   usePinnedMessages: () => ({ pinnedIds: new Set<string>(), pinMessage: vi.fn(), unpinMessage: vi.fn() }),
 }))
+const app = vi.hoisted(() => ({ listeners: new Set<(active: boolean) => void>() }))
+vi.mock('@/lib/appLifecycle', () => ({
+  onAppStateChange: (l: (active: boolean) => void) => {
+    app.listeners.add(l)
+    return () => app.listeners.delete(l)
+  },
+}))
 
 import { MessageList } from '@/components/chat2/MessageList'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useEmojiStore } from '@/stores/emojiStore'
@@ -162,5 +170,26 @@ describe('MessageList jumps from outside the list', () => {
     await act(async () => {})
 
     expect(scrollTo).not.toHaveBeenCalledWith(expect.objectContaining({ top: 5000 }))
+  })
+})
+
+describe('MessageList in the iOS app', () => {
+  it('going to the background sends the pending read mark at once', async () => {
+    const { all } = seed(3)
+    render(<MessageList conversationId="conv" space="schist" />)
+    await waitFor(() => expect(row(all[all.length - 1].id)).not.toBeNull())
+    vi.mocked(supabase.rpc).mockClear()
+
+    // The read mark is debounced (500 ms); the background signal sends it straight away.
+    act(() => app.listeners.forEach((l) => l(false)))
+    expect(supabase.rpc).toHaveBeenCalledWith('mark_read', expect.objectContaining({ p_conversation: 'conv', p_space: 'schist' }))
+  })
+
+  it('stops listening when it unmounts', () => {
+    seed(3)
+    const { unmount } = render(<MessageList conversationId="conv" space="schist" />)
+    expect(app.listeners.size).toBe(1)
+    unmount()
+    expect(app.listeners.size).toBe(0)
   })
 })

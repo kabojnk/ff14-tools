@@ -11,6 +11,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
+import { onAppStateChange } from '@/lib/appLifecycle'
 import { sendMessageEvent } from '@/lib/conversationRealtime'
 import { createReadScheduler } from '@/lib/readScheduler'
 import { spaceKey } from '@/lib/spaces'
@@ -200,8 +201,13 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
     schedulerRef.current = scheduler
     const onPageHide = () => void scheduler.flush()
     window.addEventListener('pagehide', onPageHide)
+    // In the iOS app, pagehide isn't reliable: the app's background signal flushes instead.
+    const stopApp = onAppStateChange((active) => {
+      if (!active) void scheduler.flush()
+    })
     return () => {
       window.removeEventListener('pagehide', onPageHide)
+      stopApp()
       if (schedulerRef.current === scheduler) schedulerRef.current = null
       void scheduler.flush()
       scheduler.dispose()
