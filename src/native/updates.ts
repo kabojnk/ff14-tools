@@ -120,6 +120,11 @@ export function startUpdates(): void {
           remove: (id) => CapacitorUpdater.delete({ id }),
         }),
       )
+      .then((result) => {
+        // Visible in Safari Web Inspector; the runbook and the rollback check read it.
+        console.info(`[updates] running ${__BUNDLE_VERSION__}: ${result}`)
+        return result
+      })
       .finally(() => {
         running = null
       })
