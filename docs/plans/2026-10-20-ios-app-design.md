@@ -105,6 +105,20 @@ No database changes. Supabase auth stays in the web view's `localStorage`, which
 | Performance | Minor | The app loads its bundle locally (faster than the PWA on a bad connection). Update zips are about 1 MB |
 | Accessibility | No change | Same web UI |
 
+## Changed while planning (2026-10-20)
+
+From the [implementation plan](2026-10-20-ios-app-plan.md#decisions-made-while-planning-deviations-from-the-design-to-report-to-the-user):
+
+1. Bundle versions are `<package version>-<UTC stamp YYYYMMDDHHmmss>`; the app only updates to a newer stamp.
+2. The manifest's `url` is the zip's file name, resolved against the manifest's own URL.
+3. No keyboard plugin: the existing `useKeyboardViewport` keeps the composer on the keyboard.
+4. The status bar only sets light or dark text (`StatusBar.setStyle`) from the existing `theme-color`; iOS can't colour it.
+5. `onAppStateChange()` in `src/lib/appLifecycle.ts` instead of a `useAppLifecycle` hook.
+6. `autoDeleteFailed: false`: a failed bundle is kept so the app never downloads it again.
+7. Info.plist also has the microphone text, `NSAllowsLocalNetworking` and `ITSAppUsesNonExemptEncryption = NO`.
+8. The iOS step in the Docker build can't fail a website deploy; undoing a release means rolling forward.
+9. "Background" is Capacitor's `pause`; plain "inactive" (Control Center, prompts, calls) only gets the native switcher cover.
+
 ## Out of scope
 
 - **Waiting on enrolment:** signing, the App Store Connect record, the TestFlight upload and inviting the partner. These are written as a runbook (`docs/ios/testflight-runbook.md`) for the owner to follow.

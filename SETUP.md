@@ -122,6 +122,18 @@ npm run dev
 
 The app will be available at `http://localhost:5173`.
 
+### iOS app (local)
+
+The iPhone app is the same web code wrapped in Capacitor (`ios/`, `capacitor.config.ts`). Getting it onto real phones: [docs/ios/testflight-runbook.md](docs/ios/testflight-runbook.md).
+
+1. Install Xcode (with an iOS simulator) and run it once to accept the licence.
+2. Create `.env.native.local` (git-ignored) for the app's web build. For the local stack, copy the `.env.test` values and add `VITE_NATIVE_UPDATE_URL=http://localhost:8080` (the Docker image, for trying live updates; leave it out to turn them off).
+3. With the local stack running (`npm run db:start`), run `npm run ios:sim` (or `npm run ios:sim -- "iPhone 16"`). It builds the web code with `--mode native`, copies it into `ios/`, builds the app and opens it in the simulator.
+4. Web Inspector: Safari → Develop → Simulator → XIV.
+5. After changing the FF14 picker screen or `public/icon.svg`, run `npm run ios:assets` (it needs the e2e stack, see its header comment) to regenerate the app icon and the Splash image, which is both the launch screen and the app-switcher cover.
+
+The native checks are the "Native app" rows of [docs/testing/iphone-checklist.md](docs/testing/iphone-checklist.md).
+
 ### Register users
 
 1. Open the app and click "Register"
