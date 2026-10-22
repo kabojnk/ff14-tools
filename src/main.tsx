@@ -11,3 +11,8 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// The iOS app only. The mode is a build-time constant, so website builds don't contain the native code.
+if (import.meta.env.MODE === 'native') {
+  void import('./native/bootstrap').then((m) => m.startNative())
+}
