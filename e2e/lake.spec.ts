@@ -77,14 +77,15 @@ test.describe('Lake', () => {
     const next = `new-lake-${Date.now()}`
     await alice.openChat()
     await alice.openSecurity()
+    const change = await alice.lakeRow('Change lake password')
 
     await field(alice, 'Current lake password').fill('not-it')
     await field(alice, 'New lake password').fill(next)
-    await alice.page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).click()
+    await change.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(notice(alice, 'Current password is wrong.')).toBeVisible()
 
     await field(alice, 'Current lake password').fill(LAKE_PASSWORD)
-    await alice.page.getByRole('button', { name: 'Save', exact: true }).filter({ visible: true }).click()
+    await change.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(notice(alice, 'Lake password changed.')).toBeVisible()
 
     await alice.fillTheLake(LAKE_PASSWORD)

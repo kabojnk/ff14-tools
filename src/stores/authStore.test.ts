@@ -8,6 +8,7 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/conversationRealtime', () => ({ leaveConversation: vi.fn() }))
 
 import { useAuthStore } from '@/stores/authStore'
+import { useEmojiStore } from '@/stores/emojiStore'
 
 beforeEach(() => {
   signOut.mockReset().mockResolvedValue({ error: null })
@@ -28,5 +29,12 @@ describe('authStore.signOut', () => {
     await expect(useAuthStore.getState().signOut()).resolves.toBeUndefined()
     expect(signOut).toHaveBeenCalled()
     spy.mockRestore()
+  })
+
+  it('forgets the custom emoji (and leaves their live feed)', async () => {
+    useEmojiStore.setState({ loaded: true, byName: { blob: 'https://cdn/blob.png' } })
+    await useAuthStore.getState().signOut()
+    expect(useEmojiStore.getState().loaded).toBe(false)
+    expect(useEmojiStore.getState().lookup('blob')).toBeUndefined()
   })
 })

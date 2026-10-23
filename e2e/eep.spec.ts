@@ -31,3 +31,20 @@ test('the Eep! button shows the disguise immediately', async ({ alice }) => {
   await alice.enterPassphrase(EEP_PASSPHRASE)
   await expect(alice.composer).toBeVisible()
 })
+
+test('the disguise covers an open sheet, which comes back as it was', async ({ alice }) => {
+  await alice.openChat()
+  await alice.openProfileEditor()
+  const nickname = alice.profileEditor.locator('#profile-nickname')
+  await nickname.fill('Half typed')
+  // Double-Esc: the first asks "Discard your changes?", the second puts the disguise up.
+  await alice.page.keyboard.press('Escape')
+  await alice.page.keyboard.press('Escape')
+  await expect(alice.eepHeading).toBeVisible()
+  await expect(alice.profileEditor).toBeHidden()
+  await expect(alice.page.getByText('Half typed')).toHaveCount(0)
+
+  await alice.enterPassphrase(EEP_PASSPHRASE)
+  await expect(alice.profileEditor).toBeVisible()
+  await expect(nickname).toHaveValue('Half typed')
+})

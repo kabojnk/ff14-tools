@@ -1,10 +1,19 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
-  },
+vi.mock('@/lib/supabase', () => {
+  const channel = { on: () => channel, subscribe: () => channel }
+  return {
+    supabase: {
+      from: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
+      channel: () => channel,
+      removeChannel: () => {},
+    },
+  }
+})
+vi.mock('@/lib/emoji/data', async (orig) => ({
+  ...(await orig<typeof import('@/lib/emoji/data')>()),
+  loadEmoji: () => Promise.resolve([{ emoji: '😭', label: 'loudly crying face', tags: ['cry'], tab: 'smileys' }]),
 }))
 
 import { Reactions, type ReactionsProps } from '@/components/chat2/Reactions'
@@ -102,6 +111,21 @@ describe('Reactions', () => {
     fireEvent.click(add)
     fireEvent.click(screen.getByRole('button', { name: 'React with 😂' }))
     expect(props.onToggle).toHaveBeenCalledWith('😂')
+    expect(screen.queryByRole('toolbar')).toBeNull()
+  })
+
+  it('"More emoji" in the quick bar opens the full picker; searching and picking toggles that emoji', async () => {
+    const { props } = setup()
+    fireEvent.click(screen.getByRole('button', { name: 'Add reaction' }))
+    fireEvent.click(screen.getByRole('button', { name: 'More emoji' }))
+    await act(async () => {})
+    const picker = screen.getByRole('dialog', { name: 'Emoji picker' })
+    fireEvent.change(within(picker).getByRole('searchbox', { name: 'Search emoji' }), { target: { value: 'cry' } })
+    const sob = within(picker).getByRole('button', { name: 'loudly crying face' })
+    fireEvent.pointerDown(sob)
+    fireEvent.click(sob)
+    expect(props.onToggle).toHaveBeenCalledWith('😭')
+    expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull()
     expect(screen.queryByRole('toolbar')).toBeNull()
   })
 

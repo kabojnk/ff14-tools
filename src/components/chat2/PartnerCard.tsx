@@ -4,6 +4,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
 import { StatusPill } from '@/components/chat2/StatusPill'
 import type { Presence, Profile, StatusDefinition } from '@/types'
+import { isDisguised } from '@/stores/uiStore'
 
 interface PartnerCardProps {
   name: string
@@ -15,7 +16,7 @@ interface PartnerCardProps {
   onClose: () => void
 }
 
-/** The partner's profile card: banner, avatar, name, pill and status message. */
+/** The partner's profile card: banner, avatar, name, pill, status message and About. */
 export function PartnerCard({ name, profile, presence, status, variant, onClose }: PartnerCardProps) {
   const ref = useRef<HTMLDivElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -23,10 +24,10 @@ export function PartnerCard({ name, profile, presence, status, variant, onClose 
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !isDisguised()) onClose()
     }
     const onPointerDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onClose()
+      if (!isDisguised() && !ref.current?.contains(e.target as Node)) onClose()
     }
     window.addEventListener('keydown', onKey)
     document.addEventListener('pointerdown', onPointerDown)
@@ -38,6 +39,7 @@ export function PartnerCard({ name, profile, presence, status, variant, onClose 
 
   const sheet = variant === 'sheet'
   const message = profile?.custom_status_text?.trim() || null
+  const about = profile?.profile_message?.trim() || null
 
   const card = (
     <div
@@ -76,6 +78,11 @@ export function PartnerCard({ name, profile, presence, status, variant, onClose 
           </span>
         )}
         {message && <p className="whitespace-pre-wrap break-words text-[12.5px] text-[color:var(--muted)]">{message}</p>}
+        {about && (
+          <p className="mt-0.5 whitespace-pre-wrap break-words border-t border-[color:var(--line)] pt-2 text-[12.5px] text-[color:var(--fg)]">
+            {about}
+          </p>
+        )}
       </div>
     </div>
   )

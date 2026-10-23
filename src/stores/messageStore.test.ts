@@ -61,6 +61,32 @@ describe('messageStore', () => {
     expect(useMessageStore.getState().messages[MAIN]).toHaveLength(1)
   })
 
+  it('slots a late realtime message into time order instead of appending it', () => {
+    const { addMessage } = useMessageStore.getState()
+    addMessage(MAIN, msg('a', 'main', '2026-10-19T10:00:01Z'))
+    addMessage(MAIN, msg('c', 'main', '2026-10-19T10:00:03Z'))
+    addMessage(MAIN, msg('b', 'main', '2026-10-19T10:00:02Z'))
+    expect(useMessageStore.getState().messages[MAIN].map((m) => m.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('drops a realtime message older than the oldest loaded one (paging back fetches it, in order)', () => {
+    const { addMessage } = useMessageStore.getState()
+    addMessage(MAIN, msg('b', 'main', '2026-10-19T10:00:02Z'))
+    addMessage(MAIN, msg('c', 'main', '2026-10-19T10:00:03Z'))
+    addMessage(MAIN, msg('old', 'main', '2026-10-17T10:00:00Z'))
+    expect(useMessageStore.getState().messages[MAIN].map((m) => m.id)).toEqual(['b', 'c'])
+  })
+
+  it('slots an older realtime message in before my unsent ones; a newer one still goes last', () => {
+    const { addMessage, addPending } = useMessageStore.getState()
+    addMessage(MAIN, msg('a', 'main', '2026-10-19T10:00:01Z'))
+    addPending(MAIN, msg('p', 'main', '2026-10-19T10:00:05Z'))
+    addMessage(MAIN, msg('b', 'main', '2026-10-19T10:00:02Z'))
+    expect(useMessageStore.getState().messages[MAIN].map((m) => m.id)).toEqual(['a', 'b', 'p'])
+    addMessage(MAIN, msg('d', 'main', '2026-10-19T10:00:09Z'))
+    expect(useMessageStore.getState().messages[MAIN].map((m) => m.id)).toEqual(['a', 'b', 'p', 'd'])
+  })
+
   it('fetchMessages loads one space through get_messages, oldest first', async () => {
     mockRpc.mockResolvedValue({
       data: [msg('new', 'schist', '2026-10-19T10:00:02Z'), msg('old', 'schist', '2026-10-19T10:00:01Z')],

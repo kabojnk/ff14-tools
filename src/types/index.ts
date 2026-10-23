@@ -70,6 +70,8 @@ export interface MediaItem {
   size: number | null
   spoiler: boolean
   created_at: string
+  /** The message's sender; get_media doesn't return it, so useMediaGallery fills it in per page. */
+  author_id?: string
 }
 
 export interface Session {
@@ -121,7 +123,7 @@ export interface CustomEmoji {
   id: string
   name: string
   image_url: string
-  uploaded_by: string
+  uploaded_by: string | null
   created_at: string
 }
 

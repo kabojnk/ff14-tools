@@ -4,11 +4,20 @@ import { Copy, Reply } from 'lucide-react'
 
 const { mockRpc } = vi.hoisted(() => ({ mockRpc: vi.fn() }))
 
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    rpc: mockRpc,
-    from: () => ({ select: () => ({ order: () => Promise.resolve({ data: [], error: null }) }) }),
-  },
+vi.mock('@/lib/supabase', () => {
+  const channel = { on: () => channel, subscribe: () => channel }
+  return {
+    supabase: {
+      rpc: mockRpc,
+      from: () => ({ select: () => Promise.resolve({ data: [], error: null }) }),
+      channel: () => channel,
+      removeChannel: () => {},
+    },
+  }
+})
+vi.mock('@/lib/emoji/data', async (orig) => ({
+  ...(await orig<typeof import('@/lib/emoji/data')>()),
+  loadEmoji: () => Promise.resolve([{ emoji: '🥰', label: 'smiling face with hearts', tags: [], tab: 'smileys' }]),
 }))
 
 import { ActionSheet, HoverToolbar, MessageActions } from '@/components/chat2/MessageActions'
@@ -148,6 +157,20 @@ describe('ActionSheet', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     fireEvent.click(screen.getByTestId('sheet-backdrop'))
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves Escape to a dialog opened over it (Add emoji from the picker)', () => {
+    const onClose = vi.fn()
+    render(<ActionSheet actions={sample()} onClose={onClose} />)
+    const over = document.createElement('div')
+    over.setAttribute('role', 'dialog')
+    over.setAttribute('aria-modal', 'true')
+    document.body.appendChild(over)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).not.toHaveBeenCalled()
+    over.remove()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('focuses the first action when it opens', () => {
@@ -301,6 +324,43 @@ describe('MessageActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'React' }))
     fireEvent.click(screen.getByRole('button', { name: 'React with 😂' }))
     expect(toggle).toHaveBeenCalledWith('m1', '😂', 'me')
+  })
+
+  it('desktop: React → More emoji → an emoji in the full picker sends the reaction', async () => {
+    const toggle = vi.fn()
+    useReactionStore.setState({ toggle } as never)
+    render(<MessageActions {...props({ isDesktop: true })}>{bubble}</MessageActions>)
+    fireEvent.pointerEnter(screen.getByRole('group', { name: 'Message' }))
+    fireEvent.click(screen.getByRole('button', { name: 'React' }))
+    fireEvent.click(screen.getByRole('button', { name: 'More emoji' }))
+    await act(async () => {})
+    const emoji = within(screen.getByRole('dialog', { name: 'Emoji picker' })).getByRole('button', { name: 'smiling face with hearts' })
+    fireEvent.pointerDown(emoji)
+    fireEvent.click(emoji)
+    expect(toggle).toHaveBeenCalledWith('m1', '🥰', 'me')
+    expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull()
+  })
+
+  it('phones: from the long-press quick bar, More emoji picks a reaction and closes everything; Esc closes only the picker', async () => {
+    vi.useFakeTimers()
+    const toggle = vi.fn()
+    useReactionStore.setState({ toggle } as never)
+    render(<MessageActions {...props({ mine: false })}>{bubble}</MessageActions>)
+    fireEvent.pointerDown(screen.getByText('hello there'), { pointerType: 'touch', clientX: 5, clientY: 5 })
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+    fireEvent.click(screen.getByRole('button', { name: 'More emoji' }))
+    await act(async () => {})
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'Emoji picker' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Message actions' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'More emoji' }))
+    await act(async () => {})
+    const emoji = within(screen.getByRole('dialog', { name: 'Emoji picker' })).getByRole('button', { name: 'smiling face with hearts' })
+    fireEvent.pointerDown(emoji)
+    fireEvent.click(emoji)
+    expect(toggle).toHaveBeenCalledWith('m1', '🥰', 'me')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('desktop: no long-press', () => {

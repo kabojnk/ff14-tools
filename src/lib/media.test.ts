@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSize, kindsFor, linkHost } from '@/lib/media'
+import { formatSize, kindsFor } from '@/lib/media'
 
 describe('kindsFor', () => {
   it.each([
@@ -32,16 +32,5 @@ describe('formatSize', () => {
 
   it('is empty for an unknown size', () => {
     expect(formatSize(null)).toBe('')
-  })
-})
-
-describe('linkHost', () => {
-  it('is the host of a URL', () => {
-    expect(linkHost('https://example.com/guide')).toBe('example.com')
-    expect(linkHost('http://sub.example.com:8080/a?b')).toBe('sub.example.com:8080')
-  })
-
-  it('falls back to the text when it is not a URL', () => {
-    expect(linkHost('not a url')).toBe('not a url')
   })
 })

@@ -192,3 +192,10 @@ describe('PinPad set mode', () => {
     expect(onSuccess).not.toHaveBeenCalled()
   })
 })
+
+describe('PinPad marker', () => {
+  it('marks its root with data-pin-pad, so sheets leave Escape and focus to it', () => {
+    render(<PinPad mode="unlock" length={4} verify={vi.fn()} onSuccess={vi.fn()} />)
+    expect(screen.getByRole('dialog')).toHaveAttribute('data-pin-pad')
+  })
+})

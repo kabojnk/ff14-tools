@@ -3,13 +3,32 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { readFileSync } from 'fs'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+// Read from package.json directly: the Dockerfile runs `vite build` without npm, so
+// npm_package_version would be empty there.
+const APP_VERSION = (JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string }).version
+
+// The live-update version of a native bundle (scripts/native-bundle.mjs sets it). Website builds and
+// `vite` dev get a stamp-less placeholder, which every published bundle counts as newer than.
+const BUNDLE_VERSION = process.env.BUNDLE_VERSION ?? `${APP_VERSION}-dev`
+
+export default defineConfig(({ mode }) => ({
+  // Vitest applies these too, so components that read them work in unit tests.
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    __BUNDLE_VERSION__: JSON.stringify(BUNDLE_VERSION),
+  },
+  // The iOS app (`--mode native`) gets its own output folder, which Capacitor copies into the app.
+  build: mode === 'native' ? { outDir: 'dist-native' } : undefined,
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
+      // No service worker in the iOS app: the updater owns its files, and a worker would serve stale ones.
+      disable: mode === 'native',
       registerType: 'autoUpdate',
       // Include all assets that should be precached
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'favicon-32.png'],
@@ -103,7 +122,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs'],
     restoreMocks: true,
   },
-})
+}))

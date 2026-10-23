@@ -11,6 +11,10 @@ export interface MediaGalleryOptions {
   kind: MediaFilterKind
   /** Raw text from the extension box; normalised and debounced here. */
   extension: string
+  /** Page size (default MEDIA_PAGE_SIZE). */
+  limit?: number
+  /** False: no requests, and an empty, settled list (default true). */
+  enabled?: boolean
 }
 
 interface GalleryState {
@@ -32,13 +36,31 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced
 }
 
+/** get_media rows carry no sender: one messages query per page fills in author_id. A failure leaves it unset. */
+async function withAuthors(rows: MediaItem[]): Promise<MediaItem[]> {
+  if (rows.length === 0) return rows
+  const ids = [...new Set(rows.map((r) => r.message_id))]
+  const { data, error } = await supabase.from('messages').select('id, author_id').in('id', ids)
+  if (error || !data) return rows
+  const authors = new Map((data as { id: string; author_id: string }[]).map((m) => [m.id, m.author_id]))
+  return rows.map((r) => (authors.has(r.message_id) ? { ...r, author_id: authors.get(r.message_id) } : r))
+}
+
 /**
  * The info panel's media gallery through get_media: newest first, keyset paged by (created_at, id).
  * Any filter change resets the list; answers to superseded requests are dropped.
  */
-export function useMediaGallery({ conversationId, space, scope, kind, extension }: MediaGalleryOptions) {
+export function useMediaGallery({
+  conversationId,
+  space,
+  scope,
+  kind,
+  extension,
+  limit = MEDIA_PAGE_SIZE,
+  enabled = true,
+}: MediaGalleryOptions) {
   const ext = useDebounced(normalizeExtension(extension), EXTENSION_DEBOUNCE_MS)
-  const [state, setState] = useState<GalleryState>({ items: [], loading: true, hasMore: false, error: null })
+  const [state, setState] = useState<GalleryState>({ items: [], loading: enabled, hasMore: false, error: null })
   const stateRef = useRef(state)
   stateRef.current = state
   const requestRef = useRef(0)
@@ -59,34 +81,48 @@ export function useMediaGallery({ conversationId, space, scope, kind, extension 
   const fetchPage = useCallback(
     async (after: MediaItem | null) => {
       const id = ++requestRef.current
-      setState((s) => (after ? { ...s, loading: true } : { items: [], loading: true, hasMore: false, error: null }))
+      setState((s) => (after ? { ...s, loading: true, error: null } : { items: [], loading: true, hasMore: false, error: null }))
       const { data, error } = await supabase.rpc('get_media', {
         ...params,
         p_before: after?.created_at ?? null,
         p_before_id: after?.id ?? null,
-        p_limit: MEDIA_PAGE_SIZE,
+        p_limit: limit,
       })
       if (id !== requestRef.current) return
-      const rows = (data ?? []) as MediaItem[]
+      const rows = error ? [] : await withAuthors((data ?? []) as MediaItem[])
+      if (id !== requestRef.current) return
       setState((s) => ({
         items: after ? [...s.items, ...rows] : rows,
         loading: false,
-        hasMore: !error && rows.length === MEDIA_PAGE_SIZE,
+        // A failed later page keeps hasMore, so retry() can ask for it again.
+        hasMore: error ? after !== null && s.hasMore : rows.length === limit,
         error: error?.message ?? null,
       }))
     },
-    [params],
+    [params, limit],
   )
 
   useEffect(() => {
-    void fetchPage(null)
-  }, [fetchPage])
+    if (enabled) {
+      void fetchPage(null)
+      return
+    }
+    requestRef.current++
+    setState({ items: [], loading: false, hasMore: false, error: null })
+  }, [fetchPage, enabled])
 
   const loadMore = useCallback(() => {
-    const { loading, hasMore, items } = stateRef.current
-    if (loading || !hasMore || items.length === 0) return
+    const { loading, hasMore, items, error } = stateRef.current
+    if (!enabled || loading || !hasMore || error || items.length === 0) return
     void fetchPage(items[items.length - 1])
-  }, [fetchPage])
+  }, [fetchPage, enabled])
 
-  return { ...state, loadMore }
+  /** Repeats the request that failed: the first page when nothing loaded, else the next page. */
+  const retry = useCallback(() => {
+    const { loading, items } = stateRef.current
+    if (!enabled || loading) return
+    void fetchPage(items.length === 0 ? null : items[items.length - 1])
+  }, [fetchPage, enabled])
+
+  return { ...state, loadMore, retry }
 }

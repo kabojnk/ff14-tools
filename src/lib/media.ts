@@ -31,12 +31,3 @@ export function formatSize(bytes: number | null | undefined): string {
   const n = bytes >= mb ? bytes / mb : bytes / 1024
   return `${Number(n.toFixed(1))} ${bytes >= mb ? 'MB' : 'KB'}`
 }
-
-/** The host of a link, or the text itself when it doesn't parse. */
-export function linkHost(url: string): string {
-  try {
-    return new URL(url).host
-  } catch {
-    return url
-  }
-}

@@ -228,7 +228,20 @@ Each build gets its own implementation plan. This spec covers 3a and 3b. The iOS
     - **Security:** PIN, lake, read receipts (the existing LakeSettings, restyled).
     - **Notifications:** placeholder, iOS app only.
     - **About:** version.
-  - Log out lives under Security, as today.
+  - Log out lives under Security, as today. *(Superseded by the 3b decisions below: Log out is in both places.)*
+- **Second mockup (approved 2026-10-20):** https://claude.ai/artifact/Vr2hVX9q77uhy79DJC5Czu: the emoji picker, adding a custom emoji, Settings (phone sheet and desktop dialog) and the photo viewer with "Show in chat". The first one (profile and status editor, pill A, media gallery) is https://claude.ai/artifact/YW8QxjqbYEkHtAgu7kA42b.
+- **Decisions recorded with the user (2026-10-20),** from the 3b plan (`2026-10-20-redesign-3b-plan.md`):
+
+  | Question | Answer |
+  |---|---|
+  | Emoji picker, add-emoji flow, settings and viewer look | Approved from the mockup |
+  | Log out | **In both places:** on the FF14 screen (unchanged) and in Settings (Security & privacy on phones, the bottom of the left nav on desktop) |
+  | Emoji skin tones | **Left out** of this build. The default yellow only |
+  | Emoji data | `emojibase-data`, lazy-loaded |
+  | Custom emoji live updates | Yes. Add the table to the realtime publication |
+  | Jump from search and pins | Yes, through the same jump mechanism as "Show in chat" |
+
+- **Built 2026-10-20** (plan: `2026-10-20-redesign-3b-plan.md`).
 
 ## iOS app requirements (for the iOS spec, recorded here so they aren't lost)
 

@@ -167,3 +167,6 @@ export const useUiStore = create<UiState>((set) => ({
     set({ theme })
   },
 }))
+
+/** True while the FF14 disguise is up: the chat's overlays are hidden then, and their key handlers stand down. */
+export const isDisguised = () => useUiStore.getState().eepMode

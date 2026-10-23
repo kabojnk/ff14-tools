@@ -141,6 +141,7 @@ export async function restoreStatuses() {
  * - the seeded messages (restoreSeedMessages)
  * - read receipts on
  * - statuses (restoreStatuses)
+ * - custom emoji: any a test added deleted, the seeded two put back if a test deleted them
  *
  * It writes only what a test changed. Every row written to a published table is a postgres_changes
  * message for each matching subscription (each device holds several on profiles and sessions, and those
@@ -158,6 +159,7 @@ export async function restore() {
     ['read receipts', restoreReadReceipts],
     ['statuses', restoreStatuses],
     ['PINs', restorePins],
+    ['custom emoji', restoreCustomEmoji],
   ]
   const failures: string[] = []
   for (const [name, step] of steps) {
@@ -168,6 +170,23 @@ export async function restore() {
     }
   }
   if (failures.length) throw new Error(`restore failed:\n${failures.join('\n')}`)
+}
+
+/** The seeded custom emoji (supabase/seed.sql), by name. */
+const SEED_EMOJI = [
+  { name: 'moogle', image_url: 'http://cdn.test.local/emoji/moogle.png', uploaded_by: IDS.users.alice },
+  { name: 'chocobo', image_url: 'http://cdn.test.local/emoji/chocobo.png', uploaded_by: IDS.users.bea },
+]
+
+async function restoreCustomEmoji() {
+  const svc = serviceClient()
+  const names = SEED_EMOJI.map((e) => e.name)
+  check('added custom emoji', (await svc.from('custom_emoji').delete().not('name', 'in', `(${names.join(',')})`)).error)
+  const { data, error } = await svc.from('custom_emoji').select('name').in('name', names)
+  check('seeded custom emoji', error)
+  const present = new Set(((data ?? []) as { name: string }[]).map((e) => e.name))
+  const missing = SEED_EMOJI.filter((e) => !present.has(e.name))
+  if (missing.length) check('seeded custom emoji', (await svc.from('custom_emoji').insert(missing)).error)
 }
 
 async function restorePins() {

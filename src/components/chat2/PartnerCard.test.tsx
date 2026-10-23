@@ -9,6 +9,7 @@ const bea = {
   avatar_url: null,
   banner_url: 'https://cdn.example/banner.jpg',
   custom_status_text: 'back at 9',
+  profile_message: 'Healer main. Ask me about glamours.',
 } as Profile
 const raiding = { id: 'r', label: 'Raiding', color: '#ff66aa', position: 1, legacy_key: null, created_by: null, created_at: '', updated_at: '' }
 
@@ -32,10 +33,18 @@ describe('PartnerCard', () => {
     expect(screen.getByText('back at 9')).toBeInTheDocument()
   })
 
+  it('shows About under the status message', () => {
+    setup()
+    const message = screen.getByText('back at 9')
+    const about = screen.getByText('Healer main. Ask me about glamours.')
+    expect(message.compareDocumentPosition(about) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('leaves out the pill and message when there are none', () => {
-    setup({ status: null, profile: { ...bea, custom_status_text: null } })
+    setup({ status: null, profile: { ...bea, custom_status_text: null, profile_message: null } })
     expect(document.querySelector('[data-status-pill]')).toBeNull()
     expect(screen.queryByText('back at 9')).toBeNull()
+    expect(screen.queryByText(/Healer main/)).toBeNull()
   })
 
   it('closes on Escape, on the close button and on a click outside', () => {

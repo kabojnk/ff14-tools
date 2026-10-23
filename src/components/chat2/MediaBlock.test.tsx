@@ -80,6 +80,16 @@ describe('MediaBlock', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it("the viewer goes through the message's photos from the one tapped, without Show in chat", () => {
+    render(<MediaBlock messageId="m1" attachments={[img(1), img(2), img(3)]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open p2.png' }))
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('2 of 3')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Show in chat' })).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('shows a video with a play badge, without autoplay', () => {
     const video: Attachment = { url: 'https://cdn/v.mp4', type: 'video', filename: 'v.mp4', size: 1, spoiler: false }
     const { container } = render(<MediaBlock messageId="m1" attachments={[video]} />)

@@ -28,10 +28,10 @@ const chip = (user: ChatUser, text: string, emoji: string, count: number) =>
   user.messageRow(text).getByRole('button', { name: `${emoji} ${count}`, exact: true })
 
 /**
- * The first reaction on a message: from the hover toolbar's React button (desktop), or from the quick
- * bar above a long-pressed bubble (phones).
+ * Opens the quick-react bar on a message: from the hover toolbar's React button (desktop), or above a
+ * long-pressed bubble (phones).
  */
-async function reactFromToolbar(user: ChatUser, text: string, emoji: string) {
+async function openQuickBar(user: ChatUser, text: string) {
   const bubble = user.messageRow(text).locator('[data-bubble]')
   if (await user.isPhone()) {
     await user.longPress(bubble)
@@ -39,7 +39,15 @@ async function reactFromToolbar(user: ChatUser, text: string, emoji: string) {
     await bubble.hover()
     await user.messageRow(text).getByRole('toolbar', { name: 'Message actions' }).getByRole('button', { name: 'React' }).click()
   }
-  await user.page.getByRole('toolbar', { name: 'Quick reactions' }).getByRole('button', { name: `React with ${emoji}` }).click()
+  const bar = user.page.getByRole('toolbar', { name: 'Quick reactions' })
+  await expect(bar).toBeVisible()
+  return bar
+}
+
+/** The first reaction on a message, from the quick bar. */
+async function reactFromToolbar(user: ChatUser, text: string, emoji: string) {
+  const bar = await openQuickBar(user, text)
+  await bar.getByRole('button', { name: `React with ${emoji}` }).click()
   await expect(user.page.getByRole('dialog', { name: 'Message actions' })).toBeHidden()
 }
 
@@ -89,6 +97,25 @@ test.describe('reactions', () => {
     await bea.unlockIfLocked()
     await bea.openSpace('Main')
     await expect(bea.messageRow(text).locator('[data-reactions] [data-emoji]')).toHaveCount(2)
+  })
+
+  test('an emoji found through the full picker\'s search arrives for the other person', async ({ alice, bea }) => {
+    await alice.openChat('Main')
+    await bea.openChat('Main')
+    const text = unique('search react')
+    await alice.send(text)
+    await expect(bea.message(text)).toBeVisible({ timeout: 5_000 })
+
+    const bar = await openQuickBar(alice, text)
+    await bar.getByRole('button', { name: 'More emoji' }).click()
+    const picker = alice.page.getByRole('dialog', { name: 'Emoji picker' })
+    await picker.getByRole('searchbox', { name: 'Search emoji' }).fill('loudly crying')
+    await picker.getByRole('button', { name: 'loudly crying face', exact: true }).click()
+    await expect(picker).toBeHidden()
+    await expect(alice.page.getByRole('dialog', { name: 'Message actions' })).toBeHidden()
+
+    await expect(chip(alice, text, '😭', 1)).toHaveAttribute('aria-pressed', 'true')
+    await expect(chip(bea, text, '😭', 1)).toHaveAttribute('aria-pressed', 'false', { timeout: 5_000 })
   })
 
   test('realtime channels stay few however many messages are loaded (no channel per message)', async ({ alice }) => {
