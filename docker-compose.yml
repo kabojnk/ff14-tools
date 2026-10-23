@@ -10,6 +10,7 @@ services:
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_TENOR_API_KEY: ${VITE_TENOR_API_KEY}
         VITE_BUNNY_CDN_URL: ${VITE_BUNNY_CDN_URL}
+        VITE_NATIVE_UPDATE_URL: ${VITE_NATIVE_UPDATE_URL}
     ports:
       - "8080:80"
     restart: unless-stopped

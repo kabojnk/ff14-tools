@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Bell, ChevronRight, Info, Lock, LogOut, Palette, User, X, type LucideIcon } from 'lucide-react'
+import { ChevronRight, Info, Lock, LogOut, Palette, User, X, type LucideIcon } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -13,15 +13,13 @@ import { StatusPill } from '@/components/chat2/StatusPill'
 import { Group, buttonRowClass, valueClass } from '@/components/settings/Group'
 import { AppearanceSection } from '@/components/settings/AppearanceSection'
 import { SecuritySection } from '@/components/settings/SecuritySection'
-import { NotificationsSection } from '@/components/settings/NotificationsSection'
 import { AboutSection } from '@/components/settings/AboutSection'
 
-export type SettingsSection = 'appearance' | 'security' | 'notifications' | 'about'
+export type SettingsSection = 'appearance' | 'security' | 'about'
 
 const SECTIONS: { id: SettingsSection; label: string; icon: LucideIcon }[] = [
   { id: 'appearance', label: 'Appearance', icon: Palette },
   { id: 'security', label: 'Security & privacy', icon: Lock },
-  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'about', label: 'About', icon: Info },
 ]
 
@@ -124,7 +122,6 @@ export function Settings({ onClose, onEditProfile }: SettingsProps) {
             {shown === null && <PhoneHome onOpen={setSection} onEditProfile={onEditProfile} />}
             {shown === 'appearance' && <AppearanceSection />}
             {shown === 'security' && <SecuritySection onLogOut={isDesktop ? undefined : askLogOut} />}
-            {shown === 'notifications' && <NotificationsSection />}
             {shown === 'about' && <AboutSection />}
           </div>
         </div>
@@ -158,7 +155,6 @@ function PhoneHome({
   const values: Record<SettingsSection, string> = {
     appearance: THEMES.find((t) => t.id === theme)?.name ?? '',
     security: pinOn ? 'PIN on' : 'PIN off',
-    notifications: 'iPhone app',
     about: __APP_VERSION__,
   }
 

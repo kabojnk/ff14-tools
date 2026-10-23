@@ -1,4 +1,7 @@
 import { useEffect } from 'react'
+import { appIsActive, onAppStateChange } from '@/lib/appLifecycle'
+import { isNativeApp } from '@/lib/platform'
+import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useUiStore } from '@/stores/uiStore'
@@ -63,6 +66,41 @@ export function usePresence(): void {
     const heartbeat = window.setInterval(() => {
       if (document.visibilityState === 'visible') void usePresenceStore.getState().touchLastSeen()
     }, LAST_SEEN_HEARTBEAT_MS)
+
+    // In the iOS app the app's own background/foreground signal replaces the web events, which WKWebView
+    // doesn't deliver reliably. The native privacy screen covers the switcher card; #privacy-screen
+    // stays as a second layer.
+    if (isNativeApp()) {
+      // A page loaded while the app is in the background (the updater applies bundles there) starts
+      // as if it had just gone there: covered, offline and disguised. The old page's pause handler may
+      // lose the race with the reload, so this can't rely on it having saved the disguise.
+      void appIsActive().then((active) => {
+        if (active) return
+        showPrivacyScreen()
+        void usePresenceStore.getState().setDevicePresence('offline')
+        useUiStore.getState().setEepMode(true)
+      })
+      const stop = onAppStateChange((active) => {
+        if (active) {
+          hidePrivacyScreen()
+          restorePresence()
+          // iOS may have closed the socket while suspended; reconnecting rejoins every channel, and
+          // the conversation's rejoin catches up on missed messages (useConversationRealtime).
+          if (!supabase.realtime.isConnected()) supabase.realtime.connect()
+        } else {
+          showPrivacyScreen()
+          const live = usePresenceStore.getState()
+          void live.setDevicePresence('offline')
+          void live.touchLastSeen()
+          useUiStore.getState().setEepMode(true)
+        }
+      })
+      return () => {
+        window.clearInterval(heartbeat)
+        usePresenceStore.getState().cleanupPresence()
+        stop()
+      }
+    }
 
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)

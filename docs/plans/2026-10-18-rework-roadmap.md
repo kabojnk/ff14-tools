@@ -20,7 +20,10 @@ Turn the Discord-style chat into a polished, reliable WhatsApp/Messenger-style m
 | 1 | Test foundation: local Supabase, Vitest, two-user Playwright, CI, PIN pad rebuild (**built 2026-10-19**) | — | `2026-10-18-test-foundation-design.md` |
 | 2 | Data model: channels → conversations (**built 2026-10-19**; expand only, contract pending) | 1 | `2026-10-19-conversations-data-model-design.md`, plan `2026-10-19-conversations-data-model-plan.md` |
 | 3 | Chat UX rebuild (Messenger-style, polished, mobile-first): look approved; built as 3a (core chat: **built 2026-10-19**) then 3b (profile, gallery, emoji, settings: **built 2026-10-20**) | 1, 2 | `2026-10-19-redesign-design.md`, plans `2026-10-19-redesign-3a-plan.md`, `2026-10-20-redesign-3b-plan.md` |
-| 4 | iOS: research done; **decided: Capacitor wrapper + TestFlight internal testing**, built after 3a | — | `2026-10-19-ios-native-research.md` |
+| 4 | iOS: research done; **decided: Capacitor wrapper + TestFlight internal testing**, being built (2026-10-21) | — | `2026-10-19-ios-native-research.md`, design `2026-10-20-ios-app-design.md`, plan `2026-10-20-ios-app-plan.md` |
+| 5 | Voice memos (see "Later: voice memos" below): own short design with mockups first. **Decided 2026-10-21: before the release, so one rehearsal and deploy cover the whole rework** | 3, 4 | — |
+
+After these: release rehearsal (`docs/testing/release-rehearsal.md`) → production deploy → the contract migration.
 
 ## Requirements captured for later sub-projects
 
@@ -79,7 +82,7 @@ Original requirements:
 - Distribution to one other person without public App Store release: compare EAS internal/ad-hoc distribution ($99/yr developer account, register the other person's device UDID), TestFlight, and free-Apple-ID sideloading from Windows (AltStore / Sideloadly, 7-day re-signing).
 - The deliverable is a written recommendation, not an implementation.
 
-### Later: voice memos (after sub-project 3)
+### Sub-project 5: voice memos (after the iOS app, before the release)
 - Discord-style voice messages: record, preview, send. **No voice calling.**
 - Maximum length under 10 minutes, with a visible timer and an automatic stop at the limit.
 - Decent quality with no heavy compression: Opus at about 96 kbps where the browser supports it (Chrome), AAC (`audio/mp4`) at about 128 kbps on iOS Safari, which is what `MediaRecorder` produces there. Ten minutes comes to roughly 7–10 MB, so check the `upload-media` size limit and Bunny settings.

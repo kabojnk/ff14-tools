@@ -82,7 +82,7 @@ describe('Settings on phones', () => {
     expect(card).toHaveTextContent('Potential Eep')
     expect(screen.getByRole('button', { name: 'Appearance' })).toHaveAccessibleDescription('Nord')
     expect(screen.getByRole('button', { name: 'Security & privacy' })).toHaveAccessibleDescription('PIN on')
-    expect(screen.getByRole('button', { name: 'Notifications' })).toHaveAccessibleDescription('iPhone app')
+    expect(screen.queryByRole('button', { name: 'Notifications' })).toBeNull()
     expect(screen.getByRole('button', { name: 'About' })).toHaveAccessibleDescription(__APP_VERSION__)
   })
 
@@ -123,10 +123,10 @@ describe('Settings on phones', () => {
 
   it('focuses a section with no controls itself, and Esc back returns to its row', async () => {
     renderSettings()
-    await userEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    await userEvent.click(screen.getByRole('button', { name: 'About' }))
     expect(screen.getByTestId('settings-section')).toHaveFocus()
     esc()
-    expect(screen.getByRole('button', { name: 'Notifications' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'About' })).toHaveFocus()
   })
 
   it('Esc in a pushed section goes Back; Esc at the top closes', async () => {
@@ -195,8 +195,7 @@ describe('Settings on desktop', () => {
     expect(screen.getAllByRole('button', { name: 'Log out' })).toHaveLength(1)
     await userEvent.click(within(nav).getByRole('button', { name: 'About' }))
     expect(screen.getByText('Version')).toBeInTheDocument()
-    await userEvent.click(within(nav).getByRole('button', { name: 'Notifications' }))
-    expect(screen.getByText('Notifications come with the iPhone app.')).toBeInTheDocument()
+    expect(within(nav).queryByRole('button', { name: 'Notifications' })).toBeNull()
     await userEvent.click(within(nav).getByRole('button', { name: 'Profile' }))
     expect(onEditProfile).toHaveBeenCalledTimes(1)
   })
@@ -225,13 +224,13 @@ describe('Settings on desktop', () => {
 describe('Settings across the breakpoint', () => {
   it('a pushed phone section stays selected on desktop, and back again', async () => {
     renderSettings()
-    await userEvent.click(screen.getByRole('button', { name: 'Notifications' }))
+    await userEvent.click(screen.getByRole('button', { name: 'About' }))
     media.setDesktop(true)
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(within(nav).getByRole('button', { name: 'Notifications' })).toHaveAttribute('aria-current', 'page')
-    await userEvent.click(within(nav).getByRole('button', { name: 'About' }))
+    expect(within(nav).getByRole('button', { name: 'About' })).toHaveAttribute('aria-current', 'page')
+    await userEvent.click(within(nav).getByRole('button', { name: 'Appearance' }))
     media.setDesktop(false)
-    expect(screen.getByRole('heading', { name: 'About' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
   })
 

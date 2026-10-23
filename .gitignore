@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+dist-native/
+ios/DerivedData/
 
 # Environment variables
 .env
