@@ -7,7 +7,7 @@
 >
 > **Gate for every task:** `npx tsc -b && npm run lint && npm test` (0 lint errors).
 > - T1 also runs `npm run test:db && npm run test:migration`.
-> - T5, T6, T7 and T8 also run `npm run db:reset && npm run e2e` (full suite, both projects), because they change code the website runs.
+> - T5, T6, T7 and T8 also run `npm run db:reset && npm run e2e` (full suite, both projects), because they change code the website runs. **T1 is merged first**; rebase onto the integration branch before any e2e step (the app subscribes to `voice_plays`, which only exists after T1).
 > - Wrap `db:reset`, `test:db`, `test:migration` and `e2e` in the stack lock script from the team briefing, and give each worktree its own `E2E_PORT` (5191 and up).
 
 **Goal:** Discord-style voice memos (hold to record, preview, send, play, a played marker) on the desktop site, the iPhone home-screen app and the iOS app.
@@ -58,7 +58,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 | 6 | (not covered) | Lifting the finger when the system interrupts a hold (`pointercancel`, e.g. the first microphone prompt) cancels the recording. The user holds again after allowing | Otherwise a permission prompt would leave a recording running with nothing under the finger |
 | 7 | Pending bubble "with a spinner" | The existing clock tick while sending, and the existing failed state with Retry | It matches every other message. Nothing new to learn |
 | 8 | Played marker per the RLS rule | RLS **and** the client check the ticks already use (both settings on) | Turning receipts off then hides the marker at once, not after a reload, as with the ticks |
-| 9 | The disguise discards a failed, unsent memo | Also the app going to the background on the web (`visibilitychange` hidden) | The design lists background among the disguise triggers. A memo that hasn't uploaded mustn't survive it |
+| 9 | The disguise discards a failed, unsent memo | Also the app going to the background on the web (`visibilitychange` hidden), and a memo **still uploading** (its upload is abandoned; a finished upload whose row is being inserted counts as sent) | The design lists background among the disguise triggers. A memo that hasn't uploaded mustn't survive it |
+| 10 | (not covered) | `upload-media` accepts audio only into `voice/…` | Otherwise the paperclip could attach `.m4a`/`.webm` as plain files (while `.mp3` is refused) |
+| 11 | (not covered) | Esc on a locked desktop recording also counts toward the double-Esc disguise | The double-Esc escape hatch must always work; the cost is that Esc to delete, then Esc again within 0.5 s, hides the app |
+| 12 | One shared player | Gallery rows play under their own id (`gallery:<message id>`), still one at a time | Closing the gallery would otherwise stop the same memo playing in the chat |
+| 13 | (not covered) | Pinned and search cards say "📎 Voice message (0:42)" | A pinned memo was a blank card |
+| 14 | (not covered) | The header's line says "recording a voice message…" too | Otherwise the header said "typing…" while the list said "Recording…" |
+| 15 | (not covered) | Turning read receipts back on re-fetches plays, as it re-fetches read positions | Plays from the "off" time were hidden, so the mic stayed grey until a reload |
+| 16 | E2E with the `.m4a` fixture | Chromium tests use a WebM/Opus copy of it; WebKit uses the `.m4a` | Playwright's Linux Chromium may have no AAC decoder |
 
 ## Task graph
 
@@ -71,7 +78,7 @@ T0 (lead) ─┬─ T1 migration + pgTAP ─────────────
                                 └──────────────┴─ T8 gallery Voice row ─────────────────┴─ T9 e2e, docs, final verification
 ```
 
-- **Wave 1** (parallel after T0): T1, T2, T3, T4, T5.
+- **Wave 1** (parallel after T0): T1, T2, T3, T4, T5. Merge T1 as soon as it passes: every later e2e gate needs its table.
 - **Wave 2:** T6 and T8 (after T4 and T5).
 - **Wave 3:** T7, after T2, T3, T4, T5 and T6. It uses T6's `Waveform` for the preview.
 - **Last:** T9.
@@ -84,11 +91,11 @@ T0 (lead) ─┬─ T1 migration + pgTAP ─────────────
 | T2 | `src/lib/voice/recorder.ts` (+ test) |
 | T3 | `src/lib/voice/gesture.ts` (+ test) |
 | T4 | `src/stores/voicePlayer.ts` (+ test) |
-| T5 | `src/lib/conversationRealtime.ts` (+ test), `src/hooks/useConversationRealtime.ts`, `src/stores/voicePlays.ts` (+ test), `src/stores/typingStore.ts` (+ test), `src/hooks/useTyping.ts` (+ test), `src/components/chat2/TypingBubble.tsx` (+ test), `src/components/chat2/MessageList.tsx` (one line), `src/stores/messageStore.ts`, `src/stores/authStore.ts` |
+| T5 | `src/lib/conversationRealtime.ts` (+ test), `src/hooks/useConversationRealtime.ts`, `src/stores/voicePlays.ts` (+ test), `src/stores/typingStore.ts` (+ test), `src/hooks/useTyping.ts` (+ test), `src/components/chat2/TypingBubble.tsx` (+ test), `src/components/chat2/ChatHeader.tsx` (+ test), `src/components/chat2/MessageList.tsx` (the typing line and the receipts effect), `src/stores/messageStore.ts` (+ test), `src/stores/authStore.ts` |
 | T6 | `src/components/chat2/Waveform.tsx` (+ test), `src/components/chat2/VoiceBubble.tsx` (+ test), `src/components/chat2/Bubble.tsx` (+ test) |
 | T7 | `src/lib/chat/outbox.ts` (+ test), `src/lib/chat/voice.ts` (+ test), `src/components/chat2/useVoiceSession.ts` (+ test), `src/components/chat2/VoiceComposer.tsx` (+ test), `src/components/chat2/Composer.tsx` (+ test) |
-| T8 | `src/components/gallery/VoiceRow.tsx` (+ test), `src/components/gallery/MediaGallery.tsx` |
-| T9 | `e2e/voice.spec.ts`, `e2e/stubs.ts`, `e2e/themes.spec.ts`, `docs/testing/iphone-checklist.md` |
+| T8 | `src/components/gallery/VoiceRow.tsx` (+ test), `src/components/gallery/MediaGallery.tsx` (+ test), `src/components/chat/ChannelInfoPanel.tsx` (pin and search cards) |
+| T9 | `e2e/voice.spec.ts`, `e2e/stubs.ts`, `e2e/themes.spec.ts`, `docs/testing/iphone-checklist.md` (the fixtures `e2e/fixtures/media/voice.m4a` and `voice.webm` are committed with this plan) |
 
 ## File structure
 
@@ -100,7 +107,7 @@ T0 (lead) ─┬─ T1 migration + pgTAP ─────────────
 | `supabase/functions/upload-media/index.ts` | Modify (T0) | Accept `audio/mp4`, `audio/webm` |
 | `ios/App/App/Info.plist` | Modify (T0) | Microphone text: "…when you record audio or video." |
 | `playwright.config.ts` | Modify (T0) | Chromium's fake microphone |
-| `e2e/fixtures/media/voice.m4a` | Create (with this plan) | A 4 s AAC memo recorded in Chrome, for playback tests |
+| `e2e/fixtures/media/voice.m4a`, `voice.webm` | Create (with this plan) | The same 4 s memo recorded in Chrome as AAC and as Opus, for playback tests |
 | `docs/release/owner-checklist.md` | Modify (T0) | The migration, the function deploy, a memo check |
 | `docs/plans/2026-10-23-voice-memos-design.md` | Modify (T0) | "Changed while planning" |
 | `supabase/migrations/20261026090000_voice_memos.sql` | Create (T1) | `voice_plays`, `mark_voice_played`, realtime, `message_media.duration_ms` |
@@ -112,8 +119,8 @@ T0 (lead) ─┬─ T1 migration + pgTAP ─────────────
 | `src/lib/conversationRealtime.ts` (+ test) | Modify (T5) | `voice_plays` inserts; `activity` on `typing` |
 | `src/hooks/useConversationRealtime.ts` | Modify (T5) | Route plays to the store |
 | `src/stores/typingStore.ts`, `src/hooks/useTyping.ts` (+ tests) | Modify (T5) | The `recording` activity |
-| `src/components/chat2/TypingBubble.tsx` (+ test), `MessageList.tsx` | Modify (T5) | "Recording a voice message…" |
-| `src/stores/messageStore.ts`, `src/stores/authStore.ts` | Modify (T5) | Load plays with each page; reset on sign-out |
+| `src/components/chat2/TypingBubble.tsx` (+ test), `ChatHeader.tsx` (+ test), `MessageList.tsx` | Modify (T5) | "Recording a voice message…" in the list and the header; plays re-fetched when receipts come back on |
+| `src/stores/messageStore.ts` (+ test), `src/stores/authStore.ts` | Modify (T5) | Load plays with each page; reset on sign-out |
 | `src/components/chat2/Waveform.tsx` (+ test) | Create (T6) | The scrubbable bar waveform (`role="slider"`) |
 | `src/components/chat2/VoiceBubble.tsx` (+ test) | Create (T6) | Play/pause, waveform, duration, played marker |
 | `src/components/chat2/Bubble.tsx` (+ test) | Modify (T6) | Voice memos render as `VoiceBubble` |
@@ -123,7 +130,8 @@ T0 (lead) ─┬─ T1 migration + pgTAP ─────────────
 | `src/components/chat2/VoiceComposer.tsx` (+ test) | Create (T7) | `MicButton`, `VoicePanel`, `VoiceHint`, `VoiceKeysHint` |
 | `src/components/chat2/Composer.tsx` (+ test) | Modify (T7) | The mic in place of Send; the panel in place of the field |
 | `src/components/gallery/VoiceRow.tsx` (+ test) | Create (T8) | The gallery's Voice row |
-| `src/components/gallery/MediaGallery.tsx` | Modify (T8) | Use `VoiceRow` for `audio` |
+| `src/components/gallery/MediaGallery.tsx` (+ test) | Modify (T8) | Use `VoiceRow` for `audio` |
+| `src/components/chat/ChannelInfoPanel.tsx` | Modify (T8) | Pinned and search cards say "Voice message (0:42)" instead of a blank card |
 | `e2e/voice.spec.ts`, `e2e/stubs.ts`, `e2e/themes.spec.ts` | Create/Modify (T9) | Voice e2e; a ranged CDN stub; a memo in the screenshots |
 | `docs/testing/iphone-checklist.md` | Modify (T9) | Rows V1–V10 |
 
@@ -277,6 +285,13 @@ with
     const baseType = file.type.split(';')[0].trim().toLowerCase()
     if (!ALLOWED_TYPES.includes(baseType)) {
 ```
+and, right after that `if` block's closing brace, add:
+```ts
+    // Audio is for voice memos only (the paperclip still can't attach audio files).
+    if (baseType.startsWith('audio/') && !pathPrefix.startsWith('voice/')) {
+      return new Response(JSON.stringify({ error: 'File type not allowed' }), { status: 400 })
+    }
+```
 Nothing else changes (Bunny still gets `application/octet-stream`).
 
 - [ ] **Step 9: Info.plist.** In `ios/App/App/Info.plist`, change `<string>XIV uses the microphone when you record a video.</string>` to `<string>XIV uses the microphone when you record audio or video.</string>`.
@@ -322,7 +337,11 @@ Nothing else changes (Bunny still gets `application/octet-stream`).
 - Haptics only where `navigator.vibrate` exists (not iPhone).
 - An interrupted hold (`pointercancel`, e.g. the first microphone prompt) cancels.
 - The played marker also follows the client-side receipts check, like the ticks.
-- On the web, going to the background also discards an unsent (failed) memo.
+- On the web, going to the background also discards an unsent memo, failed or still uploading.
+- `upload-media` accepts audio only into `voice/…`.
+- Esc on a locked desktop recording still counts toward the double-Esc disguise.
+- Gallery rows play under their own player id; pinned and search cards say "Voice message (0:42)"; the header says "recording a voice message…".
+- Read receipts back on re-fetch plays.
 ```
 
 - [ ] **Step 13: Gate and commit.**
@@ -862,7 +881,7 @@ function browserEnv(): RecorderEnv {
   return {
     getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
     MediaRecorder,
-    AudioContext: w.AudioContext ?? w.webkitAudioContext,
+    AudioContext: window.AudioContext ?? w.webkitAudioContext,
     now: () => performance.now(),
   }
 }
@@ -1014,7 +1033,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 **Files:**
 - Create: `src/lib/voice/gesture.ts`, `src/lib/voice/gesture.test.ts`
 
-**Dependencies:** none (after T0 for the branch)
+**Dependencies:** T0
 
 - [ ] **Step 1: Write the failing test** `src/lib/voice/gesture.test.ts`:
 ```ts
@@ -1235,6 +1254,17 @@ describe('voicePlayer', () => {
     expect(store().failed.m1).toBeUndefined()
   })
 
+  it('pausing while it loads is a pause, not "Can\'t play"', async () => {
+    audio.play.mockImplementationOnce(async () => {
+      audio.paused = false
+      audio.pause()
+      throw new DOMException('interrupted', 'AbortError')
+    })
+    expect(await store().toggle('m1', 'a')).toBe(false)
+    expect(store().status).toBe('paused')
+    expect(store().failed.m1).toBeUndefined()
+  })
+
   it('seeking another memo loads it paused at that point', () => {
     store().seek('m3', 'c', 7)
     expect(audio.src).toBe('c')
@@ -1421,7 +1451,9 @@ export const useVoicePlayerStore = create<VoicePlayerState>((set, get) => {
       try {
         await a.play()
         return get().current === id
-      } catch {
+      } catch (e) {
+        // A pause (or another memo) before playback began: not a failure. The pause handler set the state.
+        if ((e as { name?: string } | null)?.name === 'AbortError') return false
         if (get().current === id) markFailed(id)
         setAudioSession('auto')
         return false
@@ -1458,7 +1490,7 @@ export const useVoicePlayerStore = create<VoicePlayerState>((set, get) => {
 })
 ```
 
-- [ ] **Step 4: Run it.** Expected: PASS (10 tests). If the disguise test fails because `useUiStore.setState` doesn't reach `subscribe` with `prev`, check that Zustand 5's `subscribe(listener)` passes `(state, prevState)`. It does, so the failure is elsewhere.
+- [ ] **Step 4: Run it.** Expected: PASS (11 tests). If the disguise test fails because `useUiStore.setState` doesn't reach `subscribe` with `prev`, check that Zustand 5's `subscribe(listener)` passes `(state, prevState)`. It does, so the failure is elsewhere.
 
 - [ ] **Step 5: Gate and commit.**
 ```bash
@@ -1475,9 +1507,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `src/stores/voicePlays.ts`, `src/stores/voicePlays.test.ts`
-- Modify: `src/lib/conversationRealtime.ts` (+ `.test.ts`), `src/hooks/useConversationRealtime.ts`, `src/stores/typingStore.ts` (+ `.test.ts`), `src/hooks/useTyping.ts` (+ `.test.ts`), `src/components/chat2/TypingBubble.tsx` (+ `.test.tsx`), `src/components/chat2/MessageList.tsx`, `src/stores/messageStore.ts`, `src/stores/authStore.ts`
+- Modify: `src/lib/conversationRealtime.ts` (+ `.test.ts`), `src/hooks/useConversationRealtime.ts`, `src/stores/typingStore.ts` (+ `.test.ts`), `src/hooks/useTyping.ts` (+ `.test.ts`), `src/components/chat2/TypingBubble.tsx` (+ `.test.tsx`), `src/components/chat2/ChatHeader.tsx` (+ `.test.tsx`), `src/components/chat2/MessageList.tsx`, `src/stores/messageStore.ts` (+ `.test.ts`), `src/stores/authStore.ts`
 
-**Dependencies:** T0
+**Dependencies:** T0 (and T1 merged before the e2e step)
 
 - [ ] **Step 1: Write the failing store test** `src/stores/voicePlays.test.ts`:
 ```ts
@@ -1620,9 +1652,9 @@ Run it. Expected: PASS (6 tests).
 
 - [ ] **Step 4: Realtime tests first.** In `src/lib/conversationRealtime.test.ts`:
   - Add `onVoicePlay: vi.fn()` to the `handlers()` factory (line 84).
-  - In the test at line 236 ("relays…"), change the expected typing call to `expect(h.onTyping).toHaveBeenCalledWith('schist', { user_id: 'u2', nickname: 'Bea', activity: 'typing' })`.
-  - In the test at line 262, change the filter to exclude `voice_plays` as well: `l.filter.table !== 'reactions' && l.filter.table !== 'voice_plays'`.
-  - In the send test (line 312), the typing payload becomes `{ space: 'main', user_id: 'u1', nickname: 'Alice', activity: 'typing' }`.
+  - In the test "routes broadcasts and database changes…" (around line 254), change the expected typing call to `expect(h.onTyping).toHaveBeenCalledWith('schist', { user_id: 'u2', nickname: 'Bea', activity: 'typing' })`.
+  - In the test that checks every non-reaction binding is filtered by conversation (around line 262), change the filter to exclude `voice_plays` as well: `l.filter.table !== 'reactions' && l.filter.table !== 'voice_plays'`.
+  - In the test "sends on the joined channel…" (around line 314), the typing payload becomes `{ space: 'main', user_id: 'u1', nickname: 'Alice', activity: 'typing' }`.
   - Add these tests next to the reactions ones:
 ```ts
   it('binds voice play inserts, unfiltered (RLS scopes them), and routes them', () => {
@@ -1664,7 +1696,8 @@ Run it. Expected: PASS (6 tests).
   - Imports: `import type { Message, Reaction, ReadPosition, Space, TypingActivity, VoicePlay } from '@/types'`.
   - In `ConversationHandlers`, replace the `onTyping` line and add `onVoicePlay`:
 ```ts
-  onTyping(space: Space, user: { user_id: string; nickname: string; activity: TypingActivity }): void
+  /** `activity` is always set by this module; optional so callers and tests may leave it out (it means typing). */
+  onTyping(space: Space, user: { user_id: string; nickname: string; activity?: TypingActivity }): void
   /** Someone started playing a voice memo (RLS: only when both have read receipts on, or it's mine). */
   onVoicePlay(row: VoicePlay): void
 ```
@@ -1823,12 +1856,47 @@ Run. Expected: PASS.
 
   If `messageStore.test.ts` mocks `@/stores/reactionStore` by path, add an equivalent `vi.mock('@/stores/voicePlays', ...)` there returning `{ useVoicePlayStore: { getState: () => ({ loadFor: vi.fn() }) }, voiceMessageIds: () => [] }`.
 
+- [ ] **Step 9a: The header says it too.** Add to `src/components/chat2/ChatHeader.test.tsx` (use the partner id and render helper its existing typing test uses):
+```tsx
+  it('says "recording a voice message…" while the partner records', () => {
+    useTypingStore.setState({
+      typing: { main: [{ user_id: PARTNER_ID, nickname: 'Bea', at: Date.now(), activity: 'recording' }], schist: [] },
+    })
+    renderHeader()
+    expect(screen.getByText('recording a voice message…')).toBeInTheDocument()
+  })
+```
+Run it. Expected: FAIL (it says "typing…"). In `src/components/chat2/ChatHeader.tsx`, replace the `typing` selector and the `line`:
+```tsx
+  const partnerTyping = useTypingStore((s) => (partner.id ? s.typing[activeSpace].find((t) => t.user_id === partner.id) : undefined))
+  ...
+  const line = partnerTyping
+    ? partnerTyping.activity === 'recording'
+      ? 'recording a voice message…'
+      : 'typing…'
+    : presenceLine(partner.presence, lastSeen(partner.profile), new Date())
+```
+(If `typing` is used anywhere else in the file, use `!!partnerTyping` there.) Run. Expected: PASS.
+
+- [ ] **Step 9b: Receipts back on re-fetch plays**, as they already re-fetch read positions. While either person had receipts off, the partner's plays were hidden, so nothing loaded them. In `src/components/chat2/MessageList.tsx`, add `import { useVoicePlayStore, voiceMessageIds } from '@/stores/voicePlays'`. Then change the receipts effect (around line 110) to:
+```tsx
+  useEffect(() => {
+    // Back on: what they read (and played) meanwhile was hidden, so fetch it.
+    if (receiptsOn && !receiptsWereOn.current && myId) {
+      void useConversationStore.getState().refreshPartnerReadAt(myId)
+      void useVoicePlayStore.getState().loadFor(voiceMessageIds(useMessageStore.getState().messages[key] ?? []))
+    }
+    receiptsWereOn.current = receiptsOn
+  }, [receiptsOn, myId, key])
+```
+(`useMessageStore` and `key` are already in scope in `MessageList`; add the import if `useMessageStore` isn't imported there.)
+
 - [ ] **Step 10: Gate (with e2e) and commit.**
 ```bash
 npx tsc -b && npm run lint && npm test
 # in the stack lock, with this worktree's E2E_PORT:
 npm run db:reset && E2E_PORT=<port> npm run e2e
-git add src/stores/voicePlays.ts src/stores/voicePlays.test.ts src/lib/conversationRealtime.ts src/lib/conversationRealtime.test.ts src/hooks/useConversationRealtime.ts src/stores/typingStore.ts src/stores/typingStore.test.ts src/hooks/useTyping.ts src/hooks/useTyping.test.ts src/components/chat2/TypingBubble.tsx src/components/chat2/TypingBubble.test.tsx src/components/chat2/MessageList.tsx src/stores/messageStore.ts src/stores/messageStore.test.ts src/stores/authStore.ts
+git add src/stores/voicePlays.ts src/stores/voicePlays.test.ts src/lib/conversationRealtime.ts src/lib/conversationRealtime.test.ts src/hooks/useConversationRealtime.ts src/stores/typingStore.ts src/stores/typingStore.test.ts src/hooks/useTyping.ts src/hooks/useTyping.test.ts src/components/chat2/TypingBubble.tsx src/components/chat2/TypingBubble.test.tsx src/components/chat2/ChatHeader.tsx src/components/chat2/ChatHeader.test.tsx src/components/chat2/MessageList.tsx src/stores/messageStore.ts src/stores/messageStore.test.ts src/stores/authStore.ts
 git commit -m "Voice plays live on the conversation channel; \"Recording a voice message…\"
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -1843,7 +1911,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `src/components/chat2/Waveform.tsx` (+ `.test.tsx`), `src/components/chat2/VoiceBubble.tsx` (+ `.test.tsx`)
 - Modify: `src/components/chat2/Bubble.tsx`, `src/components/chat2/Bubble.test.tsx`
 
-**Dependencies:** T4, T5
+**Dependencies:** T1, T4, T5
 
 - [ ] **Step 1: Waveform test** `src/components/chat2/Waveform.test.tsx`:
 ```tsx
@@ -1887,8 +1955,16 @@ describe('Waveform', () => {
     render(<Waveform peaks={peaks} position={0} duration={20} onSeek={onSeek} label="p" />)
     const slider = screen.getByRole('slider')
     slider.getBoundingClientRect = () => ({ left: 100, width: 200, top: 0, height: 28, right: 300, bottom: 28, x: 100, y: 0, toJSON: () => ({}) })
-    fireEvent.pointerDown(slider, { clientX: 150, pointerId: 1 })
+    // jsdom has no PointerEvent: a MouseEvent named pointerdown carries clientX.
+    fireEvent(slider, new MouseEvent('pointerdown', { bubbles: true, clientX: 150 }))
     expect(onSeek).toHaveBeenCalledWith(5)
+  })
+
+  it('shows a thumb at the position only when asked', () => {
+    const { container, rerender } = render(<Waveform peaks={peaks} position={5} duration={20} onSeek={() => {}} label="p" />)
+    expect(container.querySelector('[data-thumb]')).toBeNull()
+    rerender(<Waveform peaks={peaks} position={5} duration={20} onSeek={() => {}} label="p" thumb />)
+    expect(container.querySelector<HTMLElement>('[data-thumb]')?.style.left).toBe('25%')
   })
 
   it('colours the bars up to the position', () => {
@@ -1924,13 +2000,15 @@ interface WaveformProps {
   onSeek: (seconds: number) => void
   label: string
   bars?: number
+  /** A dot at the position (while a memo is playing or part-played). */
+  thumb?: boolean
 }
 
 /**
  * A memo's waveform as a slider: bars up to the position use --wave-on, the rest --wave-off (set by the
  * parent). Tap or drag to seek; arrow keys step 5 s.
  */
-export function Waveform({ peaks, position, duration, onSeek, label, bars = 40 }: WaveformProps) {
+export function Waveform({ peaks, position, duration, onSeek, label, bars = 40, thumb = false }: WaveformProps) {
   const ref = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
   const heights = resample(peaks, bars)
@@ -1987,7 +2065,7 @@ export function Waveform({ peaks, position, duration, onSeek, label, bars = 40 }
       onPointerUp={() => (dragging.current = false)}
       onPointerCancel={() => (dragging.current = false)}
       onClick={(e) => e.stopPropagation()}
-      className="flex h-7 min-w-0 flex-1 cursor-pointer touch-pan-y items-center gap-[2px] rounded outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--wave-on)]"
+      className="relative flex h-7 min-w-0 flex-1 cursor-pointer touch-pan-y items-center gap-[2px] rounded outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--wave-on)]"
     >
       {heights.map((h, i) => (
         <span
@@ -1998,11 +2076,19 @@ export function Waveform({ peaks, position, duration, onSeek, label, bars = 40 }
           style={{ height: `${Math.round(4 + (h / 100) * 22)}px` }}
         />
       ))}
+      {thumb && (
+        <span
+          data-thumb
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[color:var(--wave-on)] shadow-[0_0_0_2px_var(--wave-ring,transparent)]"
+          style={{ left: `${fraction * 100}%` }}
+        />
+      )}
     </div>
   )
 }
 ```
-Run. Expected: PASS (5 tests).
+Run. Expected: PASS (6 tests).
 
 - [ ] **Step 3: VoiceBubble test** `src/components/chat2/VoiceBubble.test.tsx`:
 ```tsx
@@ -2182,6 +2268,7 @@ export function VoiceBubble({ message, attachment, mine, meta }: VoiceBubbleProp
           duration={total}
           onSeek={(s) => useVoicePlayerStore.getState().seek(id, attachment.url, s)}
           label="Voice message position"
+          thumb={active}
         />
       </div>
       <div className={`flex items-center gap-1.5 pl-[46px] text-[12px] ${mine ? 'text-[color:var(--me-muted)]' : 'text-[color:var(--muted)]'}`}>
@@ -2301,43 +2388,74 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Create: `src/lib/chat/voice.ts` (+ `.test.ts`), `src/components/chat2/useVoiceSession.ts` (+ `.test.ts`), `src/components/chat2/VoiceComposer.tsx` (+ `.test.tsx`)
 - Modify: `src/lib/chat/outbox.ts` (+ `.test.ts`), `src/components/chat2/Composer.tsx` (+ `.test.tsx`)
 
-**Dependencies:** T2, T3, T4, T5, T6
+**Dependencies:** T1, T2, T3, T4, T5, T6
 
-- [ ] **Step 1: Outbox test.** Add to `src/lib/chat/outbox.test.ts` (reusing its existing mocks of `conversationStore.sendMessage` and the realtime send):
+- [ ] **Step 1: Outbox test.** Add to `src/lib/chat/outbox.test.ts`. It reuses the file's existing mock `sendMessage`, which `beforeEach` resets so that it resolves `undefined` (a failed insert), and conversation `conv-1`:
 ```ts
-  it('runs the upload step before the insert, and a retry reuses a finished upload', async () => {
-    const uploaded = [{ url: 'https://cdn/voice/x.m4a', type: 'audio' as const, filename: 'voice-x.m4a', size: 10, spoiler: false }]
-    const prepare = vi.fn(async () => uploaded)
+  const VOICE = { url: 'https://cdn/voice/x.m4a', type: 'audio' as const, filename: 'voice-x.m4a', size: 10, spoiler: false }
+  const voiceMessage = { authorId: 'alice', space: 'main' as const, content: null, attachments: [{ ...VOICE, url: 'blob:local' }], type: 'text' as const, replyTo: null }
+  const key = spaceKey('conv-1', 'main')
+
+  it('runs the upload step before the insert, tells the caller the id first, and a retry reuses a finished upload', async () => {
+    const prepare = vi.fn(async () => [VOICE])
+    const onAdded = vi.fn()
     sendMessage.mockResolvedValueOnce(null) // the insert fails once
-    const id = await sendOutgoing(
-      { authorId: 'alice', space: 'main', content: null, attachments: [{ ...uploaded[0], url: 'blob:local' }], type: 'text', replyTo: null },
-      prepare,
-    )
-    expect(sendMessage.mock.calls[0][0].attachments).toEqual(uploaded)
-    await retryOutgoing(spaceKey('conv-1', 'main'), id!)
+    const id = await sendOutgoing(voiceMessage, { prepare, onAdded })
+    expect(onAdded).toHaveBeenCalledWith(id)
+    expect(sendMessage.mock.calls[0][0].attachments).toEqual([VOICE])
+    await retryOutgoing(key, id!)
     expect(prepare).toHaveBeenCalledTimes(1)
-    expect(sendMessage.mock.calls[1][0].attachments).toEqual(uploaded)
+    expect(sendMessage.mock.calls[1][0].attachments).toEqual([VOICE])
   })
 
   it('a failed upload fails the message without inserting, and Retry uploads again', async () => {
-    const prepare = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([])
-    const id = await sendOutgoing({ authorId: 'alice', space: 'main', content: null, attachments: [], type: 'text', replyTo: null }, prepare)
-    const key = spaceKey('conv-1', 'main')
+    const prepare = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([VOICE])
+    const id = await sendOutgoing(voiceMessage, { prepare })
     expect(useMessageStore.getState().messages[key]?.find((m) => m.id === id)?.localState).toBe('failed')
     expect(sendMessage).not.toHaveBeenCalled()
     await retryOutgoing(key, id!)
     expect(prepare).toHaveBeenCalledTimes(2)
   })
+
+  it('an upload forgotten while in flight (the disguise) sends nothing and fails nothing', async () => {
+    let finish: (a: typeof VOICE[]) => void = () => {}
+    const prepare = vi.fn(() => new Promise<typeof VOICE[]>((r) => (finish = r)))
+    let added = ''
+    const sending = sendOutgoing(voiceMessage, { prepare, onAdded: (id) => (added = id) })
+    await Promise.resolve()
+    forgetUpload(added)
+    useMessageStore.getState().removeMessage(key, added)
+    finish([VOICE])
+    await sending
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(useMessageStore.getState().messages[key]?.some((m) => m.id === added) ?? false).toBe(false)
+  })
+
+  it('never inserts a local blob: copy without its upload step', async () => {
+    const id = await sendOutgoing(voiceMessage, { prepare: async () => Promise.reject(new Error('offline')) })
+    forgetUpload(id!)
+    await retryOutgoing(key, id!)
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(useMessageStore.getState().messages[key]?.find((m) => m.id === id)?.localState).toBe('failed')
+  })
 ```
-(Use the test file's own names for the mocked `sendMessage` and conversation id. If its conversation id isn't `conv-1`, use its value.) Run `npx vitest run src/lib/chat/outbox.test.ts`. Expected: FAIL (`sendOutgoing` takes one argument and returns nothing).
+(Import `forgetUpload` from `@/lib/chat/outbox` and `spaceKey` from `@/lib/spaces` if the file doesn't already.) Run `npx vitest run src/lib/chat/outbox.test.ts`. Expected: FAIL (`sendOutgoing` takes one argument; `forgetUpload` doesn't exist).
 
 - [ ] **Step 2: Implement** in `src/lib/chat/outbox.ts`:
-  - `import type { Attachment, Message } from '@/types'`
-  - Add, above `sendOutgoing`:
+  - Change the type import to `import type { Attachment, Message } from '@/types'`.
+  - Add this above `sendOutgoing`:
 ```ts
+/** A message whose attachments upload before the row is inserted (voice memos). */
+export interface UploadStep {
+  /** Uploads and returns the attachments to send in place of the local ones. */
+  prepare: () => Promise<Attachment[]>
+  /** The message is in the list (as "sending") under this id: before the upload starts. */
+  onAdded?: (id: string) => void
+}
+
 /**
- * Messages whose attachments must upload before the row is inserted (voice memos), by message id. The
- * step is memoised once it succeeds, so a retry after a failed insert doesn't upload again.
+ * Upload steps by message id, kept for Retry until the row is inserted. The step is memoised once it
+ * succeeds, so a retry after a failed insert doesn't upload again.
  */
 const uploads = new Map<string, () => Promise<Attachment[]>>()
 
@@ -2352,21 +2470,23 @@ function memoise(fn: () => Promise<Attachment[]>): () => Promise<Attachment[]> {
   }
 }
 
-/** Forgets a message's upload step (it was sent, or thrown away). */
+/** Abandons a message's upload step: an upload still running is then sent nowhere. */
 export function forgetUpload(id: string): void {
   uploads.delete(id)
 }
 ```
-  - Change `sendOutgoing` to accept `prepare?: () => Promise<Attachment[]>` and return the id:
+  - Change `sendOutgoing` to take the step and return the id:
 ```ts
-export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>, prepare?: () => Promise<Attachment[]>): Promise<string | undefined> {
+export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>, upload?: UploadStep): Promise<string | undefined> {
   const conv = useConversationStore.getState()
   const conversationId = conv.conversation?.id
   if (!conversationId) return undefined
   const id = newId()
-  ...(unchanged up to addPending)
-  useMessageStore.getState().addPending(key, local)
-  if (prepare) uploads.set(id, memoise(prepare))
+  ...(unchanged up to and including addPending)
+  if (upload) {
+    uploads.set(id, memoise(upload.prepare))
+    upload.onAdded?.(id)
+  }
   await deliver(key, { ...m, id })
   return id
 }
@@ -2375,24 +2495,37 @@ export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>, prepare?: () 
 ```ts
   const prepare = uploads.get(m.id)
   if (prepare) {
+    let attachments: Attachment[]
     try {
-      m = { ...m, attachments: await prepare() }
+      attachments = await prepare()
     } catch {
-      useMessageStore.getState().failPending(key, m.id)
+      // Forgotten meanwhile (the disguise): it's gone from the list already, so nothing to fail.
+      if (uploads.get(m.id) === prepare) useMessageStore.getState().failPending(key, m.id)
       return
     }
+    // Forgotten while uploading: send nothing.
+    if (uploads.get(m.id) !== prepare) return
+    m = { ...m, attachments }
+  } else if (m.attachments.some((a) => a.url.startsWith('blob:'))) {
+    // A local copy without its upload step can never be sent.
+    useMessageStore.getState().failPending(key, m.id)
+    return
   }
 ```
   - After `store.confirmPending(key, m.id, data)`, add `uploads.delete(m.id)`.
 
-  Run. Expected: PASS (all outbox tests).
+  Run. Expected: PASS (all outbox tests, old and new).
 
 - [ ] **Step 3: `voice.ts` test** `src/lib/chat/voice.test.ts`:
 ```ts
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+type Step = { prepare: () => Promise<unknown>; onAdded?: (id: string) => void }
 const { sendOutgoing, uploadFile, forgetUpload } = vi.hoisted(() => ({
-  sendOutgoing: vi.fn(async (_m: unknown, _p?: () => Promise<unknown>) => 'id-1' as string | undefined),
+  sendOutgoing: vi.fn(async (_m: unknown, step?: Step) => {
+    step?.onAdded?.('id-1')
+    return 'id-1' as string | undefined
+  }),
   uploadFile: vi.fn(async () => ({ url: 'https://cdn/voice/c1/x.m4a', filename: 'voice-x.m4a', size: 3, type: 'audio/mp4' })),
   forgetUpload: vi.fn(),
 }))
@@ -2403,6 +2536,7 @@ vi.mock('@/lib/supabase', () => ({ supabase: {} }))
 import { discardUnsentVoice, sendVoiceMemo } from '@/lib/chat/voice'
 import { useMessageStore } from '@/stores/messageStore'
 import type { VoiceRecording } from '@/lib/voice/recorder'
+import type { Message } from '@/types'
 
 const recording: VoiceRecording = {
   blob: new Blob(['abc'], { type: 'audio/mp4' }),
@@ -2410,16 +2544,22 @@ const recording: VoiceRecording = {
   durationMs: 4200,
   peaks: [1, 2, 3],
 }
+const KEY = 'c1:main'
+const inList = (localState?: Message['localState']) =>
+  useMessageStore.setState({ messages: { [KEY]: [{ id: 'id-1', space: 'main', localState } as Message] } })
+const send = () => sendVoiceMemo({ authorId: 'alice', conversationId: 'c1', space: 'main', recording, replyTo: null })
 
 beforeEach(() => {
   URL.createObjectURL = vi.fn(() => 'blob:local')
   URL.revokeObjectURL = vi.fn()
+  useMessageStore.setState({ messages: {} })
+  discardUnsentVoice()
 })
 
 describe('sendVoiceMemo', () => {
   it('sends an empty message with one audio attachment, uploaded to voice/<conversation>', async () => {
     await sendVoiceMemo({ authorId: 'alice', conversationId: 'c1', space: 'main', recording, replyTo: 'r1' })
-    const [m, prepare] = sendOutgoing.mock.calls[0]
+    const [m, step] = sendOutgoing.mock.calls[0]
     expect(m).toEqual({
       authorId: 'alice',
       space: 'main',
@@ -2428,34 +2568,52 @@ describe('sendVoiceMemo', () => {
       replyTo: 'r1',
       attachments: [{ url: 'blob:local', type: 'audio', filename: 'voice-uuid.m4a', size: 3, spoiler: false, duration_ms: 4200, peaks: [1, 2, 3] }],
     })
-    const uploaded = await prepare!()
-    const file = (uploadFile.mock.calls[0] as unknown as [File, string])[0]
+    const uploaded = await step!.prepare()
+    const [file, folder] = uploadFile.mock.calls[0] as unknown as [File, string]
     expect(file.name).toBe('voice-uuid.m4a')
     expect(file.type).toBe('audio/mp4')
-    expect((uploadFile.mock.calls[0] as unknown as [File, string])[1]).toBe('voice/c1')
+    expect(folder).toBe('voice/c1')
     expect(uploaded).toEqual([{ url: 'https://cdn/voice/c1/x.m4a', type: 'audio', filename: 'voice-uuid.m4a', size: 3, spoiler: false, duration_ms: 4200, peaks: [1, 2, 3] }])
   })
 
   it('frees the local copy once sent', async () => {
-    await sendVoiceMemo({ authorId: 'alice', conversationId: 'c1', space: 'main', recording, replyTo: null })
+    await send()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local')
   })
 })
 
 describe('discardUnsentVoice', () => {
-  it('removes my failed memos and their uploads', async () => {
-    const key = 'c1:main'
-    useMessageStore.setState({
-      messages: { [key]: [{ id: 'id-1', localState: 'failed', space: 'main' } as never] },
-    })
-    await sendVoiceMemo({ authorId: 'alice', conversationId: 'c1', space: 'main', recording, replyTo: null })
+  it('removes a failed memo and abandons its upload', async () => {
+    inList('failed')
+    await send()
     discardUnsentVoice()
-    expect(useMessageStore.getState().messages[key]).toEqual([])
+    expect(useMessageStore.getState().messages[KEY]).toEqual([])
     expect(forgetUpload).toHaveBeenCalledWith('id-1')
+  })
+
+  it('removes a memo that is still uploading', async () => {
+    sendOutgoing.mockImplementationOnce(async (_m, step) => {
+      step?.onAdded?.('id-1')
+      inList('sending')
+      discardUnsentVoice() // the disguise comes up mid-upload
+      return 'id-1'
+    })
+    await send()
+    expect(useMessageStore.getState().messages[KEY]).toEqual([])
+    expect(forgetUpload).toHaveBeenCalledWith('id-1')
+  })
+
+  it('leaves a memo that was sent', async () => {
+    inList('failed')
+    await send()
+    inList(undefined) // a Retry went through
+    discardUnsentVoice()
+    expect(useMessageStore.getState().messages[KEY]).toHaveLength(1)
+    expect(forgetUpload).not.toHaveBeenCalled()
   })
 })
 ```
-(Check `spaceKey('c1', 'main')`'s format in `src/lib/spaces.ts` and use that value for `key`.) Run. Expected: FAIL.
+Run. Expected: FAIL.
 
 - [ ] **Step 4: Implement** `src/lib/chat/voice.ts`:
 ```ts
@@ -2466,7 +2624,7 @@ import type { VoiceRecording } from '@/lib/voice/recorder'
 import { useMessageStore } from '@/stores/messageStore'
 import type { Attachment, Space } from '@/types'
 
-/** My voice memos still in the list unsent, with what to free when they're discarded. */
+/** My memos from the moment they're in the list until they're sent: the disguise throws these away. */
 const unsent = new Map<string, { key: string; local: string }>()
 
 interface SendVoice {
@@ -2482,36 +2640,49 @@ interface SendVoice {
  * then the row is inserted. A failed upload or insert leaves it in the list with Retry.
  */
 export async function sendVoiceMemo({ authorId, conversationId, space, recording, replyTo }: SendVoice): Promise<void> {
+  const key = spaceKey(conversationId, space)
   const filename = `voice-${newId()}.${recording.format.ext}`
   const file = new File([recording.blob], filename, { type: recording.blob.type })
   const local = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(recording.blob) : ''
   const base = { type: 'audio' as const, filename, spoiler: false, duration_ms: recording.durationMs, peaks: recording.peaks }
   const attachment: Attachment = { url: local, size: file.size, ...base }
 
-  const id = await sendOutgoing({ authorId, space, content: null, attachments: [attachment], type: 'text', replyTo }, async () => {
-    const result = await uploadFile(file, `voice/${conversationId}`)
-    return [{ url: result.url, size: result.size, ...base }]
-  })
-  if (!id) return
-  const key = spaceKey(conversationId, space)
-  const sent = useMessageStore.getState().messages[key]?.find((m) => m.id === id)
-  if (sent?.localState === 'failed') unsent.set(id, { key, local })
-  else if (local) URL.revokeObjectURL(local)
+  const id = await sendOutgoing(
+    { authorId, space, content: null, attachments: [attachment], type: 'text', replyTo },
+    {
+      prepare: async () => {
+        const result = await uploadFile(file, `voice/${conversationId}`)
+        return [{ url: result.url, size: result.size, ...base }]
+      },
+      onAdded: (added) => unsent.set(added, { key, local }),
+    },
+  )
+  if (!id || !unsent.has(id)) return // never added, or already thrown away
+  // A failed memo keeps its local copy for Retry (and stays discardable); a sent one doesn't need it.
+  if (useMessageStore.getState().messages[key]?.find((m) => m.id === id)?.localState === 'failed') return
+  unsent.delete(id)
+  if (local) URL.revokeObjectURL(local)
 }
 
-/** The disguise: my unsent memos leave the list, and their recordings are dropped. */
+/**
+ * The disguise: my memos that are still uploading or failed leave the list, their uploads are abandoned
+ * (an upload that finishes later sends nothing), and the recordings are freed. A memo whose upload has
+ * finished and whose row is being inserted has, in effect, been sent: it may come back with the echo.
+ */
 export function discardUnsentVoice(): void {
   const store = useMessageStore.getState()
   for (const [id, { key, local }] of unsent) {
     const m = store.messages[key]?.find((x) => x.id === id)
-    if (m?.localState === 'failed') store.removeMessage(key, id)
-    forgetUpload(id)
+    if (m?.localState) {
+      forgetUpload(id)
+      store.removeMessage(key, id)
+    }
     if (local) URL.revokeObjectURL(local)
   }
   unsent.clear()
 }
 ```
-(A memo sent by Retry stays in `unsent` until the next disguise. There, `localState` is no longer `failed`, so only its local copy is freed. That's harmless.) Run. Expected: PASS.
+Run. Expected: PASS (5 tests).
 
 - [ ] **Step 5: useVoiceSession test** `src/components/chat2/useVoiceSession.test.ts`:
 ```ts
@@ -2683,6 +2854,27 @@ describe('useVoiceSession', () => {
     await press(result)
     expect(result.current.phase).toBe('idle')
     expect(result.current.hint).toMatch(/^Microphone access is off/)
+  })
+
+  it('stops announcing "recording" once the memo is sent', async () => {
+    const { result } = setup()
+    await press(result)
+    await release(result, 1200)
+    sendTyping.mockClear()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(sendTyping).not.toHaveBeenCalled()
+  })
+
+  it('Stop and the limit at once make one preview', async () => {
+    const { result } = setup()
+    await act(async () => result.current.press.onClick({ detail: 0 } as never))
+    const opts = startRecording.mock.calls[0][0]!
+    await act(async () => {
+      result.current.stopToPreview()
+      opts.onLimit?.()
+    })
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+    expect(result.current.phase).toBe('preview')
   })
 
   it('unmounting discards', async () => {
@@ -2884,8 +3076,8 @@ export function useVoiceSession(options: Options): VoiceSession {
   /** Release after a hold, or Send while locked: stop, then send (too short: a hint instead). */
   const finishAndSend = async () => {
     const gen = genRef.current
-    opts.current.stopTyping()
     setPhase('idle')
+    opts.current.stopTyping()
     const recording = await stopRecorder()
     if (genRef.current !== gen) return
     reset()
@@ -2898,7 +3090,8 @@ export function useVoiceSession(options: Options): VoiceSession {
   }
 
   const toPreview = async () => {
-    if (phaseRef.current !== 'holding' && phaseRef.current !== 'locked') return
+    // Stop pressed just as the limit hit: one preview, not two.
+    if (stoppingRef.current || (phaseRef.current !== 'holding' && phaseRef.current !== 'locked')) return
     // A finger still down: its release does nothing now.
     gestureRef.current = IDLE
     const gen = genRef.current
@@ -2917,6 +3110,7 @@ export function useVoiceSession(options: Options): VoiceSession {
   }
 
   const send = () => {
+    if (stoppingRef.current) return
     if (phaseRef.current === 'preview') {
       const p = previewRef.current
       if (!p) return
@@ -2966,6 +3160,8 @@ export function useVoiceSession(options: Options): VoiceSession {
     if (phase !== 'holding' && phase !== 'locked') return
     opts.current.sendTyping('recording')
     const t = setInterval(() => {
+      // Never after stopTyping: a stop or discard is under way, or the phase has just changed.
+      if (stoppingRef.current || (phaseRef.current !== 'holding' && phaseRef.current !== 'locked')) return
       const r = recorderRef.current
       if (r) setElapsed(r.elapsedMs())
       opts.current.sendTyping('recording')
@@ -3009,7 +3205,8 @@ export function useVoiceSession(options: Options): VoiceSession {
     press: {
       onPointerDown: (e) => {
         pressPhaseRef.current = phaseRef.current
-        if (phaseRef.current !== 'idle' || e.button !== 0) return
+        // While the last memo is still stopping, a press starts nothing (and leaves no gesture behind).
+        if (phaseRef.current !== 'idle' || stoppingRef.current || e.button !== 0) return
         e.preventDefault()
         if (e.pointerType !== 'mouse') {
           try {
@@ -3040,7 +3237,7 @@ export function useVoiceSession(options: Options): VoiceSession {
   }
 }
 ```
-Run. Expected: PASS (12 tests). Two traps to check if it fails:
+Run. Expected: PASS (14 tests). Two traps to check if it fails:
 - `useUiStore.setState({ eepMode: true })` must reach `subscribe` with `prev`.
 - The unmount test needs the `[conversationId, space]` effect's cleanup.
 
@@ -3165,7 +3362,8 @@ export function MicButton({ session }: { session: VoiceSession }) {
 export function VoicePanel({ session, isDesktop }: { session: VoiceSession; isDesktop: boolean }) {
   const { phase, elapsedMs, levels, drag, send, discard } = session
 
-  // Desktop: Enter sends and Esc deletes while locked or previewing (the field is gone).
+  // Desktop: Enter sends and Esc deletes while locked or previewing (the field is gone). Esc still reaches
+  // AppShell's double-Esc disguise on purpose: a panicked Esc Esc must always hide the app.
   useEffect(() => {
     if (!isDesktop || (phase !== 'locked' && phase !== 'preview')) return
     const onKey = (e: KeyboardEvent) => {
@@ -3406,9 +3604,9 @@ In this task's e2e, the composer shows the mic instead of Send while empty, in b
 
 **Files:**
 - Create: `src/components/gallery/VoiceRow.tsx`, `src/components/gallery/VoiceRow.test.tsx`
-- Modify: `src/components/gallery/MediaGallery.tsx`
+- Modify: `src/components/gallery/MediaGallery.tsx` (+ test if needed), `src/components/chat/ChannelInfoPanel.tsx`
 
-**Dependencies:** T4, T5
+**Dependencies:** T1, T4, T5
 
 - [ ] **Step 1: Write the failing test** `src/components/gallery/VoiceRow.test.tsx`:
 ```tsx
@@ -3453,7 +3651,7 @@ describe('VoiceRow', () => {
     render(<VoiceRow item={item('bea')} now={now} dim={false} />)
     expect(screen.getByText('Bea · 1:24')).toBeInTheDocument()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Play voice message' })))
-    expect(toggle).toHaveBeenCalledWith('v1', 'https://cdn/v.m4a')
+    expect(toggle).toHaveBeenCalledWith('gallery:v1', 'https://cdn/v.m4a')
     expect(markPlayed).toHaveBeenCalledWith('v1', 'alice')
   })
 
@@ -3463,10 +3661,10 @@ describe('VoiceRow', () => {
     expect(useJumpStore.getState().pending).toMatchObject({ messageId: 'v1', space: 'main', created_at: '2026-10-23T10:00:00Z' })
   })
 
-  it('stops its memo when it goes away', () => {
+  it('stops only its own playback when it goes away (not the chat bubble\'s)', () => {
     const { unmount } = render(<VoiceRow item={item('bea')} now={now} dim={false} />)
     unmount()
-    expect(stop).toHaveBeenCalledWith('v1')
+    expect(stop).toHaveBeenCalledWith('gallery:v1')
   })
 })
 ```
@@ -3486,14 +3684,18 @@ import { useVoicePlayerStore } from '@/stores/voicePlayer'
 import { useVoicePlayStore } from '@/stores/voicePlays'
 import type { MediaItem } from '@/types'
 
-/** A voice memo in the gallery's Voice tab: play, "Bea · 0:42", "Main · 23 Oct", Show in chat. */
+/**
+ * A voice memo in the gallery's Voice tab: play, "Bea · 0:42", "Main · 23 Oct", Show in chat. It plays
+ * under its own player id, so closing the gallery never stops the same memo playing in the chat.
+ */
 export function VoiceRow({ item, now, dim }: { item: MediaItem; now: Date; dim: boolean }) {
   const id = item.message_id
+  const playerId = `gallery:${id}`
   const myId = useAuthStore((s) => s.user?.id ?? null)
   const nickname = useProfileStore((s) => (item.author_id ? s.profiles[item.author_id]?.nickname : undefined))
-  const status = useVoicePlayerStore((s) => (s.current === id ? s.status : null))
-  const failed = useVoicePlayerStore((s) => !!s.failed[id])
-  useEffect(() => () => useVoicePlayerStore.getState().stop(id), [id])
+  const status = useVoicePlayerStore((s) => (s.current === playerId ? s.status : null))
+  const failed = useVoicePlayerStore((s) => !!s.failed[playerId])
+  useEffect(() => () => useVoicePlayerStore.getState().stop(playerId), [playerId])
 
   const mine = !!item.author_id && item.author_id === myId
   const who = mine ? 'You' : (nickname ?? '')
@@ -3505,7 +3707,7 @@ export function VoiceRow({ item, now, dim }: { item: MediaItem; now: Date; dim: 
   const play = () => {
     void useVoicePlayerStore
       .getState()
-      .toggle(id, item.url)
+      .toggle(playerId, item.url)
       .then((started) => {
         if (started && !mine && myId) void useVoicePlayStore.getState().markPlayed(id, myId)
       })
@@ -3558,11 +3760,28 @@ export function VoiceRow({ item, now, dim }: { item: MediaItem; now: Date; dim: 
 ```
 Run `npx vitest run src/components/gallery`. Expected: PASS. If a `MediaGallery.test.tsx` case renders an `audio` item as a file link, update its expectation to the voice row ("Play voice message").
 
-- [ ] **Step 4: Gate (with e2e) and commit.**
+- [ ] **Step 4: Pinned and search cards.** A pinned memo is a blank card today: the card shows text, and "📎 Attachment" only for photos and GIFs. In `src/components/chat/ChannelInfoPanel.tsx`, add `import { messagePreview } from '@/lib/chat/preview'`. Then:
+  - In the pinned card, replace
+    ```tsx
+            {message.attachments?.some((a) => a.type === 'image' || a.type === 'gif') && (
+              <div className="mt-1 text-xs text-muted italic">📎 Attachment</div>
+            )}
+    ```
+    with
+    ```tsx
+            {message.attachments?.length > 0 && (
+              <div className="mt-1 text-xs text-muted italic">📎 {message.content ? 'Attachment' : messagePreview(message)}</div>
+            )}
+    ```
+  - In `SearchResultCard`, replace `<span className="mt-1 block text-xs text-muted italic">📎 Attachment</span>` with `<span className="mt-1 block text-xs text-muted italic">📎 {message.content ? 'Attachment' : messagePreview(message)}</span>`.
+
+  A memo now reads "📎 Voice message (0:42)", and a photo-only pin "📎 Photo". Nothing in the tests asserts the old text (`grep -rn "📎" src e2e`).
+
+- [ ] **Step 5: Gate (with e2e) and commit.**
 ```bash
 npx tsc -b && npm run lint && npm test
 npm run db:reset && E2E_PORT=<port> npm run e2e   # in the stack lock
-git add src/components/gallery/VoiceRow.tsx src/components/gallery/VoiceRow.test.tsx src/components/gallery/MediaGallery.tsx src/components/gallery/MediaGallery.test.tsx
+git add src/components/gallery/VoiceRow.tsx src/components/gallery/VoiceRow.test.tsx src/components/gallery/MediaGallery.tsx src/components/gallery/MediaGallery.test.tsx src/components/chat/ChannelInfoPanel.tsx
 git commit -m "Gallery Voice tab: play, length, Show in chat
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
@@ -3580,11 +3799,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: A CDN stub that answers range requests**, so Safari can load and seek memos. In `e2e/stubs.ts`, add `import { readFileSync } from 'node:fs'` at the top. Then, at the end of `stubExternalServices` (after the generic CDN route, so it is tried first), add:
 ```ts
-  // Voice memos: the 4 s fixture, with range requests (Safari won't play media without them).
-  const voice = readFileSync('e2e/fixtures/media/voice.m4a')
+  // Voice memos: the 4 s fixture (.webm or .m4a by the URL), with range requests (Safari won't play
+  // media without them).
+  const fixtures = { m4a: readFileSync('e2e/fixtures/media/voice.m4a'), webm: readFileSync('e2e/fixtures/media/voice.webm') }
   await context.route('http://cdn.test.local/voice/**', (route) => {
+    const webm = route.request().url().endsWith('.webm')
+    const voice = webm ? fixtures.webm : fixtures.m4a
     const range = /bytes=(\d+)-(\d*)/.exec(route.request().headers()['range'] ?? '')
-    const headers = { 'Content-Type': 'audio/mp4', 'Accept-Ranges': 'bytes' }
+    const headers = { 'Content-Type': webm ? 'audio/webm' : 'audio/mp4', 'Accept-Ranges': 'bytes' }
     if (!range) return route.fulfill({ status: 200, body: voice, headers })
     const start = Number(range[1])
     const end = range[2] ? Math.min(Number(range[2]), voice.length - 1) : voice.length - 1
@@ -3614,14 +3836,21 @@ afterDevicesClose(async () => {
     if (error) throw new Error(error.message)
   }
   // Memos recorded in the tests.
-  const { error } = await svc.from('messages').delete().eq('author_id', IDS.users.alice).contains('attachments', [{ type: 'audio' }])
+  const { error } = await svc.from('messages').delete().eq('author_id', IDS.users.alice).contains('attachments', JSON.stringify([{ type: 'audio' }]))
   if (error) throw new Error(error.message)
   await restore()
 })
 
+/**
+ * The fixture format a browser can surely play. Playwright's Chromium on Linux (CI) may lack the AAC
+ * decoder (it's a platform codec on macOS and Windows), so Chromium gets the WebM/Opus copy.
+ */
+const voiceExt = (browserName: string) => (browserName === 'chromium' ? 'webm' : 'm4a')
+
 /** Stands in for a memo Bea sent: 4 s, in Main, in the current session. */
-async function beaVoiceMemo() {
+async function beaVoiceMemo(browserName: string) {
   const id = randomUUID()
+  const ext = voiceExt(browserName)
   const { error } = await serviceClient().from('messages').insert({
     id,
     conversation_id: IDS.conversation,
@@ -3629,7 +3858,7 @@ async function beaVoiceMemo() {
     session_id: IDS.sessions.current,
     author_id: IDS.users.bea,
     content: null,
-    attachments: [{ url: `http://cdn.test.local/voice/${id}.m4a`, type: 'audio', filename: `voice-${id}.m4a`, size: 24156, spoiler: false, duration_ms: 4000, peaks: PEAKS }],
+    attachments: [{ url: `http://cdn.test.local/voice/${id}.${ext}`, type: 'audio', filename: `voice-${id}.${ext}`, size: 24156, spoiler: false, duration_ms: 4000, peaks: PEAKS }],
     type: 'text',
   })
   if (error) throw new Error(error.message)
@@ -3642,18 +3871,19 @@ async function aliceAudioCount() {
     .from('messages')
     .select('id', { count: 'exact', head: true })
     .eq('author_id', IDS.users.alice)
-    .contains('attachments', [{ type: 'audio' }])
+    .contains('attachments', JSON.stringify([{ type: 'audio' }]))
   if (error) throw new Error(error.message)
   return count ?? 0
 }
 
 /** Uploads answer with a voice URL (the CDN stub serves the fixture there). */
-async function stubVoiceUpload(user: ChatUser) {
+async function stubVoiceUpload(user: ChatUser, browserName: string) {
+  const ext = voiceExt(browserName)
   await user.page.route('**/functions/v1/upload-media**', (route) =>
     route.request().method() === 'OPTIONS'
       ? route.fulfill({ status: 204, headers: CORS })
       : route.fulfill({
-          json: { url: `http://cdn.test.local/voice/${randomUUID()}.m4a`, filename: 'voice-e2e.m4a', type: 'audio/mp4', size: 24156 },
+          json: { url: `http://cdn.test.local/voice/${randomUUID()}.${ext}`, filename: `voice-e2e.${ext}`, type: `audio/${ext === 'webm' ? 'webm' : 'mp4'}`, size: 24156 },
           headers: CORS,
         }),
   )
@@ -3665,7 +3895,7 @@ const memoBubble = (user: ChatUser, id?: string) =>
 test.describe('Voice memos', () => {
   test('Alice records on desktop; Bea sees it live, plays it, and Alice sees it played', async ({ alice, bea, browserName }) => {
     test.skip(browserName !== 'chromium', 'only Chromium can fake a microphone')
-    await stubVoiceUpload(alice)
+    await stubVoiceUpload(alice, browserName)
     await alice.openChat()
     await bea.openChat()
 
@@ -3685,7 +3915,7 @@ test.describe('Voice memos', () => {
 
   test('the disguise mid-recording discards it', async ({ alice, browserName }) => {
     test.skip(browserName !== 'chromium', 'only Chromium can fake a microphone')
-    await stubVoiceUpload(alice)
+    await stubVoiceUpload(alice, browserName)
     await alice.openChat()
     const before = await aliceAudioCount()
     await alice.page.getByRole('button', { name: 'Record a voice message' }).click()
@@ -3710,8 +3940,8 @@ test.describe('Voice memos', () => {
     expect(await aliceAudioCount()).toBe(before)
   })
 
-  test("a memo plays, shows its position, and is marked played", async ({ alice }) => {
-    const id = await beaVoiceMemo()
+  test("a memo plays, shows its position, and is marked played", async ({ alice, browserName }) => {
+    const id = await beaVoiceMemo(browserName)
     await alice.openChat()
     const memo = memoBubble(alice, id)
     await expect(memo.getByText('0:04', { exact: true })).toBeVisible()
@@ -3725,8 +3955,8 @@ test.describe('Voice memos', () => {
       .toBe(1)
   })
 
-  test('the gallery Voice tab lists it, and Show in chat goes there', async ({ alice }) => {
-    const id = await beaVoiceMemo()
+  test('the gallery Voice tab lists it, and Show in chat goes there', async ({ alice, browserName }) => {
+    const id = await beaVoiceMemo(browserName)
     await alice.openChat()
     await alice.openInfoPanel('Media')
     await alice.page.getByRole('button', { name: 'Voice', exact: true }).filter({ visible: true }).click()
@@ -3739,6 +3969,7 @@ test.describe('Voice memos', () => {
 ```
 
 - [ ] **Step 3: Run it.** `npm run db:reset && npx playwright test e2e/voice.spec.ts` (in the lock). Expected: PASS in `chromium-desktop` (5) and `webkit-iphone` (3 run, 2 skipped).
+  - Chromium plays the WebM copy (see `voiceExt`), so the Linux CI build's codecs don't matter there.
   - If WebKit can't decode AAC on this machine, the play test fails. Look at the media element's error (add a temporary `page.on('console')`).
   - If it's a codec limit of Playwright's WebKit build and not the app, mark that one test `test.skip(browserName === 'webkit' && process.platform === 'linux', …)` with the reason, and tell the user. Device row V5 covers real iPhones.
 
