@@ -27,7 +27,7 @@ describe('useTyping', () => {
       result.current.sendTyping()
     })
     expect(rt.sendTyping).toHaveBeenCalledTimes(1)
-    expect(rt.sendTyping).toHaveBeenCalledWith('main', alice)
+    expect(rt.sendTyping).toHaveBeenCalledWith('main', alice, 'typing')
   })
 
   it('stopTyping announces the stop and lets the next keystroke announce again at once', () => {
@@ -44,5 +44,13 @@ describe('useTyping', () => {
     const { result } = renderHook(() => useTyping('main'))
     act(() => result.current.stopTyping())
     expect(rt.sendTypingStop).not.toHaveBeenCalled()
+  })
+
+  it('announces recording at once, even inside the typing throttle', () => {
+    const { result } = renderHook(() => useTyping('main'))
+    act(() => result.current.sendTyping())
+    act(() => result.current.sendTyping('recording'))
+    act(() => result.current.sendTyping('recording'))
+    expect(rt.sendTyping.mock.calls.map((c) => c[2])).toEqual(['typing', 'recording'])
   })
 })

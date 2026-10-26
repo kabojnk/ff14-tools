@@ -7,6 +7,7 @@ import { Portal } from '@/components/ui/Portal'
 import { usePinnedMessages } from '@/hooks/usePinnedMessages'
 import { MediaGallery } from '@/components/gallery/MediaGallery'
 import { SPACE_LABEL } from '@/lib/spaces'
+import { messagePreview } from '@/lib/chat/preview'
 import { useJumpStore } from '@/stores/jumpStore'
 import type { Message, Space } from '@/types'
 
@@ -301,8 +302,8 @@ function PinnedMessageCard({ message, onShow, onUnpin }: { message: Message; onS
             <Markdown content={message.content} emoji={emoji} />
           </div>
         )}
-        {message.attachments?.some((a) => a.type === 'image' || a.type === 'gif') && (
-          <div className="mt-1 text-xs text-muted italic">📎 Attachment</div>
+        {message.attachments?.length > 0 && (
+          <div className="mt-1 text-xs text-muted italic">📎 {message.content ? 'Attachment' : messagePreview(message)}</div>
         )}
       </div>
       <button
@@ -338,7 +339,7 @@ function SearchResultCard({ message, query, onShow }: { message: Message; query:
         <span className="block text-sm text-secondary">{highlight(message.content)}</span>
       )}
       {message.attachments?.length > 0 && (
-        <span className="mt-1 block text-xs text-muted italic">📎 Attachment</span>
+        <span className="mt-1 block text-xs text-muted italic">📎 {message.content ? 'Attachment' : messagePreview(message)}</span>
       )}
     </button>
   )

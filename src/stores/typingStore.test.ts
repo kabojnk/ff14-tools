@@ -14,8 +14,8 @@ describe('typingStore', () => {
     noteTyping('main', { user_id: 'bea', nickname: 'Bea' }, 2000)
     noteTyping('schist', { user_id: 'cleo', nickname: 'Cleo' }, 1500)
     const { typing } = useTypingStore.getState()
-    expect(typing.main).toEqual([{ user_id: 'bea', nickname: 'Bea', at: 2000 }])
-    expect(typing.schist).toEqual([{ user_id: 'cleo', nickname: 'Cleo', at: 1500 }])
+    expect(typing.main).toEqual([{ user_id: 'bea', nickname: 'Bea', activity: 'typing', at: 2000 }])
+    expect(typing.schist).toEqual([{ user_id: 'cleo', nickname: 'Cleo', activity: 'typing', at: 1500 }])
   })
 
   it('prune drops entries older than the timeout', () => {
@@ -48,5 +48,13 @@ describe('typingStore', () => {
     const before = useTypingStore.getState().typing
     useTypingStore.getState().stopTyping('main', 'bea')
     expect(useTypingStore.getState().typing).toBe(before)
+  })
+
+  it('keeps the activity, typing by default', () => {
+    const { noteTyping } = useTypingStore.getState()
+    noteTyping('main', { user_id: 'bea', nickname: 'Bea', activity: 'recording' }, 1000)
+    noteTyping('schist', { user_id: 'bea', nickname: 'Bea' }, 1000)
+    expect(useTypingStore.getState().typing.main[0].activity).toBe('recording')
+    expect(useTypingStore.getState().typing.schist[0].activity).toBe('typing')
   })
 })

@@ -81,7 +81,7 @@ function fakeClient() {
 }
 
 function handlers(): ConversationHandlers & { [K in keyof ConversationHandlers]: ReturnType<typeof vi.fn> } {
-  return { onMessage: vi.fn(), onTyping: vi.fn(), onTypingStop: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onProfile: vi.fn(), onReaction: vi.fn(), onStatus: vi.fn() }
+  return { onMessage: vi.fn(), onTyping: vi.fn(), onTypingStop: vi.fn(), onLake: vi.fn(), onReadPosition: vi.fn(), onProfile: vi.fn(), onReaction: vi.fn(), onVoicePlay: vi.fn(), onStatus: vi.fn() }
 }
 
 describe('conversationRealtime', () => {
@@ -248,7 +248,7 @@ describe('conversationRealtime', () => {
       [msg, 'new'],
       [{ ...msg, deleted: true }, 'delete'],
     ])
-    expect(h.onTyping).toHaveBeenCalledWith('schist', { user_id: 'u2', nickname: 'Bea' })
+    expect(h.onTyping).toHaveBeenCalledWith('schist', { user_id: 'u2', nickname: 'Bea', activity: 'typing' })
     expect(h.onReadPosition).toHaveBeenCalledWith({ space: 'main' })
     expect(h.onLake).not.toHaveBeenCalled()
     vi.advanceTimersByTime(250)
@@ -259,7 +259,7 @@ describe('conversationRealtime', () => {
   it('binds the database safety nets to this conversation', () => {
     const { client, created } = fakeClient()
     createConversationRealtime(client).joinConversation('c1', handlers())
-    const pg = created[0].listeners.filter((l) => l.type === 'postgres_changes' && l.filter.table !== 'reactions')
+    const pg = created[0].listeners.filter((l) => l.type === 'postgres_changes' && l.filter.table !== 'reactions' && l.filter.table !== 'voice_plays')
     expect(pg.map((l) => l.filter.table).sort()).toEqual(['messages', 'messages', 'read_positions', 'read_positions', 'sessions'])
     for (const l of pg) expect(l.filter.filter).toBe('conversation_id=eq.c1')
   })
@@ -293,6 +293,39 @@ describe('conversationRealtime', () => {
     ])
   })
 
+  it('binds voice play inserts, unfiltered (RLS scopes them), and routes them', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    const vp = created[0].listeners.filter((l) => l.type === 'postgres_changes' && l.filter.table === 'voice_plays')
+    expect(vp.map((l) => l.filter)).toEqual([{ event: 'INSERT', schema: 'public', table: 'voice_plays' }])
+    const row = { message_id: 'm1', user_id: 'u2', played_at: '2026-10-26T10:00:00Z' }
+    created[0].emitPg('voice_plays', 'INSERT', { new: row, old: {} })
+    expect(h.onVoicePlay).toHaveBeenCalledWith(row)
+  })
+
+  it('passes the recording activity on, and treats anything else as typing', () => {
+    const { client, created } = fakeClient()
+    const h = handlers()
+    createConversationRealtime(client).joinConversation('c1', h)
+    created[0].emitBroadcast('typing', { space: 'main', user_id: 'u2', nickname: 'Bea', activity: 'recording' })
+    created[0].emitBroadcast('typing', { space: 'main', user_id: 'u2', nickname: 'Bea', activity: 'juggling' })
+    expect(h.onTyping.mock.calls).toEqual([
+      ['main', { user_id: 'u2', nickname: 'Bea', activity: 'recording' }],
+      ['main', { user_id: 'u2', nickname: 'Bea', activity: 'typing' }],
+    ])
+  })
+
+  it('sends the activity with typing', () => {
+    const { client, created } = fakeClient()
+    const rt = createConversationRealtime(client)
+    rt.joinConversation('c1', handlers())
+    rt.sendTyping('main', { user_id: 'u1', nickname: 'Alice' }, 'recording')
+    expect(created[0].sent).toEqual([
+      { type: 'broadcast', event: 'typing', payload: { space: 'main', user_id: 'u1', nickname: 'Alice', activity: 'recording' } },
+    ])
+  })
+
   it('drops reaction events from a channel that has been left', () => {
     const { client, created } = fakeClient()
     const h = handlers()
@@ -316,7 +349,7 @@ describe('conversationRealtime', () => {
     rt.sendLake()
     rt.sendMessageEvent('delete', { id: 'm1', space: 'main' })
     expect(created[0].sent).toEqual([
-      { type: 'broadcast', event: 'typing', payload: { space: 'main', user_id: 'u1', nickname: 'Alice' } },
+      { type: 'broadcast', event: 'typing', payload: { space: 'main', user_id: 'u1', nickname: 'Alice', activity: 'typing' } },
       { type: 'broadcast', event: 'lake', payload: {} },
       { type: 'broadcast', event: 'message', payload: { kind: 'delete', message: { id: 'm1', space: 'main' } } },
     ])

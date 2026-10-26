@@ -2,16 +2,46 @@ import { sendMessageEvent } from '@/lib/conversationRealtime'
 import { spaceKey } from '@/lib/spaces'
 import { useConversationStore, type OutgoingMessage } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
-import type { Message } from '@/types'
+import type { Attachment, Message } from '@/types'
+
+/** A message whose attachments upload before the row is inserted (voice memos). */
+export interface UploadStep {
+  /** Uploads and returns the attachments to send in place of the local ones. */
+  prepare: () => Promise<Attachment[]>
+  /** The message is in the list (as "sending") under this id: before the upload starts. */
+  onAdded?: (id: string) => void
+}
+
+/**
+ * Upload steps by message id, kept for Retry until the row is inserted. The step is memoised once it
+ * succeeds, so a retry after a failed insert doesn't upload again.
+ */
+const uploads = new Map<string, () => Promise<Attachment[]>>()
+
+function memoise(fn: () => Promise<Attachment[]>): () => Promise<Attachment[]> {
+  let done: Promise<Attachment[]> | null = null
+  return () => {
+    done ??= fn().catch((e: unknown) => {
+      done = null
+      throw e
+    })
+    return done
+  }
+}
+
+/** Abandons a message's upload step: an upload still running is then sent nowhere. */
+export function forgetUpload(id: string): void {
+  uploads.delete(id)
+}
 
 /**
  * Sends one of my messages. It shows at once (clock tick) under a client-generated id, which becomes
  * the row's id, so the realtime echo merges into it and a retry can never post twice.
  */
-export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>): Promise<void> {
+export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>, upload?: UploadStep): Promise<string | undefined> {
   const conv = useConversationStore.getState()
   const conversationId = conv.conversation?.id
-  if (!conversationId) return
+  if (!conversationId) return undefined
   const id = newId()
   const key = spaceKey(conversationId, m.space)
   const local: Message = {
@@ -30,7 +60,12 @@ export async function sendOutgoing(m: Omit<OutgoingMessage, 'id'>): Promise<void
     created_at: new Date().toISOString(),
   }
   useMessageStore.getState().addPending(key, local)
+  if (upload) {
+    uploads.set(id, memoise(upload.prepare))
+    upload.onAdded?.(id)
+  }
   await deliver(key, { ...m, id })
+  return id
 }
 
 /** Retry for a failed message: the same id again (a 23505 means the first try had landed). */
@@ -60,6 +95,24 @@ export function newId(): string {
 }
 
 async function deliver(key: string, m: OutgoingMessage & { id: string }) {
+  const prepare = uploads.get(m.id)
+  if (prepare) {
+    let attachments: Attachment[]
+    try {
+      attachments = await prepare()
+    } catch {
+      // Forgotten meanwhile (the disguise): it's gone from the list already, so nothing to fail.
+      if (uploads.get(m.id) === prepare) useMessageStore.getState().failPending(key, m.id)
+      return
+    }
+    // Forgotten while uploading: send nothing.
+    if (uploads.get(m.id) !== prepare) return
+    m = { ...m, attachments }
+  } else if (m.attachments.some((a) => a.url.startsWith('blob:'))) {
+    // A local copy without its upload step can never be sent.
+    useMessageStore.getState().failPending(key, m.id)
+    return
+  }
   const conv = useConversationStore.getState()
   let data: Message | null = null
   try {
@@ -73,6 +126,7 @@ async function deliver(key: string, m: OutgoingMessage & { id: string }) {
     return
   }
   store.confirmPending(key, m.id, data)
+  uploads.delete(m.id)
   useConversationStore.getState().noteMessage(data)
   sendMessageEvent('new', data)
 }

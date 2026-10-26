@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Space } from '@/types'
+import type { Space, TypingActivity } from '@/types'
 
 /** How long a typing indicator lasts after the last typing event. */
 export const TYPING_TIMEOUT_MS = 5000
@@ -7,12 +7,13 @@ export const TYPING_TIMEOUT_MS = 5000
 export interface TypingEntry {
   user_id: string
   nickname: string
+  activity: TypingActivity
   at: number
 }
 
 interface TypingState {
   typing: Record<Space, TypingEntry[]>
-  noteTyping: (space: Space, user: { user_id: string; nickname: string }, at?: number) => void
+  noteTyping: (space: Space, user: { user_id: string; nickname: string; activity?: TypingActivity }, at?: number) => void
   /** They sent their message (or cleared the box): hide the indicator until they type again. */
   stopTyping: (space: Space, userId: string) => void
   prune: (now: number) => void
@@ -28,7 +29,7 @@ export const useTypingStore = create<TypingState>((set) => ({
     set((state) => ({
       typing: {
         ...state.typing,
-        [space]: [...state.typing[space].filter((t) => t.user_id !== user.user_id), { user_id: user.user_id, nickname: user.nickname, at }],
+        [space]: [...state.typing[space].filter((t) => t.user_id !== user.user_id), { user_id: user.user_id, nickname: user.nickname, activity: user.activity ?? 'typing', at }],
       },
     })),
 

@@ -92,6 +92,14 @@ describe('ChatHeader', () => {
     expect(screen.getByTestId('presence-line')).toHaveTextContent('typing…')
   })
 
+  it('says "recording a voice message…" while the partner records', () => {
+    useTypingStore.setState({
+      typing: { main: [{ user_id: 'bea', nickname: 'Bea', at: Date.now(), activity: 'recording' }], schist: [] },
+    })
+    renderHeader()
+    expect(screen.getByText('recording a voice message…')).toBeInTheDocument()
+  })
+
   it('the Eep! button shows the disguise', () => {
     renderHeader()
     fireEvent.click(screen.getByRole('button', { name: 'Eep!' }))

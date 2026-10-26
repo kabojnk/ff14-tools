@@ -69,6 +69,8 @@ export interface MediaItem {
   extension: string | null
   size: number | null
   spoiler: boolean
+  /** Voice memos: the length in ms (message_media.duration_ms). */
+  duration_ms?: number | null
   created_at: string
   /** The message's sender; get_media doesn't return it, so useMediaGallery fills it in per page. */
   author_id?: string
@@ -89,6 +91,10 @@ export interface Attachment {
   filename: string
   size: number
   spoiler: boolean
+  /** Voice memos: the length in ms (the player shows this, never the file's own duration). */
+  duration_ms?: number
+  /** Voice memos: 48 waveform levels, 0–100. */
+  peaks?: number[]
 }
 
 export interface Message {
@@ -143,3 +149,13 @@ export interface PinnedMessage {
   pinned_by: string
   pinned_at: string
 }
+
+/** A voice_plays row: someone started playing a voice memo. */
+export interface VoicePlay {
+  message_id: string
+  user_id: string
+  played_at: string
+}
+
+/** What a typing broadcast says the person is doing. */
+export type TypingActivity = 'typing' | 'recording'

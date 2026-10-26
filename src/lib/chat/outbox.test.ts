@@ -5,7 +5,7 @@ const { sendMessageEvent } = vi.hoisted(() => ({ sendMessageEvent: vi.fn() }))
 vi.mock('@/lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }))
 vi.mock('@/lib/conversationRealtime', () => ({ sendMessageEvent }))
 
-import { retryOutgoing, sendOutgoing } from '@/lib/chat/outbox'
+import { forgetUpload, retryOutgoing, sendOutgoing } from '@/lib/chat/outbox'
 import { useConversationStore } from '@/stores/conversationStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { spaceKey } from '@/lib/spaces'
@@ -105,5 +105,54 @@ describe('retryOutgoing', () => {
     useMessageStore.getState().addMessage(KEY, server({ id: 'done' }))
     await retryOutgoing(KEY, 'done')
     expect(sendMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('upload steps (voice memos)', () => {
+  const VOICE = { url: 'https://cdn/voice/x.m4a', type: 'audio' as const, filename: 'voice-x.m4a', size: 10, spoiler: false }
+  const voiceMessage = { authorId: 'alice', space: 'main' as const, content: null, attachments: [{ ...VOICE, url: 'blob:local' }], type: 'text' as const, replyTo: null }
+  const key = spaceKey('conv-1', 'main')
+
+  it('runs the upload step before the insert, tells the caller the id first, and a retry reuses a finished upload', async () => {
+    const prepare = vi.fn(async () => [VOICE])
+    const onAdded = vi.fn()
+    sendMessage.mockResolvedValueOnce(null) // the insert fails once
+    const id = await sendOutgoing(voiceMessage, { prepare, onAdded })
+    expect(onAdded).toHaveBeenCalledWith(id)
+    expect(sendMessage.mock.calls[0][0].attachments).toEqual([VOICE])
+    await retryOutgoing(key, id!)
+    expect(prepare).toHaveBeenCalledTimes(1)
+    expect(sendMessage.mock.calls[1][0].attachments).toEqual([VOICE])
+  })
+
+  it('a failed upload fails the message without inserting, and Retry uploads again', async () => {
+    const prepare = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce([VOICE])
+    const id = await sendOutgoing(voiceMessage, { prepare })
+    expect(useMessageStore.getState().messages[key]?.find((m) => m.id === id)?.localState).toBe('failed')
+    expect(sendMessage).not.toHaveBeenCalled()
+    await retryOutgoing(key, id!)
+    expect(prepare).toHaveBeenCalledTimes(2)
+  })
+
+  it('an upload forgotten while in flight (the disguise) sends nothing and fails nothing', async () => {
+    let finish: (a: typeof VOICE[]) => void = () => {}
+    const prepare = vi.fn(() => new Promise<typeof VOICE[]>((r) => (finish = r)))
+    let added = ''
+    const sending = sendOutgoing(voiceMessage, { prepare, onAdded: (id) => (added = id) })
+    await Promise.resolve()
+    forgetUpload(added)
+    useMessageStore.getState().removeMessage(key, added)
+    finish([VOICE])
+    await sending
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(useMessageStore.getState().messages[key]?.some((m) => m.id === added) ?? false).toBe(false)
+  })
+
+  it('never inserts a local blob: copy without its upload step', async () => {
+    const id = await sendOutgoing(voiceMessage, { prepare: async () => Promise.reject(new Error('offline')) })
+    forgetUpload(id!)
+    await retryOutgoing(key, id!)
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(useMessageStore.getState().messages[key]?.find((m) => m.id === id)?.localState).toBe('failed')
   })
 })

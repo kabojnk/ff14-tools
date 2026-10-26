@@ -6,6 +6,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
 import { PROFILE_COLUMNS, useProfileStore } from '@/stores/profileStore'
 import { useReactionStore } from '@/stores/reactionStore'
+import { useVoicePlayStore } from '@/stores/voicePlays'
 import { useEmojiStore } from '@/stores/emojiStore'
 import { useJumpStore } from '@/stores/jumpStore'
 import { HAS_PIN_KEY } from '@/stores/uiStore'
@@ -96,6 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     useTypingStore.getState().clear()
     useProfileStore.getState().reset()
     useReactionStore.getState().reset()
+    useVoicePlayStore.getState().reset()
     useEmojiStore.getState().reset()
     useJumpStore.getState().reset()
     // Every logout path comes through here: the next login on this device must not launch locked.

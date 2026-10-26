@@ -1,6 +1,6 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { Message, Reaction, ReadPosition, Space } from '@/types'
+import type { Message, Reaction, ReadPosition, Space, TypingActivity, VoicePlay } from '@/types'
 
 export type RealtimeStatus = 'CLOSED' | 'JOINING' | 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT'
 export type MessageEventKind = 'new' | 'edit' | 'delete'
@@ -9,7 +9,8 @@ export type MessageRef = { id: string; space: Space; created_at?: string }
 
 export interface ConversationHandlers {
   onMessage(m: Message | MessageRef, kind: MessageEventKind): void
-  onTyping(space: Space, user: { user_id: string; nickname: string }): void
+  /** `activity` is always set by this module; optional so callers and tests may leave it out (it means typing). */
+  onTyping(space: Space, user: { user_id: string; nickname: string; activity?: TypingActivity }): void
   onTypingStop(space: Space, userId: string): void
   onLake(): void
   onReadPosition(rp: ReadPosition): void
@@ -17,6 +18,8 @@ export interface ConversationHandlers {
   onProfile(row: Record<string, unknown>): void
   /** A reaction row came or went. A DELETE carries only the primary key, and reaches every subscriber. */
   onReaction(event: 'INSERT' | 'DELETE', row: Partial<Reaction> & { id: string }): void
+  /** Someone started playing a voice memo (RLS: only when both have read receipts on, or it's mine). */
+  onVoicePlay(row: VoicePlay): void
   /** SUBSCRIBED only once broadcasts AND postgres_changes are live (see joinConversation). */
   onStatus(s: RealtimeStatus, rejoined: boolean): void
 }
@@ -40,8 +43,8 @@ export const POSTGRES_READY_TIMEOUT_MS = 10_000
 /**
  * Owns the one private `conv:<id>` channel per device. Message, typing and lake broadcasts for both
  * spaces travel on it, plus postgres_changes on messages, sessions and read positions as a safety net
- * (which also covers inserts from a cached old app), on the members' profiles, and on reactions (one
- * binding for every message, instead of a channel per message).
+ * (which also covers inserts from a cached old app), on the members' profiles, on reactions and voice plays
+ * (one binding for every message, instead of a channel per message).
  *
  * StrictMode-safe: the channel is created synchronously, a generation counter silences callbacks from
  * a channel that has been left, and a second join for the same conversation reuses the first.
@@ -112,8 +115,9 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         if (!live()) return
-        const { space, user_id, nickname } = payload as { space: Space; user_id: string; nickname: string }
-        handlers.onTyping(space, { user_id, nickname })
+        const { space, user_id, nickname, activity } = payload as { space: Space; user_id: string; nickname: string; activity?: string }
+        // Older apps send no activity: that's typing.
+        handlers.onTyping(space, { user_id, nickname, activity: activity === 'recording' ? 'recording' : 'typing' })
       })
       .on('broadcast', { event: 'typing_stop' }, ({ payload }) => {
         if (!live()) return
@@ -155,6 +159,10 @@ export function createConversationRealtime(client: RealtimeClientLike) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'reactions' }, (payload) => {
         const old = payload.old as Partial<Reaction>
         if (live() && old?.id) handlers.onReaction('DELETE', { ...old, id: old.id })
+      })
+      // Unfiltered like reactions: voice_plays has no conversation_id; RLS limits delivery.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'voice_plays' }, (payload) => {
+        if (live()) handlers.onVoicePlay(payload.new as VoicePlay)
       })
     // The members' profiles (name, avatar, status, presence override, last seen), live for the header.
     if (memberIds.length > 0) {
@@ -214,7 +222,8 @@ export function createConversationRealtime(client: RealtimeClientLike) {
     /** Leaves whatever conversation is joined (sign-out). */
     leaveConversation: () => current?.leave(),
     sendMessageEvent: (kind: MessageEventKind, m: Message | MessageRef) => send('message', { kind, message: m }),
-    sendTyping: (space: Space, user: { user_id: string; nickname: string }) => send('typing', { space, ...user }),
+    sendTyping: (space: Space, user: { user_id: string; nickname: string }, activity: TypingActivity = 'typing') =>
+      send('typing', { space, ...user, activity }),
     sendTypingStop: (space: Space, userId: string) => send('typing_stop', { space, user_id: userId }),
     sendLake: () => send('lake', {}),
   }

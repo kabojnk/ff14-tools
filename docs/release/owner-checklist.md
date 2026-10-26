@@ -5,6 +5,7 @@ Everything in the rework that only **you** can do: things that touch production 
 Work top to bottom. Each section says when it can start. Tick items as you go. A **Why** line explains anything that isn't obvious.
 
 Related docs:
+- The same list as a tickable page: https://claude.ai/artifact/DZR4EbHaYJPc8sFi53t2Pw (private; open it from your claude.ai account).
 - [release-rehearsal.md](../testing/release-rehearsal.md): the full rehearsal steps (section C below links into it).
 - [DEPLOY.md](../../DEPLOY.md): the droplet.
 - [testflight-runbook.md](../ios/testflight-runbook.md): Apple and TestFlight.
@@ -17,12 +18,9 @@ Related docs:
 
 ## A. Now: merge the finished work (GitHub)
 
-- [ ] **PR #4 (redesign 3b): commit the desktop theme screenshots, then merge.**
-  - Claude downloads the `screenshot-baselines` artifact from PR #4's CI run, commits the desktop images and tells you when CI is green. Then you merge.
-  - *Why:* 3b changed the chat's look, so the old desktop baselines were deleted. CI renders new ones on Linux. They have to come from CI, because fonts render differently on a Mac.
-- [ ] **The iOS app PR (`feat/ios-app`): merge once Claude opens it and CI is green.**
-  - Claude first rebases it onto `main` after PR #4 is merged.
-- [ ] **The voice memos PR: merge when it's done** (sub-project 5, not built yet; you approve its design first).
+- [x] **PR #4 (redesign 3b) and PR #5 (the iOS app): merged**.
+- [ ] **The voice memos PR: merge once Claude opens it and CI is green** (sub-project 5).
+  - Claude first commits the regenerated theme screenshots from its CI run (the voice bubble and the mic in the empty message box change them).
 
 Nothing in section A changes production. `main` is only deployed when you deploy it (section D).
 
@@ -41,7 +39,7 @@ Nothing in section A changes production. `main` is only deployed when you deploy
 - [ ] **Realtime settings** (Dashboard → Realtime → Settings): leave **public channel access allowed**.
   - *Why:* the new chat's conversation channel is private and protected by policies that the migrations add. Presence and the old app still use public channels, so turning public access off would break presence.
 - [ ] **Edge function secrets are unchanged** (Dashboard → Edge Functions → Secrets): `BUNNY_API_KEY`, `BUNNY_CDN_URL`, `BUNNY_STORAGE_ZONE`, `KLIPY_API_KEY` (and optionally `BUNNY_STORAGE_HOST`). Nothing to add.
-  - *Why:* `upload-media` and `gif-search` haven't changed in this rework, so no function deploy is needed. If voice memos change `upload-media` (e.g. the size limit for 10-minute recordings), section D gets a `functions deploy` step. Its design will say.
+  - *Why:* the secrets don't change. `gif-search` is unchanged; `upload-media` changes once, for voice memos (it accepts audio files), and section D deploys it.
 - [ ] **Know the Fill the Lake password after release.**
   - The migration stores a hash of the agreed starting value (not the old plain-text setting).
   - After release, Fill the Lake accepts that agreed word.
@@ -57,7 +55,7 @@ Full steps: [release-rehearsal.md](../testing/release-rehearsal.md). Start once 
 - [ ] **Step 2: dump production's data** in your terminal (`pg_dump … > prod.dump`).
   - The dump includes `auth` (password hashes), so keep it out of the repo folder and delete it in step 8.
 - [ ] **Steps 3–6 (with Claude):** rebuild the local database at the baseline, load the dump, apply the migrations, and compare counts.
-  - Also sign in with your **real** account locally and unlock with your **real PIN**.
+  - Also sign in with your **real** account locally and unlock with your **real PIN**. Record and play a voice memo too.
   - *Why:* this proves the PIN hashing and the channel merge work on your actual data, not only on test data.
 - [ ] **Step 8: delete `prod.dump`.**
 
@@ -87,10 +85,12 @@ Pick a quiet time; the whole thing takes about 30 minutes. Keep both phones and 
   - `20261020090100_message_replies`
   - `20261020090200_profile_presence`
   - `20261020120000_custom_emoji_live`
-  - plus any voice memo migration, if its design adds one
+  - `20261026090000_voice_memos`
 - [ ] ⚠️ **Push:** `npx --yes supabase@2 db push`.
   - *Why it's safe for the running site:* these migrations only **add** (the "expand" step). The old app, still live on the droplet and cached on the phones, keeps working against the new schema through compatibility triggers. Nothing is dropped until section F.
   - If the backfill finds a count mismatch, it aborts and nothing is applied. Stop and tell Claude.
+- [ ] ⚠️ **Deploy `upload-media`:** `npx --yes supabase@2 functions deploy upload-media`.
+  - *Why:* voice memos upload `.m4a` and `.webm` files, which the deployed function refuses. The new version only adds those two types (and only into the `voice/` folder), so the old app keeps working with it. Deploy it before the website, so the first memo from the new app can upload.
 - [ ] **Re-run the step 1 queries** from the rehearsal and check the counts match what you recorded.
 
 **Droplet**
@@ -120,6 +120,8 @@ Pick a quiet time; the whole thing takes about 30 minutes. Keep both phones and 
   - Drag the Lake and Fill the Lake (with the agreed word from section B).
   - Add a reaction, add a custom emoji, upload a photo.
   - Presence shows the other person online.
+  - Record and send a voice memo from each phone. It plays on the other phone and on the Mac, and the sender's mic turns blue once it's played.
+  - Check that the CDN serves memos as audio: in the Supabase dashboard (Table editor → `messages`, newest row), copy the memo's `url` from `attachments`, then run `curl -sI -H 'Range: bytes=0-1' '<url>'`. Expect `HTTP/2 206` and a `content-type` starting with `audio/`. If it says `application/octet-stream`, tell Claude: Safari may refuse to seek.
 
 **If something is badly wrong**
 - **Website:** redeploy the previous image. The old app works against the expanded database.
@@ -165,5 +167,5 @@ Start only when **both phones and the Mac** have run the new app (section D's de
 - [ ] **Rotate the Eep passphrase.**
   - *Why:* the current one is in the repo's git history (`supabase/migrations/00007_create_settings.sql`), so anyone who ever sees the repo knows it.
   - How: Claude gives you a one-line SQL update for the dashboard's SQL editor. You choose the new phrase and type it there yourself.
-- [ ] **Harden `upload-media`** (allowed folders, an emoji size cap). Claude writes it. You deploy it with `npx --yes supabase@2 functions deploy upload-media`. This is the only step in this list that deploys an edge function.
+- [ ] **Harden `upload-media`** (allowed folders, an emoji size cap). Claude writes it. You deploy it with `npx --yes supabase@2 functions deploy upload-media`. Apart from the voice memo deploy in section D, this is the only step in this list that deploys an edge function.
 - [ ] **Firewall on the droplet**, if not already done: `ufw allow OpenSSH && ufw allow 80,443/tcp && ufw enable`.

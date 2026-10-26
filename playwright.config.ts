@@ -26,7 +26,12 @@ export default defineConfig({
     {
       name: 'chromium-desktop',
       testIgnore: SCREENSHOTS,
-      use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1280, height: 800 },
+        // A fake microphone (a beep) that needs no permission prompt: voice memo recording tests.
+        launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] },
+      },
       dependencies: ['setup'],
     },
     {

@@ -1,4 +1,5 @@
 import { dayDiff, localDayKey, type DateOptions } from './dates'
+import { formatDuration } from '@/lib/gallery'
 import type { Attachment, Message } from '@/types'
 
 const ATTACHMENT_LABEL: Record<Attachment['type'], string> = {
@@ -14,7 +15,10 @@ export function messagePreview(m: Pick<Message, 'content' | 'attachments' | 'typ
   const firstLine = (m.content ?? '').trim().split('\n')[0].replace(/\s+/g, ' ').trim()
   if (firstLine) return firstLine
   const first = m.attachments?.[0]
-  if (first) return ATTACHMENT_LABEL[first.type] ?? 'Attachment'
+  if (first) {
+    if (first.type === 'audio' && typeof first.duration_ms === 'number') return `Voice message (${formatDuration(first.duration_ms / 1000)})`
+    return ATTACHMENT_LABEL[first.type] ?? 'Attachment'
+  }
   if (m.type === 'gif') return 'GIF'
   return 'Message'
 }

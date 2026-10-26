@@ -34,7 +34,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>XIV uses the camera for profile pictures and emoji.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>XIV uses the microphone when you record a video.</string>
+	<string>XIV uses the microphone when you record audio or video.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>XIV uses your photos for profile pictures and emoji.</string>
 	<key>UIApplicationSceneManifest</key>

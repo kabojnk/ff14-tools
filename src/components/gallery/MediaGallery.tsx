@@ -6,6 +6,7 @@ import { useMediaGallery } from '@/hooks/useMediaGallery'
 import { createSerialQueue, formatDuration, formatItemDate, groupByMonth, linkLabel, type SerialQueue } from '@/lib/gallery'
 import { formatSize, type MediaFilterKind, type MediaScope } from '@/lib/media'
 import { SPACE_LABEL, normalizeExtension } from '@/lib/spaces'
+import { VoiceRow } from '@/components/gallery/VoiceRow'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore } from '@/stores/profileStore'
 import type { MediaItem, Space } from '@/types'
@@ -100,7 +101,13 @@ export function MediaGallery({ conversationId, space, onOpen, renderViewer, scro
     <Thumb key={`${item.id}:${item.spoiler}`} item={item} onOpen={onClick} queue={queue} root={scrollRoot} dim={dim} />
   )
   const row = (item: MediaItem, dim = false) =>
-    item.kind === 'link' ? <LinkRow key={item.id} item={item} now={now} dim={dim} /> : <FileRow key={item.id} item={item} now={now} dim={dim} />
+    item.kind === 'link' ? (
+      <LinkRow key={item.id} item={item} now={now} dim={dim} />
+    ) : item.kind === 'audio' ? (
+      <VoiceRow key={item.id} item={item} now={now} dim={dim} />
+    ) : (
+      <FileRow key={item.id} item={item} now={now} dim={dim} />
+    )
 
   return (
     <div data-media-gallery className="flex flex-col">

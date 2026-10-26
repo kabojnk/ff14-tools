@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef } from 'react'
 import { sendTyping as broadcastTyping, sendTypingStop as broadcastTypingStop } from '@/lib/conversationRealtime'
 import { useAuthStore } from '@/stores/authStore'
 import { useTypingStore } from '@/stores/typingStore'
-import type { Space } from '@/types'
+import type { Space, TypingActivity } from '@/types'
 
 const TYPING_THROTTLE = 3000 // Send typing event at most every 3 seconds
 
 export function useTyping(space: Space) {
   const { user, profile } = useAuthStore()
   const typing = useTypingStore((s) => s.typing[space])
-  const lastSentRef = useRef<{ space: Space; at: number }>({ space, at: 0 })
+  const lastSentRef = useRef<{ space: Space; at: number; activity: TypingActivity }>({ space, at: 0, activity: 'typing' })
 
   // Expire stale indicators (the store keeps them for TYPING_TIMEOUT_MS after the last event).
   useEffect(() => {
@@ -17,19 +17,22 @@ export function useTyping(space: Space) {
     return () => clearInterval(t)
   }, [])
 
-  const sendTyping = useCallback(() => {
-    if (!user || !profile) return
-    const now = Date.now()
-    const last = lastSentRef.current
-    if (last.space === space && now - last.at < TYPING_THROTTLE) return
-    lastSentRef.current = { space, at: now }
-    broadcastTyping(space, { user_id: user.id, nickname: profile.nickname })
-  }, [user, profile, space])
+  const sendTyping = useCallback(
+    (activity: TypingActivity = 'typing') => {
+      if (!user || !profile) return
+      const now = Date.now()
+      const last = lastSentRef.current
+      if (last.space === space && last.activity === activity && now - last.at < TYPING_THROTTLE) return
+      lastSentRef.current = { space, at: now, activity }
+      broadcastTyping(space, { user_id: user.id, nickname: profile.nickname }, activity)
+    },
+    [user, profile, space],
+  )
 
   /** Message sent, command run or box cleared: tell the others now, and let the next keystroke announce again at once. */
   const stopTyping = useCallback(() => {
     const last = lastSentRef.current
-    lastSentRef.current = { space, at: 0 }
+    lastSentRef.current = { space, at: 0, activity: 'typing' }
     if (!user || last.at === 0) return
     broadcastTypingStop(last.space, user.id)
   }, [user, space])
