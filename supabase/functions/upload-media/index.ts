@@ -8,6 +8,7 @@ const BUNNY_CDN_URL = Deno.env.get('BUNNY_CDN_URL')!
 const ALLOWED_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'video/mp4', 'video/webm',
+  'audio/mp4', 'audio/webm', // voice memos (.m4a, .webm)
   'application/pdf',
   'text/plain',
 ]
@@ -40,7 +41,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'No file provided' }), { status: 400 })
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // "audio/webm;codecs=opus" → "audio/webm"
+    const baseType = file.type.split(';')[0].trim().toLowerCase()
+    if (!ALLOWED_TYPES.includes(baseType)) {
+      return new Response(JSON.stringify({ error: 'File type not allowed' }), { status: 400 })
+    }
+
+    // Audio is for voice memos only (the paperclip still can't attach audio files).
+    if (baseType.startsWith('audio/') && !pathPrefix.startsWith('voice/')) {
       return new Response(JSON.stringify({ error: 'File type not allowed' }), { status: 400 })
     }
 

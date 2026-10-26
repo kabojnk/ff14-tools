@@ -34,6 +34,15 @@ describe('messagePreview', () => {
   it('tolerates a missing attachments array', () => {
     expect(messagePreview({ content: null, attachments: null as unknown as Attachment[], type: 'text' })).toBe('Message')
   })
+  it('labels a voice memo with its length', () => {
+    const memo = {
+      content: null,
+      type: 'text' as const,
+      attachments: [{ url: 'u', type: 'audio' as const, filename: 'voice-1.m4a', size: 1, spoiler: false, duration_ms: 42_150 }],
+    }
+    expect(messagePreview(memo)).toBe('Voice message (0:42)')
+    expect(messagePreview({ ...memo, attachments: [{ ...memo.attachments[0], duration_ms: undefined }] })).toBe('Voice message')
+  })
 })
 
 describe('listTimeLabel', () => {

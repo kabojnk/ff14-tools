@@ -191,3 +191,17 @@ The migration is added to the owner checklist's release-day list.
 - Voice calls.
 - Trimming or editing a recording.
 - Native recording through a Capacitor plugin (the web recorder works in WKWebView).
+
+## Changed while planning (2026-10-26)
+
+- `upload-media` refuses audio today, so it gains `audio/mp4` and `audio/webm` (only into `voice/…`), deployed on release day (owner checklist, section D).
+- Chrome and Safari both record AAC `.m4a`; WebKit plays and seeks Chrome's `.m4a` and `.webm`. No browser needs the mic hidden for playback reasons.
+- Silent switch: playback sets `navigator.audioSession.type = 'playback'` (recording sets `'play-and-record'`), back to `'auto'` afterwards.
+- The theme screenshots get their voice bubble from `e2e/themes.spec.ts`, not `seed.sql`.
+- Errors show as a short pill above the composer; there is no toast system.
+- Haptics only where `navigator.vibrate` exists (not iPhone).
+- An interrupted hold (`pointercancel`, e.g. the first microphone prompt) cancels.
+- The played marker also follows the client-side receipts check, like the ticks; turning receipts back on re-fetches plays.
+- On the web, going to the background also discards an unsent memo, failed or still uploading.
+- Esc on a locked desktop recording still counts toward the double-Esc disguise.
+- Gallery rows play under their own player id; pinned and search cards say "Voice message (0:42)"; the header says "recording a voice message…".
