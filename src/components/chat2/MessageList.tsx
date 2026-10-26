@@ -8,6 +8,7 @@ import { useConversationStore } from '@/stores/conversationStore'
 import { useEmojiStore } from '@/stores/emojiStore'
 import { useJumpStore } from '@/stores/jumpStore'
 import { useMessageStore } from '@/stores/messageStore'
+import { useVoicePlayStore, voiceMessageIds } from '@/stores/voicePlays'
 import { useProfileStore } from '@/stores/profileStore'
 import { useUiStore } from '@/stores/uiStore'
 import { supabase } from '@/lib/supabase'
@@ -108,10 +109,13 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
   const partnerReadAt = receiptsOn ? partnerReadAtRaw : null
   const receiptsWereOn = useRef(receiptsOn)
   useEffect(() => {
-    // Back on: what they read meanwhile was hidden, so fetch it.
-    if (receiptsOn && !receiptsWereOn.current && myId) void useConversationStore.getState().refreshPartnerReadAt(myId)
+    // Back on: what they read (and played) meanwhile was hidden, so fetch it.
+    if (receiptsOn && !receiptsWereOn.current && myId) {
+      void useConversationStore.getState().refreshPartnerReadAt(myId)
+      void useVoicePlayStore.getState().loadFor(voiceMessageIds(useMessageStore.getState().messages[key] ?? []))
+    }
     receiptsWereOn.current = receiptsOn
-  }, [receiptsOn, myId])
+  }, [receiptsOn, myId, key])
 
   // ── Opening snapshot ──
   // Taken once the first fetch answers: where the divider goes (my read position at open) and the
@@ -489,7 +493,9 @@ export function MessageList({ conversationId, space, onSetReply }: MessageListPr
               </Fragment>
             )
           })}
-          {typingUsers.length > 0 && <TypingBubble names={typingUsers.map((t) => t.nickname)} />}
+          {typingUsers.length > 0 && (
+            <TypingBubble names={typingUsers.map((t) => t.nickname)} recording={typingUsers.some((t) => t.activity === 'recording')} />
+          )}
         </div>
       </div>
 

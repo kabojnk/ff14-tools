@@ -11,6 +11,11 @@ vi.mock('@/stores/reactionStore', () => ({
   useReactionStore: { getState: () => ({ loadFor: mockLoadFor }) },
 }))
 
+vi.mock('@/stores/voicePlays', () => ({
+  useVoicePlayStore: { getState: () => ({ loadFor: vi.fn() }) },
+  voiceMessageIds: () => [],
+}))
+
 import { useMessageStore } from '@/stores/messageStore'
 import { spaceKey } from '@/lib/spaces'
 

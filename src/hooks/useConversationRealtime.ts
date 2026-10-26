@@ -7,6 +7,7 @@ import { useMessageStore } from '@/stores/messageStore'
 import { useTypingStore } from '@/stores/typingStore'
 import { useProfileStore } from '@/stores/profileStore'
 import { useReactionStore } from '@/stores/reactionStore'
+import { useVoicePlayStore } from '@/stores/voicePlays'
 import type { Message } from '@/types'
 
 setLakeBroadcaster(sendLake)
@@ -65,6 +66,9 @@ export function useConversationRealtime() {
       },
       onReaction(event, row) {
         useReactionStore.getState().apply(event, row)
+      },
+      onVoicePlay(row) {
+        useVoicePlayStore.getState().apply(row)
       },
       onStatus(status, rejoined) {
         conv().setRealtimeStatus(status)

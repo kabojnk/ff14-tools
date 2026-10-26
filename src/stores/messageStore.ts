@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { supabase } from '@/lib/supabase'
 import { SPACES, spaceKey } from '@/lib/spaces'
 import { useReactionStore } from '@/stores/reactionStore'
+import { useVoicePlayStore, voiceMessageIds } from '@/stores/voicePlays'
 import type { Message, Space } from '@/types'
 
 interface MessageState {
@@ -71,6 +72,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
       })
       // The page's reactions, in one query (also re-run on a rejoin and after the lake, which reload here).
       void useReactionStore.getState().loadFor(msgs.map((m) => m.id))
+      void useVoicePlayStore.getState().loadFor(voiceMessageIds(msgs))
     } else {
       set({ loading: false })
     }
@@ -104,6 +106,7 @@ export const useMessageStore = create<MessageState>((set, get) => {
           return { messages: { ...state.messages, [key]: [...page.filter((m) => !ids.has(m.id)), ...existing] } }
         })
         void useReactionStore.getState().loadFor(page.map((m) => m.id))
+        void useVoicePlayStore.getState().loadFor(voiceMessageIds(page))
       }
       return page.length >= PAGE_SIZE
     },

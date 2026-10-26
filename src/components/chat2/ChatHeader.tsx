@@ -34,12 +34,16 @@ export function ChatHeader({ isDesktop, onBack, onOpenPanel }: ChatHeaderProps) 
   const activeSpace = useConversationStore((s) => s.activeSpace)
   const dragTheLake = useConversationStore((s) => s.dragTheLake)
   const partner = usePartner()
-  const typing = useTypingStore((s) => !!partner.id && s.typing[activeSpace].some((t) => t.user_id === partner.id))
+  const partnerTyping = useTypingStore((s) => (partner.id ? s.typing[activeSpace].find((t) => t.user_id === partner.id) : undefined))
   const [showCard, setShowCard] = useState(false)
   const closeCard = useCallback(() => setShowCard(false), [])
 
   const name = partner.profile?.nickname ?? conversation?.title ?? 'Conversation'
-  const line = typing ? 'typing…' : presenceLine(partner.presence, lastSeen(partner.profile), new Date())
+  const line = partnerTyping
+    ? partnerTyping.activity === 'recording'
+      ? 'recording a voice message…'
+      : 'typing…'
+    : presenceLine(partner.presence, lastSeen(partner.profile), new Date())
 
   return (
     <header
@@ -70,7 +74,7 @@ export function ChatHeader({ isDesktop, onBack, onOpenPanel }: ChatHeaderProps) 
             {name}
           </button>
           <div className="flex min-w-0 items-center gap-1.5 text-[11.5px] leading-tight text-[color:var(--muted)]">
-            <span data-testid="presence-line" className={`flex-none ${typing ? 'text-[color:var(--accent)]' : ''}`}>
+            <span data-testid="presence-line" className={`flex-none ${partnerTyping ? 'text-[color:var(--accent)]' : ''}`}>
               {line}
             </span>
             {partner.status && <StatusPill label={partner.status.label} color={partner.status.color} className="min-w-0" />}

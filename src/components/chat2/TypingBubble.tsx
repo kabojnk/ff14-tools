@@ -1,6 +1,26 @@
-/** Three bouncing dots in their bubble colour while the partner types in this space. */
-export function TypingBubble({ names }: { names: string[] }) {
-  const label = names.length === 1 ? `${names[0]} is typing` : `${names.join(' and ')} are typing`
+import { Mic } from 'lucide-react'
+import { Icon } from '@/components/ui/Icon'
+
+/** Three bouncing dots in their bubble colour while the partner types in this space; a mic while they record a memo. */
+export function TypingBubble({ names, recording = false }: { names: string[]; recording?: boolean }) {
+  const plural = names.length !== 1
+  if (recording) {
+    const label = `${names.join(' and ')} ${plural ? 'are' : 'is'} recording a voice message`
+    return (
+      <div className="msg-in mt-1 flex">
+        <div
+          role="status"
+          aria-label={label}
+          data-typing-bubble="recording"
+          className="inline-flex items-center gap-1.5 rounded-[10px] rounded-tl-[2px] bg-[color:var(--them)] px-3 py-2 text-[13px] text-[color:var(--muted)] shadow-[0_1px_0_var(--shadow)]"
+        >
+          <Icon icon={Mic} size={15} className="text-[color:var(--accent)] motion-safe:animate-pulse" />
+          <span aria-hidden="true">Recording a voice message…</span>
+        </div>
+      </div>
+    )
+  }
+  const label = plural ? `${names.join(' and ')} are typing` : `${names[0]} is typing`
   return (
     <div className="msg-in mt-1 flex">
       <div
