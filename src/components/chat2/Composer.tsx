@@ -4,12 +4,15 @@ import { Icon } from '@/components/ui/Icon'
 import { EmojiPicker } from '@/components/emoji/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
 import { PendingAttachments } from '@/components/chat2/PendingAttachments'
+import { MicButton, VoiceHint, VoiceKeysHint, VoicePanel } from '@/components/chat2/VoiceComposer'
+import { useVoiceSession } from '@/components/chat2/useVoiceSession'
 import { useTyping } from '@/hooks/useTyping'
 import { messagePreview } from '@/lib/chat/preview'
 import { sendOutgoing } from '@/lib/chat/outbox'
 import { sendMessageEvent } from '@/lib/conversationRealtime'
 import { discardUpload, retryUpload, startUpload } from '@/lib/chat/uploads'
 import { SPACE_LABEL, spaceKey } from '@/lib/spaces'
+import { canRecordVoice } from '@/lib/voice/recorder'
 import { useAuthStore } from '@/stores/authStore'
 import { useComposerStore } from '@/stores/composerStore'
 import { useConversationStore } from '@/stores/conversationStore'
@@ -43,6 +46,16 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   const dragTheLake = useConversationStore((s) => s.dragTheLake)
   const setEepMode = useUiStore((s) => s.setEepMode)
   const { sendTyping, stopTyping } = useTyping(space)
+  const [voiceSupported] = useState(canRecordVoice)
+  const voice = useVoiceSession({
+    conversationId,
+    space,
+    replyTo,
+    onSent: () => onCancelReply?.(),
+    sendTyping,
+    stopTyping,
+  })
+  const recording = voice.phase !== 'idle'
   const key = spaceKey(conversationId, space)
 
   const [content, setContent] = useState(() => useDraftStore.getState().drafts[key]?.content ?? '')
@@ -90,6 +103,8 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   const uploading = attachments.some((a) => a.status === 'uploading')
   const ready = attachments.map(toAttachment).filter((a): a is Attachment => a !== null)
   const canSubmit = editing ? true : !uploading && (content.trim() !== '' || ready.length > 0)
+  /** The mic takes Send's place while there is nothing to send (and the browser can record). */
+  const showMic = voiceSupported && !editing && content.trim() === '' && attachments.length === 0
 
   /** Grows with the text up to 6 lines (in a frame, never mid-composition). */
   const resize = useCallback(() => {
@@ -340,73 +355,83 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
         )}
 
         <div className="flex items-end gap-2">
-          <div className="relative flex min-h-[38px] min-w-0 flex-1 items-end gap-1 rounded-[19px] border border-[color:var(--line)] bg-[color:var(--field)] px-1.5">
-            <FieldButton buttonRef={emojiButtonRef} label="Pick an emoji" pressed={showEmoji} onClick={toggleEmoji}>
-              <Icon icon={Smile} />
-            </FieldButton>
+          {recording ? (
+            <VoicePanel session={voice} isDesktop={isDesktop} />
+          ) : (
+            <div className="relative flex min-h-[38px] min-w-0 flex-1 items-end gap-1 rounded-[19px] border border-[color:var(--line)] bg-[color:var(--field)] px-1.5">
+              <FieldButton buttonRef={emojiButtonRef} label="Pick an emoji" pressed={showEmoji} onClick={toggleEmoji}>
+                <Icon icon={Smile} />
+              </FieldButton>
 
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={onChange}
-              onKeyDown={onKeyDown}
-              onCompositionStart={onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
-              onPaste={onPaste}
-              onSelect={rememberCaret}
-              onKeyUp={rememberCaret}
-              onBlur={rememberCaret}
-              onFocus={() => {
-                // Tapping into the field on a phone swaps the picker for the keyboard.
-                if (phonePicker) setShowEmoji(false)
-              }}
-              placeholder={`Message #${SPACE_LABEL[space]}`}
-              aria-label={editing ? 'Edit message' : undefined}
-              rows={1}
-              autoComplete="off"
-              autoCorrect="on"
-              autoCapitalize="sentences"
-              spellCheck
-              enterKeyHint="send"
-              inputMode="text"
-              className={`min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 leading-5 text-[color:var(--fg)] outline-none placeholder:text-[color:var(--muted)] ${
-                isDesktop ? 'text-[15px]' : 'text-[16px]'
-              }`}
-              style={{ maxHeight: MAX_HEIGHT }}
-            />
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={onChange}
+                onKeyDown={onKeyDown}
+                onCompositionStart={onCompositionStart}
+                onCompositionEnd={onCompositionEnd}
+                onPaste={onPaste}
+                onSelect={rememberCaret}
+                onKeyUp={rememberCaret}
+                onBlur={rememberCaret}
+                onFocus={() => {
+                  // Tapping into the field on a phone swaps the picker for the keyboard.
+                  if (phonePicker) setShowEmoji(false)
+                }}
+                placeholder={`Message #${SPACE_LABEL[space]}`}
+                aria-label={editing ? 'Edit message' : undefined}
+                rows={1}
+                autoComplete="off"
+                autoCorrect="on"
+                autoCapitalize="sentences"
+                spellCheck
+                enterKeyHint="send"
+                inputMode="text"
+                className={`min-w-0 flex-1 resize-none overflow-y-auto bg-transparent py-2 leading-5 text-[color:var(--fg)] outline-none placeholder:text-[color:var(--muted)] ${
+                  isDesktop ? 'text-[15px]' : 'text-[16px]'
+                }`}
+                style={{ maxHeight: MAX_HEIGHT }}
+              />
 
-            {!editing && (
-              <>
-                <FieldButton
-                  buttonRef={gifButtonRef}
-                  label="Search GIFs"
-                  onClick={() => {
-                    setShowGif((v) => !v)
-                    setShowEmoji(false)
-                  }}
-                >
-                  <span className="text-[11px] font-bold leading-5">GIF</span>
-                </FieldButton>
-                <FieldButton label="Attach a file" onClick={() => fileInputRef.current?.click()}>
-                  <Icon icon={Paperclip} />
-                </FieldButton>
-              </>
-            )}
-          </div>
+              {!editing && (
+                <>
+                  <FieldButton
+                    buttonRef={gifButtonRef}
+                    label="Search GIFs"
+                    onClick={() => {
+                      setShowGif((v) => !v)
+                      setShowEmoji(false)
+                    }}
+                  >
+                    <span className="text-[11px] font-bold leading-5">GIF</span>
+                  </FieldButton>
+                  <FieldButton label="Attach a file" onClick={() => fileInputRef.current?.click()}>
+                    <Icon icon={Paperclip} />
+                  </FieldButton>
+                </>
+              )}
+            </div>
+          )}
 
-          <button
-            type="button"
-            onClick={submit}
-            // Keeps the focus (and the phone keyboard) in the field.
-            onMouseDown={(e) => e.preventDefault()}
-            disabled={!canSubmit}
-            aria-label={editing ? 'Save edit' : 'Send'}
-            title={editing ? 'Save edit' : 'Send'}
-            className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full bg-[color:var(--accent)] text-[color:var(--on-accent)] transition-opacity disabled:opacity-40"
-          >
-            <Icon icon={editing ? Check : SendHorizontal} />
-          </button>
+          {showMic || recording ? (
+            <MicButton session={voice} />
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              // Keeps the focus (and the phone keyboard) in the field.
+              onMouseDown={(e) => e.preventDefault()}
+              disabled={!canSubmit}
+              aria-label={editing ? 'Save edit' : 'Send'}
+              title={editing ? 'Save edit' : 'Send'}
+              className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full bg-[color:var(--accent)] text-[color:var(--on-accent)] transition-opacity disabled:opacity-40"
+            >
+              <Icon icon={editing ? Check : SendHorizontal} />
+            </button>
+          )}
         </div>
+        {recording && voice.phase !== 'holding' && isDesktop && <VoiceKeysHint />}
+        {voice.hint && <VoiceHint text={voice.hint} />}
 
         <input
           ref={fileInputRef}

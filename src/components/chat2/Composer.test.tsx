@@ -419,3 +419,29 @@ describe('Composer: attachments', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
   })
 })
+
+describe('voice memos in the composer', () => {
+  beforeEach(() => {
+    vi.stubGlobal('MediaRecorder', Object.assign(function () {}, { isTypeSupported: () => true }))
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn() } })
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined })
+  })
+
+  it('shows the mic instead of Send while the box is empty, and Send once there is text', () => {
+    const { box } = setup()
+    expect(screen.getByRole('button', { name: 'Record a voice message' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+    fireEvent.change(box, { target: { value: 'hi' } })
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Record a voice message' })).toBeNull()
+  })
+
+  it('no mic while editing', () => {
+    useComposerStore.setState({ editing: msg({ author_id: 'alice' }) })
+    setup()
+    expect(screen.queryByRole('button', { name: 'Record a voice message' })).toBeNull()
+  })
+})
