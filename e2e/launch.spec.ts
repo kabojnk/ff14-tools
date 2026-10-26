@@ -51,6 +51,8 @@ test.describe('Launch with a PIN', () => {
       await bea.tapPin(bea.user.pin)
       await expect(bea.composer).toBeVisible()
       await expect(bea.eepHeading).toBeHidden()
+      // The field mounted hidden behind the disguise; it must still be one full line tall, not squashed.
+      await expect.poll(() => bea.page.locator('[data-composer] textarea').evaluate((el) => el.clientHeight)).toBeGreaterThanOrEqual(30)
     } else {
       await expect(bea.composer).toBeVisible()
       await expect(bea.eepHeading).toBeHidden()

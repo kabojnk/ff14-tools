@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
-import { useUiStore } from '@/stores/uiStore'
+import { useUiStore, VERIFY_PIN_TIMEOUT_MS } from '@/stores/uiStore'
 import { THEME_IDS } from '@/lib/themes'
 
 const initialState = useUiStore.getState()
@@ -165,6 +165,18 @@ describe('uiStore PIN', () => {
   it('verifyPin throws when the RPC itself rejects', async () => {
     mockRpc.mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(useUiStore.getState().verifyPin('1234')).rejects.toThrow()
+  })
+
+  it('verifyPin gives up on an answer that never comes, so the pad can be tried again', async () => {
+    vi.useFakeTimers()
+    try {
+      mockRpc.mockReturnValue(new Promise(() => {}))
+      const result = expect(useUiStore.getState().verifyPin('1234')).rejects.toThrow('timed out')
+      await vi.advanceTimersByTimeAsync(VERIFY_PIN_TIMEOUT_MS)
+      await result
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('clearPin forgets the PIN length and any lock (used on logout)', () => {

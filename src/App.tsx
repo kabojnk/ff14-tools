@@ -56,10 +56,14 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  // The status bar follows the theme's bar in the chat, and the fixed disguise colour otherwise.
+  // The status bar follows the theme's bar in the chat, and the fixed disguise colour otherwise. So does the
+  // page behind everything: Safari shows it under its see-through toolbar, below the disguise and the PIN pad.
   useEffect(() => {
     const bar = getComputedStyle(document.documentElement).getPropertyValue('--bar')
-    setThemeColor(statusBarColor({ initialized, signedIn: !!user, eepMode, bar }))
+    const color = statusBarColor({ initialized, signedIn: !!user, eepMode, bar })
+    setThemeColor(color)
+    document.documentElement.style.backgroundColor = color
+    document.body.style.backgroundColor = color
   }, [theme, initialized, user, eepMode])
 
   // Collapse login overlay whenever auth resolves (successful login or init)
