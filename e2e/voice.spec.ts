@@ -110,6 +110,9 @@ test.describe('Voice memos', () => {
 
   test('a short tap hints "Hold to record" and sends nothing', async ({ alice }) => {
     await alice.openChat()
+    // Playwright's WebKit on Linux (CI) has no usable MediaRecorder, so the composer rightly offers no mic.
+    const canRecord = await alice.page.evaluate(() => typeof MediaRecorder !== 'undefined' && ['audio/mp4', 'audio/webm'].some((t) => MediaRecorder.isTypeSupported(t)))
+    test.skip(!canRecord, 'this browser cannot record, so there is no mic button')
     const before = await aliceAudioCount()
     // The same element throughout: once pressed, its label changes to "Release to send".
     const mic = await alice.page.getByRole('button', { name: 'Record a voice message' }).elementHandle()
