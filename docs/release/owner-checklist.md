@@ -5,6 +5,7 @@ Everything in the rework that only **you** can do: things that touch production 
 Work top to bottom. Each section says when it can start. Tick items as you go. A **Why** line explains anything that isn't obvious.
 
 Related docs:
+- The same list as a tickable page: https://claude.ai/artifact/DZR4EbHaYJPc8sFi53t2Pw (private; open it from your claude.ai account).
 - [release-rehearsal.md](../testing/release-rehearsal.md): the full rehearsal steps (section C below links into it).
 - [DEPLOY.md](../../DEPLOY.md): the droplet.
 - [testflight-runbook.md](../ios/testflight-runbook.md): Apple and TestFlight.
@@ -17,12 +18,9 @@ Related docs:
 
 ## A. Now: merge the finished work (GitHub)
 
-- [ ] **PR #4 (redesign 3b): commit the desktop theme screenshots, then merge.**
-  - Claude downloads the `screenshot-baselines` artifact from PR #4's CI run, commits the desktop images and tells you when CI is green. Then you merge.
-  - *Why:* 3b changed the chat's look, so the old desktop baselines were deleted. CI renders new ones on Linux. They have to come from CI, because fonts render differently on a Mac.
-- [ ] **The iOS app PR (`feat/ios-app`): merge once Claude opens it and CI is green.**
-  - Claude first rebases it onto `main` after PR #4 is merged.
-- [ ] **The voice memos PR: merge when it's done** (sub-project 5; design approved 2026-10-23).
+- [x] **PR #4 (redesign 3b) and PR #5 (the iOS app): merged**.
+- [ ] **The voice memos PR: merge once Claude opens it and CI is green** (sub-project 5).
+  - Claude first commits the regenerated theme screenshots from its CI run (the voice bubble and the mic in the empty message box change them).
 
 Nothing in section A changes production. `main` is only deployed when you deploy it (section D).
 
@@ -57,7 +55,7 @@ Full steps: [release-rehearsal.md](../testing/release-rehearsal.md). Start once 
 - [ ] **Step 2: dump production's data** in your terminal (`pg_dump … > prod.dump`).
   - The dump includes `auth` (password hashes), so keep it out of the repo folder and delete it in step 8.
 - [ ] **Steps 3–6 (with Claude):** rebuild the local database at the baseline, load the dump, apply the migrations, and compare counts.
-  - Also sign in with your **real** account locally and unlock with your **real PIN**.
+  - Also sign in with your **real** account locally and unlock with your **real PIN**. Record and play a voice memo too.
   - *Why:* this proves the PIN hashing and the channel merge work on your actual data, not only on test data.
 - [ ] **Step 8: delete `prod.dump`.**
 

@@ -10,10 +10,34 @@ import { IDS } from './users'
 test.skip(process.platform !== 'linux', 'screenshot baselines are Linux-only (CI)')
 
 const CODE_ID = randomUUID()
+const VOICE_ID = randomUUID()
 let beaLastSeen: string | null = null
 const CODE = '```ts\nconst theme = pick(themes)\nif (!theme) return\n```'
 
 test.beforeAll(async () => {
+  // A voice memo from Bea (no playback in screenshots: the bubble draws from its stored peaks).
+  const { error: voiceError } = await serviceClient().from('messages').insert({
+    id: VOICE_ID,
+    conversation_id: IDS.conversation,
+    space: 'main',
+    session_id: IDS.sessions.current,
+    author_id: IDS.users.bea,
+    content: null,
+    attachments: [
+      {
+        url: 'http://cdn.test.local/voice/theme.m4a',
+        type: 'audio',
+        filename: 'voice-theme.m4a',
+        size: 24156,
+        spoiler: false,
+        duration_ms: 42_000,
+        peaks: Array.from({ length: 48 }, (_, i) => Math.round(50 + 45 * Math.sin(i / 3))),
+      },
+    ],
+    type: 'text',
+  })
+  if (voiceError) throw new Error(voiceError.message)
+
   // A highlighted code block from Bea, the newest message in Main…
   const { error } = await serviceClient().from('messages').insert({
     id: CODE_ID,
@@ -59,7 +83,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   const svc = serviceClient()
-  const { error } = await svc.from('messages').delete().eq('id', CODE_ID)
+  const { error } = await svc.from('messages').delete().in('id', [CODE_ID, VOICE_ID])
   if (error) throw new Error(error.message)
   await restoreSeedMessages() // the seeded times
   const { error: beaError } = await svc.from('profiles').update({ last_seen_at: beaLastSeen }).eq('id', IDS.users.bea)

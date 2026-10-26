@@ -74,6 +74,21 @@ The iOS app (`npm run ios:sim` locally; [TestFlight runbook](../ios/testflight-r
 3. Resume once more. Safari Web Inspector shows `[updates] … failed-before` and no new download of that version.
 4. `docker compose up -d --build` puts the real bundle back.
 
+## Voice memos (both iPhones, in the iOS app and the home-screen app, and the Mac)
+
+| # | Check | Pass? |
+|---|---|---|
+| V1 | **First recording asks for the microphone:** the iOS prompt reads "XIV uses the microphone when you record audio or video." (iOS app; the home-screen app shows Safari's prompt). After allowing, hold again to record. Denying shows "Microphone access is off…" and the mic stays. | |
+| V2 | **Hold, release:** hold the mic about 2 s and release. The memo sends; the other phone sees "Recording a voice message…" while you hold, then the memo with a dot. | |
+| V3 | **Short tap:** a quick tap shows "Hold to record" and sends nothing. | |
+| V4 | **Slide left cancels** (nothing sent); **slide up locks**: you can let go, the timer keeps running, Stop shows the preview, which plays and seeks; Send sends it, Delete discards it. | |
+| V5 | **Playback:** play, pause, drag on the waveform to seek; another memo started pauses the first. A memo recorded in Chrome on the Mac plays on the iPhone, and an iPhone memo plays on the Mac. | |
+| V6 | **Played marker:** when the other phone starts playing your memo, your mic turns blue within about 2 s; with either person's read receipts off, it never does. | |
+| V7 | **The disguise discards:** start a locked recording, then Eep (button), lock with the PIN, and background the app, once each. Each time, nothing was sent and the microphone indicator (orange dot) is gone at once. Playback pauses under the disguise. | |
+| V8 | **Silent switch on:** memos still play out loud, in both the iOS app and the home-screen app. | |
+| V9 | **The 10-minute limit:** from 9:30 the timer turns red and counts down; at 10:00 the preview opens by itself, even while still holding. (Long; run it once.) | |
+| V10 | **Gallery:** Media → Voice lists memos with length, space and date; play works there; Show in chat jumps to the memo. | |
+
 ## Known open issues
 
 - The old message box set `autoCorrect="off"`, which explained item 5 failing. The redesign 3a composer (`src/components/chat2/Composer.tsx`) turns it on; confirm on a device. (2026-10-19)
