@@ -75,7 +75,7 @@ EOF
 
 **Rolling back with the iOS app: roll forward.** The app only installs a bundle newer than the one it runs, so redeploying an older image does **not** take the phones back. To undo a bad release, revert the change in git and deploy a new build: it gets a new stamp and the phones pick it up on their next resume. (A bundle that fails to render is rolled back on the phone by itself.)
 
-The build now runs Vite twice (the website, then the iOS bundle). On a 1 GB droplet, build locally and ship the image (the `docker save` route below), or add swap before building there. If the iOS step fails, the build prints a warning and the website still deploys.
+**The iOS bundle step is switched off for now** (commented out in `docker/Dockerfile`, because it doubled the build time and the iOS app isn't released yet). While it's off, `/native/` serves nothing and `VITE_NATIVE_UPDATE_URL` has no effect; uncomment the step before the first TestFlight build. With it on, the build runs Vite twice (the website, then the iOS bundle). On a 1 GB droplet, build locally and ship the image (the `docker save` route below), or add swap before building there. If the iOS step fails, the build prints a warning and the website still deploys.
 
 Build and start:
 

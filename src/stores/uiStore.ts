@@ -45,6 +45,8 @@ function initialTheme(): ThemePreset {
 
 /** Per-device hint that this account has a PIN ('1'), kept in step with the server. Only a boolean. */
 export const HAS_PIN_KEY = 'hasPin'
+/** The PIN pad gives up on an answer after this long and lets the person try again. */
+export const VERIFY_PIN_TIMEOUT_MS = 15_000
 
 const DISGUISE_TITLE = 'FF14 Random Content Picker'
 
@@ -153,11 +155,20 @@ export const useUiStore = create<UiState>((set) => ({
     set({ pinLength: null })
   },
 
-  // Throws on any RPC failure so the pad shows "Couldn't verify. Try again." and stays locked.
+  // Throws on any RPC failure so the pad shows "Couldn't verify. Try again." and stays locked. An answer that
+  // never comes (a request stuck after the background) counts as a failure too, so the pad never hangs.
   verifyPin: async (pin: string) => {
-    const { data, error } = await supabase.rpc('verify_pin', { p_pin: pin })
-    if (error) throw new Error(error.message)
-    return data === true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('verify_pin timed out')), VERIFY_PIN_TIMEOUT_MS)
+    })
+    try {
+      const { data, error } = await Promise.race([supabase.rpc('verify_pin', { p_pin: pin }), timeout])
+      if (error) throw new Error(error.message)
+      return data === true
+    } finally {
+      clearTimeout(timer)
+    }
   },
 
   clearPin: () => set({ pinLength: null, pinLocked: false }),

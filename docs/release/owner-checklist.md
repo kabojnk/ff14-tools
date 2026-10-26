@@ -100,7 +100,7 @@ Pick a quiet time; the whole thing takes about 30 minutes. Keep both phones and 
   ```
   - *Why:* the iOS app downloads web updates from `https://<your site>/native/`. Without this line the website still works, but the app never updates itself.
 - [ ] **Remove `VITE_TENOR_API_KEY`** from `.env` if it's there. It's unused (GIFs moved to Klipy), and harmless if you leave it.
-- [ ] **Build the image on your Mac, not on the droplet** (DEPLOY.md, Option B), using the same values as the droplet's `.env`. Then `docker save`, `scp` and `docker load` on the droplet.
+- [ ] **Build the image on your Mac, not on the droplet** (DEPLOY.md, Option B), using the same values as the droplet's `.env`, with `--platform linux/amd64` (the droplet's platform). Then `docker save`, `scp` and `docker load` on the droplet.
   - *Why:* the build now runs Vite twice (the website and the iOS bundle). A 1 GB droplet can run out of memory doing that.
   - If you'd rather keep building on the droplet, first add a 2 GB swap file (`fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile`, plus a line in `/etc/fstab`).
 - [ ] ⚠️ **Swap the container.** Stop the old one, then start the new one on the **same port as today**, so Caddy or nginx in front of it needs no change.
@@ -110,6 +110,7 @@ Pick a quiet time; the whole thing takes about 30 minutes. Keep both phones and 
   - `https://<site>/` shows the login page, or the FF14 page if you're signed in.
   - `curl -I https://<site>/native/latest.json` returns `200` with `cache-control: no-store`.
   - *Why:* this confirms your reverse proxy passes `/native/` through, and that the iOS bundle step of the build didn't fail. If it failed, the build log says `WARNING` and the site still works.
+  - **While the iOS bundle step is switched off** (`docker/Dockerfile`, see DEPLOY.md), this returns `404`; skip it until the step is back on.
 
 **Devices**
 - [ ] **Each phone and the Mac:** open the home-screen app or the site, and reload once or twice until the new chat appears.

@@ -112,12 +112,17 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
     cancelAnimationFrame(rafRef.current)
     rafRef.current = requestAnimationFrame(() => {
       const el = textareaRef.current
-      if (!el) return
+      // Hidden behind the disguise (a page that reloads in the background mounts there) it measures 0,
+      // which would squash the field: leave it until it shows again.
+      if (!el || el.getClientRects().length === 0) return
       el.style.height = 'auto'
       el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`
     })
   }, [])
-  useEffect(() => resize(), [value, resize])
+  const eepMode = useUiStore((s) => s.eepMode)
+  useEffect(() => {
+    if (!eepMode) resize()
+  }, [value, eepMode, resize])
   useEffect(() => () => cancelAnimationFrame(rafRef.current), [])
 
   // After an emoji insert: the caret goes after it. Desktop focuses the field; phones leave it unfocused,
