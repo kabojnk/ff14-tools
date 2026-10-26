@@ -1,5 +1,6 @@
-# Build stage
-FROM node:20-alpine AS build
+# Build stage. It only makes static files, so it runs natively on the building machine (fast on an
+# Apple Silicon Mac); the image's platform comes from the nginx stage (`--platform linux/amd64`, see DEPLOY.md).
+FROM --platform=$BUILDPLATFORM node:20-alpine AS build
 
 WORKDIR /app
 COPY package.json package-lock.json* ./

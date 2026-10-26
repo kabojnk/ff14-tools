@@ -86,10 +86,12 @@ docker compose up -d --build
 
 ### Option B: Build locally, push image
 
-Build the Docker image locally:
+Build the Docker image locally. The droplet is `linux/amd64`, so on an Apple Silicon Mac (arm64) ask for that
+platform; without it the image is arm64 and the droplet warns "The requested image's platform (linux/arm64)
+does not match the detected host platform" and can't start it:
 
 ```bash
-docker build \
+docker build --platform linux/amd64 \
   --build-arg VITE_SUPABASE_URL=https://your-project.supabase.co \
   --build-arg VITE_SUPABASE_ANON_KEY=your-anon-key \
   --build-arg VITE_BUNNY_CDN_URL=https://your-pullzone.b-cdn.net \
