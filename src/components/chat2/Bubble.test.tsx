@@ -88,4 +88,16 @@ describe('Bubble', () => {
     render(<Bubble message={msg()} mine={false} tail={false} header={<div>quoted</div>} />)
     expect(screen.getByText('quoted')).toBeInTheDocument()
   })
+
+  it('renders a voice memo as a voice bubble, with the time inside it', () => {
+    const voice = {
+      ...msg({ content: null }),
+      attachments: [{ url: 'https://cdn/v.m4a', type: 'audio' as const, filename: 'voice-1.m4a', size: 1, spoiler: false, duration_ms: 4000, peaks: [] }],
+    }
+    const { container } = render(<Bubble message={voice} mine={false} tail />)
+    const bubble = container.querySelector('[data-voice-bubble]')
+    expect(bubble).not.toBeNull()
+    expect(bubble?.querySelector('[data-meta] time')).not.toBeNull()
+    expect(container.querySelector('[data-media]')).toBeNull()
+  })
 })

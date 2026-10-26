@@ -3,6 +3,7 @@ import { Pin } from 'lucide-react'
 import Markdown, { type EmojiLookup } from '@/components/chat2/Markdown'
 import { MediaBlock } from '@/components/chat2/MediaBlock'
 import { Ticks } from '@/components/chat2/Ticks'
+import { VoiceBubble } from '@/components/chat2/VoiceBubble'
 import { Icon } from '@/components/ui/Icon'
 import type { Tick } from '@/lib/chat'
 import type { Message } from '@/types'
@@ -33,19 +34,21 @@ export function Bubble({ message, mine, tail, tick, onRetry, emoji, onHighlight,
   const hasText = !!content
   const mediaOnly = !hasText && attachments.length > 0 && attachments.every((a) => VISUAL.has(a.type)) && !header
 
-  const meta = (
-    <span
-      data-meta
-      className={`float-right ml-2.5 mt-1.5 inline-flex items-center gap-1 text-[10.5px] leading-4 ${
-        mine ? 'text-[color:var(--me-muted)]' : 'text-[color:var(--muted)]'
-      }`}
-    >
+  const voice = !hasText && attachments.length === 1 && attachments[0].type === 'audio' ? attachments[0] : null
+  const metaTone = mine ? 'text-[color:var(--me-muted)]' : 'text-[color:var(--muted)]'
+  const metaItems = (
+    <>
       {message.edited_at && <span>edited</span>}
       {pinned && <Icon icon={Pin} size={10} role="img" aria-label="Pinned" />}
       <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString()}>
         {formatTime(message.created_at)}
       </time>
       {mine && tick && <Ticks state={tick} onRetry={onRetry} />}
+    </>
+  )
+  const meta = (
+    <span data-meta className={`float-right ml-2.5 mt-1.5 inline-flex items-center gap-1 text-[10.5px] leading-4 ${metaTone}`}>
+      {metaItems}
     </span>
   )
 
@@ -63,24 +66,39 @@ export function Bubble({ message, mine, tail, tick, onRetry, emoji, onHighlight,
       }`}
     >
       {header}
-      {attachments.length > 0 && (
-        <div className={hasText ? 'mb-1' : ''}>
-          <MediaBlock
-            // Keyed by the spoiler flags: an item re-marked as a spoiler blurs again, even if revealed.
-            key={`${message.id}:${attachments.map((a) => (a.spoiler ? 1 : 0)).join('')}`}
-            messageId={message.id}
-            attachments={attachments}
-            overlay={mediaOnly ? meta : undefined}
-          />
-        </div>
-      )}
-      {hasText ? (
-        <>
-          <Markdown content={content} emoji={emoji} onHighlight={onHighlight} className="inline" />
-          {meta}
-        </>
+      {voice ? (
+        <VoiceBubble
+          message={message}
+          attachment={voice}
+          mine={mine}
+          meta={
+            <span data-meta className={`inline-flex items-center gap-1 text-[10.5px] leading-4 ${metaTone}`}>
+              {metaItems}
+            </span>
+          }
+        />
       ) : (
-        !mediaOnly && meta
+        <>
+          {attachments.length > 0 && (
+            <div className={hasText ? 'mb-1' : ''}>
+              <MediaBlock
+                // Keyed by the spoiler flags: an item re-marked as a spoiler blurs again, even if revealed.
+                key={`${message.id}:${attachments.map((a) => (a.spoiler ? 1 : 0)).join('')}`}
+                messageId={message.id}
+                attachments={attachments}
+                overlay={mediaOnly ? meta : undefined}
+              />
+            </div>
+          )}
+          {hasText ? (
+            <>
+              <Markdown content={content} emoji={emoji} onHighlight={onHighlight} className="inline" />
+              {meta}
+            </>
+          ) : (
+            !mediaOnly && meta
+          )}
+        </>
       )}
     </div>
   )
