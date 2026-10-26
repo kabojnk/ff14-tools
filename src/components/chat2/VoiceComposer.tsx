@@ -78,10 +78,11 @@ export function VoicePanel({ session, isDesktop }: { session: VoiceSession; isDe
         <LiveBars levels={levels} />
         <span
           aria-hidden="true"
-          className="ml-auto flex-none text-[13px] text-[color:var(--muted)]"
-          style={{ transform: `translateX(${drag.dx}px)`, opacity: Math.max(0.2, 1 + drag.dx / CANCEL_PX) }}
+          // Opaque, so sliding over the live bars covers them; only the words fade.
+          className="relative ml-auto flex-none bg-[color:var(--bar)] pl-2 text-[13px] text-[color:var(--muted)]"
+          style={{ transform: `translateX(${drag.dx}px)` }}
         >
-          ‹ Slide to cancel
+          <span style={{ opacity: Math.max(0.2, 1 + drag.dx / CANCEL_PX) }}>‹ Slide to cancel</span>
         </span>
       </div>
     )
