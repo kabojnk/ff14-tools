@@ -17,8 +17,10 @@ ARG VITE_NATIVE_UPDATE_URL
 RUN node_modules/.bin/vite build
 # The iOS app's live-update bundle and manifest, served from /native/ (scripts/native-bundle.mjs).
 # Never blocks a website deploy: without a new manifest the app just keeps the bundle it has.
-RUN (apk add --no-cache zip && node scripts/native-bundle.mjs --publish dist/native) \
-    || (rm -rf dist/native && echo "WARNING: iOS bundle not published; the app keeps its current version")
+# Off for now (it doubles the build time and the iOS app isn't released yet). To turn it back on, uncomment
+# these two lines; see DEPLOY.md.
+# RUN (apk add --no-cache zip && node scripts/native-bundle.mjs --publish dist/native) \
+#     || (rm -rf dist/native && echo "WARNING: iOS bundle not published; the app keeps its current version")
 
 # Production stage
 FROM nginx:alpine
