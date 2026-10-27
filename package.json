@@ -21,7 +21,8 @@
     "build:native": "tsc -b && node scripts/native-bundle.mjs",
     "ios:sync": "npm run build:native && npx cap sync ios",
     "ios:sim": "bash scripts/ios-sim.sh",
-    "ios:assets": "node scripts/ios-assets.mjs"
+    "ios:assets": "node scripts/ios-assets.mjs",
+    "deploy": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",

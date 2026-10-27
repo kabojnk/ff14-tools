@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { appIsActive, onAppStateChange } from '@/lib/appLifecycle'
+import { clearExternalUi, externalUiExpected, watchFilePickers } from '@/lib/externalUi'
 import { isNativeApp } from '@/lib/platform'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/authStore'
@@ -102,9 +103,26 @@ export function usePresence(): void {
       }
     }
 
+    // Phones: the window loses focus the moment the person leaves (home screen, app switcher, Control
+    // Center), before iOS says the page is hidden, and a quick trip away may never say so. The disguise
+    // goes up then, unless the app itself opened what took the focus (a photo picker, the mic prompt).
+    const isPhone = window.matchMedia?.('(pointer: coarse)').matches === true
+    const handleBlur = () => {
+      if (!isPhone || externalUiExpected()) return
+      showPrivacyScreen()
+      useUiStore.getState().setEepMode(true)
+    }
+    const handleFocus = () => {
+      clearExternalUi()
+      if (document.visibilityState !== 'hidden') hidePrivacyScreen()
+    }
+    const stopWatchingPickers = watchFilePickers()
+
     window.addEventListener('pagehide', handlePageHide)
     window.addEventListener('pageshow', handlePageShow)
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('blur', handleBlur)
+    window.addEventListener('focus', handleFocus)
 
     return () => {
       window.clearInterval(heartbeat)
@@ -112,6 +130,9 @@ export function usePresence(): void {
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener('pageshow', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('blur', handleBlur)
+      window.removeEventListener('focus', handleFocus)
+      stopWatchingPickers()
     }
   // Only re-run if the logged-in user changes or their profile first loads — not on every profile update
   // eslint-disable-next-line react-hooks/exhaustive-deps

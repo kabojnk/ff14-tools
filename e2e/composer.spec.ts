@@ -86,6 +86,27 @@ test.describe('composer', () => {
     await expect(bea.messageList.getByText(first)).toBeVisible({ timeout: 5_000 })
   })
 
+  test(':emoji: autocomplete: type a colon and a name, pick, and the emoji is sent', async ({ alice, bea }, testInfo) => {
+    await alice.openChat()
+    await bea.openChat()
+    const base = `autocomplete ${Date.now()}`
+    await alice.composer.click()
+    await alice.composer.pressSequentially(`${base} :jo`)
+    const options = alice.page.getByRole('listbox', { name: 'Emoji suggestions' }).getByRole('option')
+    await expect(options.first()).toContainText(':joy:')
+    await alice.page.screenshot({ path: testInfo.outputPath('autocomplete.png') })
+    await options.first().click()
+    await expect(alice.composer).toHaveValue(new RegExp(`^${base} 😂 $`))
+    // A finished :name: converts as it's typed.
+    await alice.composer.pressSequentially(':thumbsup:')
+    await expect(alice.composer).toHaveValue(new RegExp(`^${base} 😂 👍`))
+
+    const text = (await alice.composer.inputValue()).trim()
+    sentTexts.push(text)
+    await alice.page.getByRole('button', { name: 'Send', exact: true }).click()
+    await expect(bea.message(text)).toBeVisible({ timeout: 5_000 })
+  })
+
   test('a reply reaches the other person with the quoted original', async ({ alice, bea }) => {
     await alice.openChat('Main')
     await bea.openChat('Main')

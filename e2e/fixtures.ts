@@ -285,7 +285,7 @@ export class ChatUser {
     await this.page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' })
       Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
-      document.dispatchEvent(new Event('visibilitychange'))
+      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
       window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }))
     })
   }
@@ -295,7 +295,7 @@ export class ChatUser {
     await this.page.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' })
       Object.defineProperty(document, 'hidden', { configurable: true, get: () => false })
-      document.dispatchEvent(new Event('visibilitychange'))
+      document.dispatchEvent(new Event('visibilitychange', { bubbles: true }))
       window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
     })
   }
