@@ -59,6 +59,25 @@ test.describe('Launch with a PIN', () => {
     }
   })
 
+  test('the PIN still unlocks when a frozen old copy of the page holds the session lock', async ({ bea }) => {
+    // iOS reloads a page it discarded in the background, and the old copy can stay frozen while holding the
+    // browser-wide lock supabase-js used to take. Another tab holding it forever stands in for that copy.
+    const old = await bea.page.context().newPage()
+    await old.goto('/')
+    // supabase-js names the lock after its storage key (sb-<project>-auth-token).
+    const lockName = await old.evaluate(() => `lock:${Object.keys(localStorage).find((k) => /^sb-.*-auth-token$/.test(k))}`)
+    await old.evaluate((name) => {
+      void navigator.locks.request(name, () => new Promise(() => {}))
+    }, lockName)
+    await expect.poll(() => old.evaluate(async (name) => (await navigator.locks.query()).held?.some((l) => l.name === name), lockName)).toBe(true)
+
+    await bea.page.addInitScript(() => localStorage.setItem('hasPin', '1'))
+    await bea.page.goto('/')
+    await bea.unlockIfLocked()
+    await expect(bea.composer).toBeVisible({ timeout: 8_000 })
+    await old.close()
+  })
+
   test('after a login on this device, the next launch is locked on a phone and not on desktop', async ({ bea }, testInfo) => {
     await bea.openChat()
     await expect.poll(() => bea.page.evaluate(() => localStorage.getItem('hasPin'))).toBe('1')

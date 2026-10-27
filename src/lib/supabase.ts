@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, processLock } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -21,7 +21,17 @@ export const fetchWithAuthTimeout: typeof fetch = (input, init) => {
   return fetch(input, { ...init, signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS) })
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, { global: { fetch: fetchWithAuthTimeout } })
+/**
+ * The session lock is this page's own (processLock), not the browser-wide Web Lock supabase-js uses by default.
+ * iOS reloads a page it discarded in the background, and the old copy can stay frozen while holding that
+ * browser-wide lock: the new page then waited for it on every request (the PIN check never answered) until
+ * the app was killed. Tabs no longer wait for each other: two refreshing at once is fine, since Supabase
+ * accepts a just-used refresh token for a few seconds (its reuse interval).
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { lock: processLock },
+  global: { fetch: fetchWithAuthTimeout },
+})
 
 // e2e only (the test server runs `vite --mode test`): lets a spec check that realtime channels don't
 // grow with the number of messages. Never in a production build.
