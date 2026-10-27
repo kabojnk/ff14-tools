@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import { Portal } from '@/components/ui/Portal'
 import { Icon } from '@/components/ui/Icon'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { useSwipeBack } from '@/hooks/useSwipeBack'
 import { isDisguised } from '@/stores/uiStore'
 
 interface SheetProps {
@@ -24,6 +25,15 @@ interface SheetProps {
    * own (Settings). The hidden title still names the dialog.
    */
   hideHeaderOnDesktop?: boolean
+  /** Phones: a swipe right from the left edge (the content follows the finger). Usually the same as Back. */
+  onSwipeBack?: () => void
+  /** Phones: pulling the sheet down (it follows the finger). Usually the same as Cancel. */
+  onSwipeDown?: () => void
+  /**
+   * Checked when a pull down completes: false means `onSwipeDown` keeps the sheet open (it asks to
+   * discard changes first), so the sheet springs back instead of sliding away. Default: it closes.
+   */
+  swipeDownCloses?: () => boolean
   children: ReactNode
 }
 
@@ -53,6 +63,8 @@ const pinPadOpen = () => document.querySelector('[data-pin-pad]') !== null
  *   while the PinPad (`[data-pin-pad]`) is open.
  * - **Focus:** moves into the sheet on open, is trapped on Tab (topmost sheet only, not while the
  *   PinPad is open) and returns to the opener on close.
+ * - **Swipes (phones):** `onSwipeBack` and `onSwipeDown` (see `useSwipeBack`), for the topmost sheet
+ *   only, never under the PinPad or the disguise.
  * - **Layers:** sheets and dialogs are `z-50`; the photo viewer is `z-[60]`; the PinPad `z-[70]`.
  */
 export function Sheet({
@@ -64,6 +76,9 @@ export function Sheet({
   action,
   width = 440,
   hideHeaderOnDesktop = false,
+  onSwipeBack,
+  onSwipeDown,
+  swipeDownCloses,
   children,
 }: SheetProps) {
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
@@ -72,6 +87,23 @@ export function Sheet({
   const [order] = useState(() => nextOrder++)
   // Read while rendering, before this sheet's effects move focus.
   const [opener] = useState(() => (typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)))
+
+  const contentRef = useRef<HTMLDivElement>(null)
+  const ownsTouch = () => topmost() === order && !pinPadOpen() && !isDisguised()
+  useSwipeBack(panelRef, {
+    direction: 'right',
+    enabled: !isDesktop && !!onSwipeBack,
+    moveRef: contentRef,
+    canStart: ownsTouch,
+    onSwipe: () => onSwipeBack?.(),
+  })
+  useSwipeBack(panelRef, {
+    direction: 'down',
+    enabled: !isDesktop && !!onSwipeDown,
+    canStart: ownsTouch,
+    leaves: swipeDownCloses,
+    onSwipe: () => onSwipeDown?.(),
+  })
 
   const escapeRef = useRef(onEscape ?? onClose)
   escapeRef.current = onEscape ?? onClose
@@ -178,7 +210,7 @@ export function Sheet({
               )}
             </div>
           </header>
-          <div className={`min-h-0 flex-1 overflow-y-auto ${isDesktop ? '' : 'pb-safe'}`}>{children}</div>
+          <div ref={contentRef} className={`min-h-0 flex-1 overflow-y-auto ${isDesktop ? '' : 'pb-safe'}`}>{children}</div>
         </div>
       </div>
     </Portal>

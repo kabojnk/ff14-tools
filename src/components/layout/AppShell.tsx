@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useConversationStore } from '@/stores/conversationStore'
-import { useUiStore } from '@/stores/uiStore'
+import { isDisguised, useUiStore } from '@/stores/uiStore'
 import { useComposerStore } from '@/stores/composerStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { useJumpStore } from '@/stores/jumpStore'
 import { useConversationRealtime } from '@/hooks/useConversationRealtime'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
 import { useKeyboardViewport } from '@/hooks/useKeyboardViewport'
+import { useSwipeBack } from '@/hooks/useSwipeBack'
 import { defaultPhoneView, type PhoneView } from '@/lib/layout'
 import { ChatHeader } from '@/components/chat2/ChatHeader'
 import { ReconnectBar } from '@/components/chat2/ReconnectBar'
@@ -44,6 +45,17 @@ export function AppShell() {
 
   const conversationCount = conversation ? 1 : 0
   const phoneView = chosenView ?? defaultPhoneView(conversationCount)
+
+  // Phones: a swipe right from the left edge of the chat goes back to the list, like its back chevron. Not
+  // while a sheet, the photo viewer, a menu or the PinPad is open over it (they're portals, outside <main>;
+  // this also keeps a touch on a stacked layer that happens to sit at the edge from reaching the chat).
+  const chatRef = useRef<HTMLElement>(null)
+  useSwipeBack(chatRef, {
+    direction: 'right',
+    enabled: !isDesktop && phoneView === 'chat',
+    canStart: () => !isDisguised() && document.querySelector('[aria-modal="true"], [role="menu"], [data-pin-pad]') === null,
+    onSwipe: () => setChosenView('list'),
+  })
 
   const openInfoPanel = (tab: InfoTab = 'media') => {
     setInfoTab(tab)
@@ -135,7 +147,8 @@ export function AppShell() {
     <div
       data-app-shell
       data-layout={isDesktop ? 'desktop' : 'phone'}
-      className="flex h-full flex-col overflow-hidden"
+      // Phones: what shows behind the chat while it's swiped away.
+      className={`flex h-full flex-col overflow-hidden ${isDesktop ? '' : 'bg-secondary'}`}
       // iOS doesn't shrink the layout viewport for the keyboard; fit the app to what's visible, so the
       // composer sits on top of the keyboard.
       style={keyboard ? { height: keyboard.height, transform: keyboard.top ? `translateY(${keyboard.top}px)` : undefined } : undefined}
@@ -157,7 +170,7 @@ export function AppShell() {
           )}
         </div>
       ) : phoneView === 'chat' ? (
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary">
+        <main ref={chatRef} className="flex min-h-0 flex-1 flex-col overflow-hidden bg-primary">
           {chatColumn(() => setChosenView('list'))}
         </main>
       ) : (

@@ -117,13 +117,16 @@ export function ProfileEditor({ onClose }: ProfileEditorProps) {
     avatarFile !== null ||
     (listRef.current?.hasOpenEdit() ?? false)
 
-  // Cancel, Escape and a backdrop click all come here. A second request while asking keeps editing.
+  // Cancel, Escape, a backdrop click and a pull down (phones) all come here. A second request while
+  // asking keeps editing.
   const requestClose = () => {
     if (saving) return
     if (confirmDiscard) setConfirmDiscard(false)
     else if (isDirty()) setConfirmDiscard(true)
     else onClose()
   }
+  // Whether requestClose closes right away: then a pull down slides the sheet away, else it springs back.
+  const closesNow = () => !saving && !confirmDiscard && !isDirty()
 
   const onPick = (kind: PictureKind) => (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -205,6 +208,8 @@ export function ProfileEditor({ onClose }: ProfileEditorProps) {
       <Sheet
         title="Profile"
         onClose={requestClose}
+        onSwipeDown={requestClose}
+        swipeDownCloses={closesNow}
         action={{ label: saving ? 'Saving…' : 'Save', onClick: () => void handleSave(), disabled: saving || nicknameBlank }}
       >
         <div className="flex flex-col gap-2.5 pb-4">

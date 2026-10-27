@@ -22,6 +22,8 @@ import { Settings } from '@/components/settings/Settings'
 import { useAuthStore } from '@/stores/authStore'
 import { useStatusStore } from '@/stores/statusStore'
 import { useUiStore } from '@/stores/uiStore'
+import { EXIT_MS } from '@/hooks/useSwipeBack'
+import { drag, path } from '@/test/touch'
 
 /** A controllable matchMedia: `setDesktop(true)` flips DESKTOP_QUERY and notifies listeners. */
 function stubMatchMedia(initialDesktop: boolean) {
@@ -262,5 +264,49 @@ describe('Settings closed mid-PIN-wizard', () => {
     unmount()
     expect(document.querySelector('[data-pin-pad]')).toBeNull()
     expect(setPin).not.toHaveBeenCalled()
+  })
+})
+
+describe('Settings swipe back', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const swipeFromEdge = () => {
+    drag(screen.getByRole('dialog'), path([8, 300], [500, 305]))
+    act(() => vi.advanceTimersByTime(EXIT_MS))
+  }
+
+  it('phones: a swipe right from the left edge in a pushed section goes Back', () => {
+    const { onClose } = renderSettings()
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    expect(screen.getByRole('heading', { name: 'Appearance' })).toBeInTheDocument()
+    swipeFromEdge()
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit profile' })).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('phones: at the top level it does nothing (Settings stays open)', () => {
+    const { onClose } = renderSettings()
+    swipeFromEdge()
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('phones: not while the Log out question is open', () => {
+    renderSettings()
+    fireEvent.click(screen.getByRole('button', { name: 'Security & privacy' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    swipeFromEdge()
+    expect(screen.getByRole('heading', { name: 'Security & privacy' })).toBeInTheDocument()
+  })
+
+  it('desktop: no swipe', () => {
+    media.setDesktop(true)
+    renderSettings()
+    fireEvent.click(screen.getByRole('button', { name: 'About' }))
+    swipeFromEdge()
+    expect(screen.getByRole('heading', { name: 'About' })).toBeInTheDocument()
   })
 })
