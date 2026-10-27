@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Sheet } from './Sheet'
 import { useUiStore } from '@/stores/uiStore'
+import { EXIT_MS } from '@/hooks/useSwipeBack'
+import { drag, path } from '@/test/touch'
 
 /** A controllable matchMedia: `setDesktop(true)` flips DESKTOP_QUERY and notifies listeners. */
 function stubMatchMedia(initialDesktop: boolean) {
@@ -312,5 +314,93 @@ describe('Sheet', () => {
     media.setDesktop(false)
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Done' })).toBeVisible()
+  })
+})
+
+describe('Sheet swipes (phones)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    stubMatchMedia(false)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    document.querySelectorAll('[data-pin-pad]').forEach((el) => el.remove())
+    act(() => useUiStore.setState({ eepMode: false }))
+  })
+
+  const swipeBack = (el: Element) => {
+    drag(el, path([6, 300], [500, 300]))
+    act(() => vi.advanceTimersByTime(EXIT_MS))
+  }
+  const pullDown = (el: Element) => {
+    drag(el, path([200, 40], [200, 600]))
+    act(() => vi.advanceTimersByTime(EXIT_MS))
+  }
+
+  it('onSwipeBack: the content (not the header) follows the finger, then the handler runs', () => {
+    const onSwipeBack = vi.fn()
+    render(<Sheet title="Section" onClose={() => {}} onSwipeBack={onSwipeBack}><p>body</p></Sheet>)
+    const body = screen.getByText('body')
+    drag(body, path([6, 300], [500, 300]))
+    expect(body.parentElement!.style.transform).toMatch(/^translate3d\(\d+px,0,0\)$/)
+    expect(screen.getByRole('dialog').style.transform).toBe('')
+    act(() => vi.advanceTimersByTime(EXIT_MS))
+    expect(onSwipeBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('onSwipeDown: pulling the header down runs the handler', () => {
+    const onSwipeDown = vi.fn()
+    render(<Sheet title="Profile" onClose={() => {}} onSwipeDown={onSwipeDown}>body</Sheet>)
+    pullDown(screen.getByRole('heading', { name: 'Profile' }))
+    expect(onSwipeDown).toHaveBeenCalledTimes(1)
+  })
+
+  it('without handlers, nothing happens', () => {
+    const onClose = vi.fn()
+    render(<Sheet title="Profile" onClose={onClose}>body</Sheet>)
+    swipeBack(screen.getByText('body'))
+    pullDown(screen.getByRole('heading', { name: 'Profile' }))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog').style.transform).toBe('')
+  })
+
+  it('only the topmost sheet reacts', () => {
+    const lower = vi.fn()
+    const upper = vi.fn()
+    render(
+      <>
+        <Sheet title="Lower" onClose={() => {}} onSwipeDown={lower}>lower body</Sheet>
+        <Sheet title="Upper" onClose={() => {}} onSwipeDown={upper}>upper body</Sheet>
+      </>,
+    )
+    pullDown(screen.getByRole('heading', { name: 'Lower' }))
+    expect(lower).not.toHaveBeenCalled()
+    pullDown(screen.getByRole('heading', { name: 'Upper' }))
+    expect(upper).toHaveBeenCalledTimes(1)
+  })
+
+  it('not under the PinPad or the disguise', () => {
+    const onSwipeDown = vi.fn()
+    render(<Sheet title="Profile" onClose={() => {}} onSwipeDown={onSwipeDown}>body</Sheet>)
+    const pad = document.createElement('div')
+    pad.setAttribute('data-pin-pad', '')
+    document.body.appendChild(pad)
+    pullDown(screen.getByRole('heading', { name: 'Profile' }))
+    pad.remove()
+    act(() => useUiStore.setState({ eepMode: true }))
+    pullDown(screen.getByRole('heading', { name: 'Profile', hidden: true }))
+    expect(onSwipeDown).not.toHaveBeenCalled()
+  })
+
+  it('desktop: no swipes', () => {
+    stubMatchMedia(true)
+    const onSwipeDown = vi.fn()
+    const onSwipeBack = vi.fn()
+    render(<Sheet title="Profile" onClose={() => {}} onSwipeDown={onSwipeDown} onSwipeBack={onSwipeBack}>body</Sheet>)
+    pullDown(screen.getByRole('heading', { name: 'Profile' }))
+    swipeBack(screen.getByText('body'))
+    expect(onSwipeDown).not.toHaveBeenCalled()
+    expect(onSwipeBack).not.toHaveBeenCalled()
   })
 })

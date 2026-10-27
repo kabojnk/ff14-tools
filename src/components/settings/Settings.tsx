@@ -37,8 +37,8 @@ interface SettingsProps {
  * Settings (design §11).
  *
  * - **Phones:** a sheet titled "Settings" with a profile card and one grouped list. Each row pushes
- *   its section inside the same sheet (title = section, leading Back). Esc in a section goes Back;
- *   Esc at the top closes.
+ *   its section inside the same sheet (title = section, leading Back). Esc or a swipe right from the
+ *   left edge in a section goes Back; Esc at the top closes.
  * - **Desktop:** a 760×520 dialog with a left nav (Profile, the sections, Log out at the bottom) and
  *   the section on the right with a "Close settings" button. It opens on Appearance.
  *
@@ -81,6 +81,7 @@ export function Settings({ onClose, onEditProfile }: SettingsProps) {
       onClose={onClose}
       leading={pushed ? 'back' : 'none'}
       onLeading={back}
+      onSwipeBack={pushed && !confirmingLogOut ? back : undefined}
       onEscape={confirmingLogOut ? () => setConfirmingLogOut(false) : pushed ? back : onClose}
       action={isDesktop || pushed ? undefined : { label: 'Done', onClick: onClose }}
       width={760}

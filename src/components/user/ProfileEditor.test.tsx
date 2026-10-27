@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { mockUpdate, mockEq, mockUpload, mockFetchProfile, mockSetOverride } = vi.hoisted(() => ({
   mockUpdate: vi.fn(),
@@ -46,6 +46,8 @@ vi.mock('@/components/ui/ImageCrop', () => ({
 }))
 
 import { ProfileEditor } from './ProfileEditor'
+import { EXIT_MS, SPRING_MS } from '@/hooks/useSwipeBack'
+import { drag, path } from '@/test/touch'
 import { useAuthStore } from '@/stores/authStore'
 import { usePresenceStore } from '@/stores/presenceStore'
 import { useStatusStore } from '@/stores/statusStore'
@@ -344,6 +346,60 @@ describe('ProfileEditor', () => {
       fireEvent.keyDown(document.body, { key: 'Escape' })
       expect(onClose).not.toHaveBeenCalled()
       expect(screen.getByText('Discard your changes?')).toBeInTheDocument()
+    })
+  })
+  // Phones (jsdom has no matchMedia, so the sheet is in its phone layout). A pull down is Cancel.
+  describe('Swipe down', () => {
+    beforeEach(() => vi.useFakeTimers())
+    afterEach(() => vi.useRealTimers())
+
+    const panel = () => screen.getByRole('dialog', { name: 'Profile' })
+    const pullDown = (from: Element) => drag(from, path([200, 60], [205, 500]))
+
+    it('from the header, with nothing changed: the sheet slides down and closes', () => {
+      const { onClose } = setup()
+      pullDown(screen.getByRole('heading', { name: 'Profile' }))
+      expect(panel().style.transform).toMatch(/^translate3d\(0,\d+px,0\)$/)
+      expect(onClose).not.toHaveBeenCalled()
+      act(() => vi.advanceTimersByTime(EXIT_MS))
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(mockUpdate).not.toHaveBeenCalled()
+    })
+
+    it('from the content while it is scrolled to the top: closes too', () => {
+      const { onClose } = setup()
+      pullDown(screen.getByText('Show me as'))
+      act(() => vi.advanceTimersByTime(EXIT_MS))
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    it('with changes: springs back and asks "Discard your changes?", like Cancel', () => {
+      const { onClose } = setup()
+      fireEvent.change(screen.getByLabelText('Status message'), { target: { value: 'afk' } })
+      pullDown(screen.getByRole('heading', { name: 'Profile' }))
+      expect(panel().style.transform).toBe('')
+      expect(screen.getByText('Discard your changes?')).toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(SPRING_MS + EXIT_MS))
+      expect(onClose).not.toHaveBeenCalled()
+      expect(screen.getByLabelText('Status message')).toHaveValue('afk')
+    })
+
+    it('a short pull springs back and keeps the sheet open', () => {
+      const { onClose } = setup()
+      drag(screen.getByRole('heading', { name: 'Profile' }), path([200, 60], [200, 160]))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(onClose).not.toHaveBeenCalled()
+      expect(panel().style.transform).toBe('')
+    })
+
+    it('never from a text field, nor from content scrolled down', () => {
+      const { onClose } = setup()
+      pullDown(screen.getByLabelText('About'))
+      const content = panel().querySelector('.overflow-y-auto')!
+      content.scrollTop = 120
+      pullDown(screen.getByText('Show me as'))
+      act(() => vi.advanceTimersByTime(1000))
+      expect(onClose).not.toHaveBeenCalled()
     })
   })
 })
