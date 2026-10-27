@@ -1,0 +1,120 @@
+/* Raid plan builder (approved mockup's planner), scoped under .xd like desk.css. */
+
+.xd .xd-raid-filters { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0 }
+.xd .xd-raid-filters .xd-chips { min-width: 0; max-width: 100% }
+
+.xd .xd-fights { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.xd .xd-fight-group { display: flex; flex-direction: column; gap: 5px; min-width: 0 }
+.xd .xd-fight-group .xd-eyebrow { padding-left: 2px }
+.xd .xd-fight-group .xd-chips { position: relative /* chips' offsetLeft is measured from the row */ }
+
+.xd .xd-planner { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start }
+.xd .xd-stage { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0 }
+
+.xd .xd-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center }
+.xd .xd-tools-gap { flex: 0 0 6px }
+.xd .xd-tool {
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 7px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.xd .xd-tool:hover { border-color: rgba(255, 255, 255, 0.3) }
+.xd .xd-tool[aria-pressed='true'] { background: var(--glass-hi); border-color: rgba(255, 255, 255, 0.35) }
+.xd .xd-tool-hint { margin: -4px 0 0; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+
+.xd .xd-arena-wrap { width: 100%; max-width: 560px; margin-inline: auto; aspect-ratio: 1 }
+.xd .xd-arena { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none }
+.xd .xd-arena[data-tool='aoe'],
+.xd .xd-arena[data-tool='cone'],
+.xd .xd-arena[data-tool='line'],
+.xd .xd-arena[data-tool='tower'] { cursor: crosshair }
+.xd .xd-arena .floor { stroke: rgba(255, 255, 255, 0.35); stroke-width: 2 }
+.xd .xd-arena .grid line { stroke: rgba(255, 255, 255, 0.07) }
+.xd .xd-arena text { font: 800 14px system-ui, sans-serif; text-anchor: middle; pointer-events: none }
+
+.xd .xd-arena .wm { pointer-events: none }
+.xd .xd-arena .wm circle,
+.xd .xd-arena .wm rect { fill: currentColor; fill-opacity: 0.2; stroke: currentColor; stroke-width: 2 }
+.xd .xd-arena .wm text { fill: currentColor }
+.xd .xd-arena .wm-a { color: var(--wm-a) }
+.xd .xd-arena .wm-b { color: var(--wm-b) }
+.xd .xd-arena .wm-c { color: var(--wm-c) }
+.xd .xd-arena .wm-d { color: var(--wm-d) }
+
+/* Mechanics only take taps while erasing, so placing on top of one still works. */
+.xd .xd-arena .shape { pointer-events: none }
+.xd .xd-arena[data-tool='erase'] .shape { pointer-events: visiblePainted; cursor: pointer }
+.xd .xd-arena[data-tool='erase'] .shape:hover { filter: brightness(1.4) }
+.xd .xd-arena .s-aoe { fill: rgba(255, 107, 122, 0.25); stroke: rgba(255, 107, 122, 0.75) }
+.xd .xd-arena .s-half { stroke: none }
+.xd .xd-arena .s-donut { stroke: none }
+.xd .xd-arena .s-cone { fill: rgba(95, 212, 255, 0.22); stroke: rgba(95, 212, 255, 0.7) }
+.xd .xd-arena .s-tower { fill: rgba(255, 212, 92, 0.16); stroke: #ffd45c; stroke-width: 2; stroke-dasharray: 6 5 }
+.xd .xd-arena .s-stack circle { fill: rgba(95, 212, 255, 0.16); stroke: var(--aether); stroke-width: 2; stroke-dasharray: 3 4 }
+.xd .xd-arena .s-stack .dot { fill: var(--aether); stroke: none }
+.xd .xd-arena .s-fire { fill: rgba(255, 120, 60, 0.18) }
+.xd .xd-arena .s-water { fill: rgba(60, 160, 255, 0.18) }
+.xd .xd-arena .s-ring { fill: none; stroke: rgba(79, 209, 139, 0.6); stroke-width: 24 }
+
+.xd .xd-arena .boss { pointer-events: none }
+.xd .xd-arena .boss circle { fill: rgba(10, 16, 40, 0.7); stroke: rgba(255, 255, 255, 0.5); stroke-dasharray: 3 3 }
+.xd .xd-arena .boss text { fill: var(--ink); font-size: 10px; font-weight: 700 }
+
+.xd .xd-arena .token circle { stroke: rgba(255, 255, 255, 0.85); stroke-width: 2 }
+.xd .xd-arena .token text { fill: #0b1430; font-size: 10px }
+.xd .xd-arena .token.tank circle { fill: var(--tank) }
+.xd .xd-arena .token.healer circle { fill: var(--healer) }
+.xd .xd-arena .token.dps circle { fill: var(--dps) }
+.xd .xd-arena[data-tool='move'] .token { cursor: grab }
+.xd .xd-arena[data-tool='move'] .token:active { cursor: grabbing }
+.xd .xd-arena:not([data-tool='move']) .token { pointer-events: none }
+
+.xd .xd-steps { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none }
+.xd .xd-steps::-webkit-scrollbar { display: none }
+.xd .xd-step {
+  flex: none;
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 7px 11px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-align: left;
+}
+.xd .xd-step[aria-current='step'] { background: var(--ink); color: #0b1430; border-color: transparent }
+.xd .xd-step b { font-family: var(--mono); margin-right: 2px }
+.xd .xd-step.add { border-style: dashed; color: var(--ink-3) }
+.xd .xd-step:disabled { opacity: 0.5 }
+
+.xd .xd-plan-side { display: flex; flex-direction: column }
+.xd .xd-card .xd-plan-title { margin: 4px 0 12px; font-size: 18px }
+.xd .xd-plan-title .xd-pill { font: 650 11px var(--font) }
+.xd .xd-card .xd-party-title { margin-top: 16px }
+.xd .xd-party-row { padding: 7px 10px }
+.xd .xd-party-row .t b { font-size: 13px }
+.xd .xd-party-row > small { flex: none; font-size: 11px; text-align: right; max-width: 45% }
+.xd .xd-role {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font: 800 10px var(--display);
+  color: #0b1430;
+}
+.xd .xd-role.tank { background: var(--tank) }
+.xd .xd-role.healer { background: var(--healer) }
+.xd .xd-role.dps { background: var(--dps) }
+.xd .xd-raid-status { min-height: 1.45em; margin: 10px 0 0; font-size: 12.5px; color: var(--aether); overflow-wrap: anywhere }
+
+@media (max-width: 860px) {
+  .xd .xd-planner { grid-template-columns: minmax(0, 1fr) }
+  .xd .xd-stage { padding: 10px }
+}
