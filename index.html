@@ -36,8 +36,8 @@
         }
         document.documentElement.setAttribute('data-theme', theme);
         if (eep) {
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1a1a2e');
-          document.documentElement.style.backgroundColor = '#1a1a2e';
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0b1430');
+          document.documentElement.style.backgroundColor = '#0b1430';
         }
       })();
     </script>
@@ -49,10 +49,10 @@
     <title>XIV Tools</title>
   </head>
   <body>
-    <!-- Shown synchronously on pagehide so the app switcher snapshot hides the chat -->
-    <div id="privacy-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:#1a1a2e;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
-      <div style="color:#e94560;font-size:1.25rem;font-weight:700;">FF14 Random Content Running Agenda Picker</div>
-      <div style="color:#a0a0b0;font-size:0.875rem;">Can't decide what to run? Let fate choose!</div>
+    <!-- Shown synchronously on pagehide so the app switcher snapshot hides the chat (the disguise, Aetherdesk) -->
+    <div id="privacy-screen" style="display:none;position:fixed;inset:0;z-index:99999;background:radial-gradient(120% 90% at 10% 0%,#1d4a8a 0%,transparent 55%),radial-gradient(90% 80% at 100% 30%,#3b2a7a 0%,transparent 60%),linear-gradient(180deg,#14305c,#0b1430);flex-direction:column;align-items:center;justify-content:center;gap:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;">
+      <div style="color:#5fd4ff;font-size:0.75rem;font-weight:650;letter-spacing:0.09em;text-transform:uppercase;">Aetherdesk</div>
+      <div style="color:#eef4ff;font-size:1.375rem;font-weight:680;">Today in Eorzea</div>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

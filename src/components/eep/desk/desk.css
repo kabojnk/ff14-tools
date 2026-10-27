@@ -1,0 +1,356 @@
+/*
+ * Aetherdesk: the FFXIV companion site the disguise shows (approved mockup, 2026-10-27). One fixed dark "glass"
+ * look, independent of the chat's themes, scoped under .xd so nothing leaks into the chat.
+ * Layout: desktop = floating sidebar + content; phone = top bar + floating tab bar.
+ */
+.xd {
+  --sky-1: #0b1430;
+  --sky-2: #14305c;
+  --aether: #5fd4ff;
+  --violet: #9d8cff;
+  --ink: #eef4ff;
+  --ink-2: rgba(238, 244, 255, 0.68);
+  --ink-3: rgba(238, 244, 255, 0.45);
+  --glass: rgba(255, 255, 255, 0.075);
+  --glass-hi: rgba(255, 255, 255, 0.14);
+  --glass-line: rgba(255, 255, 255, 0.16);
+  --tank: #5b8cff;
+  --healer: #4fd18b;
+  --dps: #ff6b7a;
+  --wm-a: #ff5d6c;
+  --wm-b: #ffd45c;
+  --wm-c: #58b8ff;
+  --wm-d: #c78bff;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  --display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --r-lg: 24px;
+  --r-md: 16px;
+
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  color-scheme: dark;
+  color: var(--ink);
+  background: var(--sky-1);
+  font: 14px/1.45 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+.xd *,
+.xd *::before,
+.xd *::after {
+  box-sizing: border-box;
+}
+.xd button,
+.xd input {
+  font: inherit;
+  color: inherit;
+}
+.xd button {
+  cursor: pointer;
+}
+.xd :focus-visible {
+  outline: 2px solid var(--aether);
+  outline-offset: 2px;
+}
+.xd h1,
+.xd h2,
+.xd h3,
+.xd p {
+  margin: 0;
+}
+
+/* The aether sky the glass refracts. */
+.xd-sky {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 10% 0%, #1d4a8a 0%, transparent 55%),
+    radial-gradient(90% 80% at 100% 30%, #3b2a7a 0%, transparent 60%),
+    radial-gradient(100% 80% at 40% 110%, #0c5a6e 0%, transparent 60%),
+    linear-gradient(180deg, var(--sky-2), var(--sky-1));
+}
+.xd-sky i {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+}
+.xd-sky i:nth-child(1) { width: 380px; height: 380px; left: -80px; top: 12%; background: #2f7cff }
+.xd-sky i:nth-child(2) { width: 320px; height: 320px; right: -60px; top: 45%; background: #8a5cff }
+.xd-sky i:nth-child(3) { width: 260px; height: 260px; left: 40%; bottom: -80px; background: #19c3d6 }
+.xd-crystal { position: absolute; right: 6%; bottom: 10%; width: 120px; opacity: 0.14 }
+
+.xd .glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-lg);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 18px 40px rgba(2, 8, 30, 0.35);
+}
+
+.xd-app {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
+}
+.xd-side { display: flex; flex-direction: column; gap: 4px; padding: 18px 12px; min-height: 0; overflow-y: auto }
+.xd-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px }
+.xd-brand b { display: block; font: 650 17px/1 var(--display); letter-spacing: -0.01em }
+.xd-brand small { display: block; color: var(--ink-3); font-size: 11px; margin-top: 3px }
+.xd-logo {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--aether), var(--violet));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.xd-nav {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--ink-2);
+  font-weight: 520;
+}
+.xd-nav:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink) }
+.xd-nav[aria-current='page'] { background: var(--glass-hi); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18) }
+.xd-nav svg { width: 19px; height: 19px; flex: none }
+.xd-side-foot { margin-top: auto; padding: 10px 12px; color: var(--ink-3); font-size: 11.5px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start }
+.xd-link { border: 0; background: none; padding: 0; color: var(--ink-3); font-size: 11.5px }
+.xd-link:hover { color: var(--ink) }
+
+.xd-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 14px }
+.xd-top { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 18px }
+.xd-top-title { min-width: 0 }
+.xd-site { font: 650 11px/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; color: var(--aether) }
+.xd-top h2 { font: 680 22px/1.15 var(--display); letter-spacing: -0.02em; text-wrap: balance; margin-top: 3px }
+.xd-sub { color: var(--ink-3); font-size: 12px }
+.xd-search {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-line);
+  min-width: 0;
+  width: min(340px, 100%);
+}
+.xd-search input { border: 0; outline: 0; background: none; min-width: 0; flex: 1; font-size: 16px /* no iOS zoom */ }
+.xd-search input::placeholder { color: var(--ink-3) }
+.xd-search svg { color: var(--ink-3); flex: none }
+.xd-me {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0;
+  flex: none;
+  background: radial-gradient(circle at 35% 30%, #9ccaff, #60a5fa 60%, #3b6fd1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 12px rgba(40, 90, 200, 0.45);
+}
+.xd-signin {
+  flex: none;
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.xd-scroll { overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 24px; scrollbar-width: none; -webkit-overflow-scrolling: touch }
+.xd-scroll::-webkit-scrollbar { display: none }
+.xd-view { display: flex; flex-direction: column; gap: 14px }
+
+.xd-grid { display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr)) }
+.xd .c4 { grid-column: span 4 }
+.xd .c5 { grid-column: span 5 }
+.xd .c6 { grid-column: span 6 }
+.xd .c7 { grid-column: span 7 }
+.xd .c8 { grid-column: span 8 }
+.xd .c12 { grid-column: span 12 }
+.xd-card { padding: 18px; min-width: 0 }
+.xd-card h3 { margin: 0 0 12px; font: 640 15px/1.2 var(--display); letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px }
+.xd-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px }
+.xd-head h3 { margin: 0 }
+.xd-more { margin-left: auto; font: 500 12px var(--font); color: var(--aether); background: none; border: 0; padding: 0 }
+.xd-eyebrow { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); font-weight: 650 }
+.xd .num { font-variant-numeric: tabular-nums }
+.xd-muted { color: var(--ink-3) }
+
+.xd-timers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+.xd-timer { padding: 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.08) }
+.xd-timer b { display: block; font: 650 20px/1.2 var(--display); margin-top: 4px }
+
+.xd-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 640;
+  background: linear-gradient(135deg, rgba(95, 212, 255, 0.9), rgba(157, 140, 255, 0.9));
+  color: #071025;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 8px 20px rgba(95, 140, 255, 0.35);
+}
+.xd-btn.ghost { background: rgba(255, 255, 255, 0.1); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18); border: 1px solid var(--glass-line) }
+.xd-btn:disabled { opacity: 0.5 }
+.xd-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px }
+.xd-duty { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 12px; background: rgba(255, 255, 255, 0.05) }
+.xd-duty span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.xd-pill { margin-left: auto; flex: none; font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.1) }
+
+.xd-ring {
+  --p: 50;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  flex: none;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--aether) calc(var(--p) * 1%), rgba(255, 255, 255, 0.1) 0);
+}
+.xd-ring i { width: 50px; height: 50px; border-radius: 50%; background: rgba(12, 22, 52, 0.85); display: grid; place-items: center; font: 650 13px var(--display); font-style: normal }
+.xd-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.xd-stat { display: flex; align-items: center; gap: 12px; min-width: 0; border: 0; background: none; padding: 0; text-align: left }
+.xd-stat small { display: block; color: var(--ink-3) }
+
+.xd-list { display: flex; flex-direction: column; gap: 6px }
+.xd-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  text-align: left;
+  width: 100%;
+}
+button.xd-row:hover { border-color: var(--glass-line) }
+.xd-row[aria-selected='true'],
+.xd-row[aria-current='true'] { background: var(--glass-hi); border-color: var(--glass-line) }
+.xd-row .t { min-width: 0; flex: 1 }
+.xd-row .t b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.xd-row .t small { color: var(--ink-3) }
+.xd-ico {
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font: 700 12px var(--display);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--glass-line);
+}
+.xd-empty { padding: 18px; text-align: center; color: var(--ink-3) }
+
+.xd-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px }
+.xd-chips::-webkit-scrollbar { display: none }
+.xd-chip {
+  flex: none;
+  border: 1px solid var(--glass-line);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.xd-chip[aria-pressed='true'] { background: var(--ink); color: #0b1430; border-color: transparent }
+
+.xd-mats { display: flex; flex-direction: column; gap: 6px; margin-top: 12px }
+.xd-mat { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05) }
+.xd-mat input { accent-color: var(--aether); width: 18px; height: 18px; flex: none }
+.xd-mat .q { margin-left: auto; font-family: var(--mono); color: var(--ink-2) }
+.xd-specs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px }
+.xd-spec { padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05) }
+.xd-spec b { display: block; font: 650 15px var(--display) }
+.xd-bar { height: 6px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); overflow: hidden }
+.xd-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--aether), var(--violet)) }
+
+.xd-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--glass-line); max-width: 100%; overflow-x: auto; scrollbar-width: none }
+.xd-seg button { flex: none; border: 0; background: none; padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 13px; color: var(--ink-2) }
+.xd-seg button[aria-pressed='true'] { background: rgba(255, 255, 255, 0.18); color: var(--ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25) }
+.xd-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; margin-top: 14px }
+.xd-tile {
+  position: relative;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  min-width: 0;
+}
+.xd-art { aspect-ratio: 1; max-width: 100%; border-radius: 12px; display: grid; place-items: center; font-size: 28px; background: linear-gradient(160deg, rgba(95, 212, 255, 0.25), rgba(157, 140, 255, 0.15)) }
+.xd-tile[aria-pressed='false'] .xd-art { filter: grayscale(1) brightness(0.6) }
+.xd-tile b { font-size: 12.5px; line-height: 1.25 }
+.xd-tile small { color: var(--ink-3); font-size: 11px }
+.xd-tick { position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--healer); color: #062414; font-size: 12px; font-weight: 800 }
+
+/* Triple Triad card face: the four sides' values around the art, stars for rarity. */
+.xd-card-face { position: relative; aspect-ratio: 3 / 4; max-width: 100%; border-radius: 10px; overflow: hidden; display: grid; place-items: center; font-size: 30px;
+  background: linear-gradient(160deg, rgba(255, 212, 92, 0.28), rgba(157, 140, 255, 0.2)); border: 1px solid rgba(255, 230, 160, 0.4) }
+.xd-tile[aria-pressed='false'] .xd-card-face { filter: grayscale(1) brightness(0.6) }
+.xd-tt { position: absolute; top: 6px; left: 6px; display: grid; grid-template-columns: repeat(3, 11px); grid-template-rows: repeat(3, 12px); font: 800 11px/12px var(--display); text-align: center; color: #fff; text-shadow: 0 1px 2px #000 }
+.xd-stars { position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; font-size: 10px; color: #ffd45c; letter-spacing: 1px; text-shadow: 0 1px 2px #000 }
+
+.xd-note { padding: 12px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); color: var(--ink-2) }
+.xd-note b { color: var(--ink) }
+
+/* Phone */
+.xd-tabbar { display: none }
+@media (max-width: 860px) {
+  .xd-app { grid-template-columns: minmax(0, 1fr); padding: max(12px, env(safe-area-inset-top)) 12px 0 }
+  .xd-side { display: none }
+  .xd-top { padding: 8px 8px 8px 14px; flex-wrap: wrap }
+  .xd-top h2 { font-size: 20px }
+  .xd-search { order: 3; width: 100% }
+  .xd .xd-grid > * { grid-column: span 12 }
+  .xd-crystal { display: none }
+  .xd-top-title { flex: 1 }
+  .xd-scroll { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) }
+  .xd-specs { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .xd-timer b { font-size: 16px }
+  .xd-tabbar {
+    display: flex;
+    position: absolute;
+    z-index: 4;
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    padding: 6px;
+    justify-content: space-around;
+    border-radius: 30px;
+    background: rgba(18, 30, 66, 0.86) !important; /* over .xd .glass: the bar sits on top of scrolling content */
+  }
+  .xd-tab { border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 600; color: var(--ink-3); padding: 6px 10px; border-radius: 22px; flex: 1 }
+  .xd-tab svg { width: 22px; height: 22px }
+  .xd-tab[aria-current='page'] { color: var(--ink); background: var(--glass-hi) }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .xd-view { animation: xd-rise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) }
+  @keyframes xd-rise {
+    from { opacity: 0.4; transform: translateY(6px) }
+  }
+}

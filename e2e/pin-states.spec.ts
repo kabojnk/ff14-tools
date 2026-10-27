@@ -126,7 +126,7 @@ test.describe('PIN pad states', () => {
       const shell = document.querySelector<HTMLElement>('[data-app-shell]')
       return {
         chat: !!shell && shell.offsetParent !== null,
-        ff14: [...document.querySelectorAll('h1')].some((h) => h.textContent?.includes('FF14 Random Content')),
+        ff14: [...document.querySelectorAll('h1')].some((h) => h.textContent?.includes('Aetherdesk')),
       }
     })
     expect(shown).toEqual({ chat: false, ff14: true })

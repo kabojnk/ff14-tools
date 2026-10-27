@@ -41,4 +41,4 @@ export const IDS = {
 export const LAKE_PASSWORD = 'test-lake-password'
 
 export const EEP_PASSPHRASE = 'test-passphrase'
-export const EEP_HEADING = 'FF14 Random Content Running Agenda Picker'
+export const EEP_HEADING = 'Aetherdesk'

@@ -35,7 +35,7 @@ describe('uiStore eep mode', () => {
     useUiStore.getState().setEepMode(true)
     expect(useUiStore.getState().eepMode).toBe(true)
     expect(sessionStorage.getItem('eepMode')).toBe('true')
-    expect(document.title).toBe('FF14 Random Content Picker')
+    expect(document.title).toBe('Aetherdesk · FFXIV Companion')
   })
 
   it('leaving eep mode restores the app title', () => {
@@ -91,7 +91,7 @@ describe('uiStore PIN pad and leaving the app', () => {
     useUiStore.getState().disguiseOnLeave()
     expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: true, pinPadOpen: false })
     expect(sessionStorage.getItem('eepMode')).toBe('true')
-    expect(document.title).toBe('FF14 Random Content Picker')
+    expect(document.title).toBe('Aetherdesk · FFXIV Companion')
   })
 
   it('leaving with the pad open (locked or not) closes it, and a lock stays on', () => {
@@ -325,7 +325,7 @@ describe('uiStore launch state', () => {
 
   it('a phone with a PIN opens disguised and locked, with the PIN pad closed until the dot is tapped', async () => {
     expect(await launch({ coarse: true, hasPin: true })).toMatchObject({ eepMode: true, pinLocked: true, pinPadOpen: false })
-    expect(document.title).toBe('FF14 Random Content Picker')
+    expect(document.title).toBe('Aetherdesk · FFXIV Companion')
   })
 
   it('a phone without a PIN opens the chat', async () => {

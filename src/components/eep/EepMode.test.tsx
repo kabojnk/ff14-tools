@@ -16,9 +16,11 @@ import { useAuthStore } from '@/stores/authStore'
 const PASSPHRASE = 'open sesame'
 const initialUi = useUiStore.getState()
 
+/** The passphrase goes in Aetherdesk's search field. */
 function enterPassphrase(value: string) {
-  fireEvent.change(screen.getByLabelText('Or enter in a custom raid'), { target: { value } })
-  fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+  const search = screen.getByRole('searchbox', { name: 'Search recipes, items and raids' })
+  fireEvent.change(search, { target: { value } })
+  fireEvent.submit(search.closest('form')!)
 }
 
 beforeEach(() => {
