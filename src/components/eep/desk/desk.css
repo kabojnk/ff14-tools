@@ -189,6 +189,8 @@
 .xd .c12 { grid-column: span 12 }
 .xd-card { padding: 18px; min-width: 0 }
 .xd-card h3 { margin: 0 0 12px; font: 640 15px/1.2 var(--display); letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px }
+.xd-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px }
+.xd-head h3 { margin: 0 }
 .xd-more { margin-left: auto; font: 500 12px var(--font); color: var(--aether); background: none; border: 0; padding: 0 }
 .xd-eyebrow { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); font-weight: 650 }
 .xd .num { font-variant-numeric: tabular-nums }

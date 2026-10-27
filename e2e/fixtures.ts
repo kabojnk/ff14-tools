@@ -249,8 +249,9 @@ export class ChatUser {
   }
 
   async enterPassphrase(passphrase: string) {
-    await this.page.getByLabel('Or enter in a custom raid').fill(passphrase)
-    await this.page.getByRole('button', { name: 'Add' }).click()
+    const search = this.page.getByRole('searchbox', { name: 'Search recipes, items and raids' })
+    await search.fill(passphrase)
+    await search.press('Enter')
   }
 
   /** The disguise's Unlock dot (shown once the PIN length has loaded). */

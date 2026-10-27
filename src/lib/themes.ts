@@ -49,7 +49,7 @@ export function defaultTheme(prefersDark: boolean): ThemeId {
 }
 
 /** The FF14 disguise's bar colour: the status bar shows this whenever the disguise is up. */
-export const DISGUISE_BAR = '#1a1a2e'
+export const DISGUISE_BAR = '#0b1430'
 
 /** The pre-auth "Loading…" screen's fixed background (never a theme colour). */
 export const LOADING_BG = '#2f3137'

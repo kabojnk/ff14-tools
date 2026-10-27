@@ -48,7 +48,7 @@ export const HAS_PIN_KEY = 'hasPin'
 /** The PIN pad gives up on an answer after this long and lets the person try again. */
 export const VERIFY_PIN_TIMEOUT_MS = 15_000
 
-const DISGUISE_TITLE = 'FF14 Random Content Picker'
+const DISGUISE_TITLE = 'Aetherdesk · FFXIV Companion'
 
 const isPhone = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
 
