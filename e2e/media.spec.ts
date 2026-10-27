@@ -207,6 +207,60 @@ test.describe('Media gallery', () => {
     await expect(v).toBeHidden()
   })
 
+  test('desktop: the viewer\'s Download button and the menu\'s Save photo download the file', async ({ alice }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium-desktop', 'desktops download; phones share (next test)')
+    const id = await beaPostsImageInSchist()
+    // A fetch of it is refused, as the CDN's is for a file it sends without CORS headers (.mov, .m4a):
+    // the save goes through the same-origin proxy. (Playwright's stubbed responses pass CORS regardless.)
+    await alice.page.route('http://cdn.test.local/media/schist-shot.png', (route) =>
+      route.request().resourceType() === 'fetch' ? route.abort('accessdenied') : route.fallback(),
+    )
+    const proxied: string[] = []
+    alice.page.on('request', (r) => {
+      if (r.url().includes('/cdn-proxy/')) proxied.push(new URL(r.url()).pathname)
+    })
+    await alice.openChat('Schist')
+    const cell = row(alice, id).locator('[data-media-index="0"]')
+    await cell.getByRole('button', { name: 'Open schist-shot.png' }).click()
+    const v = viewer(alice)
+    await expect(v).toBeVisible()
+    const [download] = await Promise.all([alice.page.waitForEvent('download'), v.getByRole('button', { name: 'Download' }).click()])
+    expect(download.suggestedFilename()).toBe('schist-shot.png')
+    expect(proxied).toContain('/cdn-proxy/media/schist-shot.png')
+    await v.getByRole('button', { name: 'Close' }).click()
+
+    const item = await alice.openMessageActions(cell)
+    const [again] = await Promise.all([alice.page.waitForEvent('download'), item('Save photo').click()])
+    expect(again.suggestedFilename()).toBe('schist-shot.png')
+  })
+
+  test('phones: Save photo in the long-press sheet hands the file to the share sheet', async ({ alice }, testInfo) => {
+    test.skip(testInfo.project.name !== 'webkit-iphone', 'phones share (iOS: Save Image → Photos); desktops download')
+    const id = await beaPostsImageInSchist()
+    await alice.openChat('Schist')
+    // Stands in for iOS's share sheet, which a test can't drive.
+    await alice.page.evaluate(() => {
+      const w = window as unknown as { shared: string[] }
+      w.shared = []
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true })
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: async ({ files }: { files: File[] }) => {
+          // The real sheet takes the window's focus while it's up.
+          window.dispatchEvent(new FocusEvent('blur'))
+          w.shared.push(...files.map((f) => `${f.name} ${f.type}`))
+          window.dispatchEvent(new FocusEvent('focus'))
+        },
+      })
+    })
+    const item = await alice.openMessageActions(row(alice, id).locator('[data-media-index="0"]'))
+    await item('Save photo').click()
+    await expect.poll(() => alice.page.evaluate(() => (window as unknown as { shared: string[] }).shared)).toEqual(['schist-shot.png image/png'])
+    // The share sheet is the app's own: no disguise for it.
+    await expect(alice.composer).toBeVisible()
+    await expect(alice.eepHeading).toBeHidden()
+  })
+
   test('a search result pages back to an old message and flashes it', async ({ alice }) => {
     const target = await oldMessageBehind(60)
     await alice.openChat('Main')

@@ -6,12 +6,13 @@ import type { EmojiLookup } from '@/components/chat2/Markdown'
 import { QuickReactBar } from '@/components/chat2/QuickReactBar'
 import { useLongPress } from '@/hooks/useLongPress'
 import { noteRecentEmoji } from '@/lib/recentEmoji'
+import { prefetchMedia, saveMedia } from '@/lib/saveMedia'
 import { useAuthStore } from '@/stores/authStore'
 import { useComposerStore } from '@/stores/composerStore'
 import { useMessageStore } from '@/stores/messageStore'
 import { chipsOf, useReactionStore } from '@/stores/reactionStore'
 import type { Message } from '@/types'
-import { buildActions, type ActionItem } from '@/components/chat2/messageActionItems'
+import { buildActions, saveTargets, type ActionItem } from '@/components/chat2/messageActionItems'
 import { isDisguised } from '@/stores/uiStore'
 
 // ── Phone: the action sheet ──
@@ -369,6 +370,15 @@ export function MessageActions({
               if (!ok) onNotice("Couldn't change the spoiler")
             })
         },
+        save: (index) => {
+          const a = message.attachments[index]
+          if (!a) return
+          void saveMedia(a).then((r) => {
+            // Safari wanted a fresher tap than the fetch left: the file is ready for the next one.
+            if (r === 'again') onNotice('Ready: tap Save again')
+            else if (r === 'failed') onNotice("Couldn't save")
+          })
+        },
         remove: () => {
           void useMessageStore
             .getState()
@@ -377,6 +387,14 @@ export function MessageActions({
         },
       },
     })
+
+  // The sheet's Save items share from the cache, inside the tap (see saveMedia): fetch as it opens.
+  const sheetMedia = sheet ? sheet.mediaIndex ?? -1 : null
+  useEffect(() => {
+    if (sheetMedia === null) return
+    for (const { a } of saveTargets(message, sheetMedia === -1 ? null : sheetMedia)) prefetchMedia(a)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetMedia])
 
   const longPress = useLongPress(
     (target) => {

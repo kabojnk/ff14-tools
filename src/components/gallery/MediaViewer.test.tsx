@@ -3,6 +3,8 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@supabase/supabase-js'
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }))
+const { mockSave, mockPrefetch } = vi.hoisted(() => ({ mockSave: vi.fn(), mockPrefetch: vi.fn() }))
+vi.mock('@/lib/saveMedia', () => ({ saveMedia: mockSave, prefetchMedia: mockPrefetch }))
 
 import { MediaViewer, type ViewerItem } from '@/components/gallery/MediaViewer'
 import { useAuthStore } from '@/stores/authStore'
@@ -58,6 +60,8 @@ const item = (n: number, over: Partial<ViewerItem> = {}): ViewerItem => ({
 const three = [item(1), item(2), item(3)]
 
 beforeEach(() => {
+  mockSave.mockReset().mockResolvedValue('saved')
+  mockPrefetch.mockReset()
   useAuthStore.setState({ user: { id: 'alice' } as User })
   useProfileStore.setState({ profiles: { alice: profile('alice', 'Alice'), bea: profile('bea', 'Bea') } })
 })
@@ -240,5 +244,57 @@ describe('MediaViewer', () => {
     render(<MediaViewer items={three} index={0} onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a phone', false],
+    ['a desktop', true],
+  ])('has a Download button on %s that saves the current item', async (_, desktop) => {
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: desktop, media: q, addEventListener: () => {}, removeEventListener: () => {} }))
+    render(<MediaViewer items={three} index={1} onClose={() => {}} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    })
+    expect(mockSave).toHaveBeenCalledWith({ url: 'https://cdn.test/2.png', filename: '2.png' })
+    vi.unstubAllGlobals()
+  })
+
+  it('Download is busy while saving', async () => {
+    let finish: (r: string) => void = () => {}
+    mockSave.mockReturnValue(new Promise((r) => (finish = r)))
+    render(<MediaViewer items={three} index={0} onClose={() => {}} />)
+    const button = screen.getByRole('button', { name: 'Download' })
+    fireEvent.click(button)
+    expect(button).toBeDisabled()
+    await act(async () => finish('saved'))
+    expect(button).toBeEnabled()
+  })
+
+  it('asks for another tap when the share sheet wanted a fresher one, until moving on', async () => {
+    mockSave.mockResolvedValue('again')
+    render(<MediaViewer items={three} index={0} onClose={() => {}} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    })
+    expect(screen.getByText('Tap again to save')).toBeInTheDocument()
+    fireEvent.click(next())
+    expect(screen.queryByText('Tap again to save')).not.toBeInTheDocument()
+  })
+
+  it("says so when the save didn't work", async () => {
+    mockSave.mockResolvedValue('failed')
+    render(<MediaViewer items={three} index={0} onClose={() => {}} />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    })
+    expect(screen.getByText("Couldn't save")).toBeInTheDocument()
+  })
+
+  it('fetches a photo ahead of a save as it shows, not a video', () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
+    render(<MediaViewer items={[item(1), item(2, { kind: 'video', url: 'https://cdn.test/2.mov' })]} index={0} onClose={() => {}} />)
+    expect(mockPrefetch).toHaveBeenCalledWith({ url: 'https://cdn.test/1.png', filename: '1.png' })
+    fireEvent.click(next())
+    expect(mockPrefetch).toHaveBeenCalledTimes(1)
   })
 })

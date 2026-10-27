@@ -28,6 +28,11 @@ export async function stubExternalServices(context: BrowserContext) {
   await context.route('http://cdn.test.local/**', (route) =>
     route.fulfill({ path: 'e2e/fixtures/media/test-image.png', contentType: 'image/png' }),
   )
+  // The same-origin CDN proxy (docker/nginx.conf): what saving a file uses when the CDN sends no CORS
+  // headers, as the stub above doesn't.
+  await context.route('**/cdn-proxy/**', (route) =>
+    route.fulfill({ path: 'e2e/fixtures/media/test-image.png', contentType: 'image/png' }),
+  )
   // Voice memos: the 4 s fixture (.webm or .m4a by the URL), with range requests (Safari won't play
   // media without them).
   const fixtures = { m4a: readFileSync('e2e/fixtures/media/voice.m4a'), webm: readFileSync('e2e/fixtures/media/voice.webm') }

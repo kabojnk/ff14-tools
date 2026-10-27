@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ChevronLeft, ChevronRight, Download, ImageOff, MessageCircle, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, ImageOff, LoaderCircle, MessageCircle, X } from 'lucide-react'
 import { Avatar } from '@/components/ui/Avatar'
 import { Icon } from '@/components/ui/Icon'
 import { Portal } from '@/components/ui/Portal'
 import { DESKTOP_QUERY, useMediaQuery } from '@/hooks/useMediaQuery'
+import { prefetchMedia, saveMedia } from '@/lib/saveMedia'
 import { SPACE_LABEL } from '@/lib/spaces'
 import { useAuthStore } from '@/stores/authStore'
 import { useProfileStore } from '@/stores/profileStore'
@@ -98,6 +99,15 @@ export function MediaViewer<T extends ViewerItem>({ items, index, onClose, onSho
   const goRef = useRef(go)
   goRef.current = go
 
+  // Phones share a save from the cache, inside the tap (see saveMedia): photos and GIFs are fetched as
+  // they show. Videos wait for a tap, which may then ask for a second one.
+  const currentUrl = current?.url
+  const currentKind = current?.kind
+  const currentName = current?.filename
+  useEffect(() => {
+    if (currentUrl && currentKind !== 'video') prefetchMedia({ url: currentUrl, filename: currentName })
+  }, [currentUrl, currentKind, currentName])
+
   // Focus moves in on open and back to where it was on close.
   useEffect(() => {
     const before = document.activeElement as HTMLElement | null
@@ -191,19 +201,7 @@ export function MediaViewer<T extends ViewerItem>({ items, index, onClose, onSho
             {pos + 1} of {items.length}
           </span>
           <span className="flex items-center gap-2">
-            {isDesktop && (
-              <a
-                href={current.url}
-                download={current.filename ?? undefined}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Download"
-                title="Download"
-                className="grid h-8 w-8 place-items-center rounded-full text-white/70 hover:bg-white/10 hover:text-white"
-              >
-                <Icon icon={Download} size={17} />
-              </a>
-            )}
+            <SaveButton key={current.id} item={current} />
             {onShowInChat && (
               <button
                 type="button"
@@ -219,6 +217,35 @@ export function MediaViewer<T extends ViewerItem>({ items, index, onClose, onSho
         <div className="pb-safe" />
       </div>
     </Portal>
+  )
+}
+
+/** Download (desktops) or Save to Photos/Files (phones, via the share sheet). Keyed by the item, so its state is the item's. */
+function SaveButton({ item }: { item: ViewerItem }) {
+  const [status, setStatus] = useState<'idle' | 'busy' | 'again' | 'failed'>('idle')
+  const save = () => {
+    setStatus('busy')
+    void saveMedia({ url: item.url, filename: item.filename }).then((r) => setStatus(r === 'again' || r === 'failed' ? r : 'idle'))
+  }
+  const message = status === 'again' ? 'Tap again to save' : status === 'failed' ? "Couldn't save" : ''
+  return (
+    <>
+      <span aria-live="polite" className="text-white/70 empty:hidden">
+        {message}
+      </span>
+      <button
+        type="button"
+        onClick={save}
+        disabled={status === 'busy'}
+        aria-label="Download"
+        title="Download"
+        className={`grid h-8 w-8 place-items-center rounded-full hover:bg-white/10 hover:text-white disabled:pointer-events-none ${
+          status === 'again' ? 'bg-white/10 text-white' : 'text-white/70'
+        }`}
+      >
+        {status === 'busy' ? <Icon icon={LoaderCircle} size={17} className="motion-safe:animate-spin" /> : <Icon icon={Download} size={17} />}
+      </button>
+    </>
   )
 }
 
