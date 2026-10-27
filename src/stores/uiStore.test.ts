@@ -54,6 +54,75 @@ describe('uiStore eep mode', () => {
   })
 })
 
+describe('uiStore PIN pad and leaving the app', () => {
+  const phone = (coarse: boolean) => vi.stubGlobal('matchMedia', vi.fn((q: string) => ({ matches: q === '(pointer: coarse)' && coarse })))
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('the pad starts closed, even on a locked launch', () => {
+    expect(useUiStore.getState().pinPadOpen).toBe(false)
+  })
+
+  it('opens and closes only when asked; Cancel leaves the lock as it was', () => {
+    useUiStore.setState({ eepMode: true, pinLocked: true, pinLength: 6 })
+    useUiStore.getState().openPinPad()
+    expect(useUiStore.getState().pinPadOpen).toBe(true)
+    useUiStore.getState().closePinPad()
+    expect(useUiStore.getState()).toMatchObject({ pinPadOpen: false, pinLocked: true, eepMode: true })
+  })
+
+  it('any change of the disguise closes the pad', () => {
+    for (const change of [
+      () => useUiStore.getState().setEepMode(true),
+      () => useUiStore.getState().setEepMode(false),
+      () => useUiStore.getState().lockApp(),
+      () => useUiStore.getState().disguiseOnLeave(),
+      () => useUiStore.getState().unlockPin(),
+      () => useUiStore.getState().clearPin(),
+    ]) {
+      useUiStore.setState({ pinPadOpen: true })
+      change()
+      expect(useUiStore.getState().pinPadOpen).toBe(false)
+    }
+  })
+
+  it('a phone with a PIN that leaves the app comes back disguised and locked', () => {
+    phone(true)
+    useUiStore.setState({ eepMode: false, pinLocked: false, pinLength: 6, pinPadOpen: false })
+    useUiStore.getState().disguiseOnLeave()
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: true, pinPadOpen: false })
+    expect(sessionStorage.getItem('eepMode')).toBe('true')
+    expect(document.title).toBe('FF14 Random Content Picker')
+  })
+
+  it('leaving with the pad open (locked or not) closes it, and a lock stays on', () => {
+    phone(true)
+    useUiStore.setState({ eepMode: true, pinLocked: true, pinLength: 4, pinPadOpen: true })
+    useUiStore.getState().disguiseOnLeave()
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: true, pinPadOpen: false })
+  })
+
+  it('a phone without a PIN (or before the server said so) is disguised but never locked', () => {
+    phone(true)
+    useUiStore.setState({ eepMode: false, pinLocked: false, pinLength: null })
+    useUiStore.getState().disguiseOnLeave()
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: false })
+  })
+
+  it('a desktop is disguised but keeps today’s behaviour: no lock', () => {
+    phone(false)
+    useUiStore.setState({ eepMode: false, pinLocked: false, pinLength: 6 })
+    useUiStore.getState().disguiseOnLeave()
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: false })
+  })
+
+  it('the Eep! button (setEepMode) never locks', () => {
+    phone(true)
+    useUiStore.setState({ eepMode: false, pinLocked: false, pinLength: 6 })
+    useUiStore.getState().setEepMode(true)
+    expect(useUiStore.getState()).toMatchObject({ eepMode: true, pinLocked: false })
+  })
+})
+
 describe('uiStore PIN', () => {
   it('loadPin reads only lock_pin_length, never lock_pin', async () => {
     mockSingle.mockResolvedValue({ data: { lock_pin_length: 6 }, error: null })
@@ -254,8 +323,8 @@ describe('uiStore launch state', () => {
     document.title = ''
   })
 
-  it('a phone with a PIN opens disguised and locked', async () => {
-    expect(await launch({ coarse: true, hasPin: true })).toMatchObject({ eepMode: true, pinLocked: true })
+  it('a phone with a PIN opens disguised and locked, with the PIN pad closed until the dot is tapped', async () => {
+    expect(await launch({ coarse: true, hasPin: true })).toMatchObject({ eepMode: true, pinLocked: true, pinPadOpen: false })
     expect(document.title).toBe('FF14 Random Content Picker')
   })
 

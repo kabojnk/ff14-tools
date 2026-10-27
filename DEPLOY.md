@@ -71,6 +71,8 @@ VITE_NATIVE_UPDATE_URL=https://your-site.example.com
 EOF
 ```
 
+`VITE_BUNNY_CDN_URL` (with or without `https://`) is required by the image build too, not only the app: the site proxies `/cdn-proxy/<path>` to that CDN host, so the app can save files the CDN serves without CORS headers (iPhone videos, voice memos, PDFs). The host is baked into the nginx config at build time and is the only host the proxy reaches; the build fails if the value is missing or isn't a host. The container needs outbound HTTPS and DNS (it looks the CDN up through its own resolvers).
+
 `VITE_NATIVE_UPDATE_URL` is this site's own public origin (https). Each build also publishes the iOS app's web code under `/native/`; the app checks `/native/latest.json` on launch and on every resume, and applies a newer bundle the next time it goes to the background. Leave it unset only if nobody uses the iOS app (its live updates then stay off).
 
 **Rolling back with the iOS app: roll forward.** The app only installs a bundle newer than the one it runs, so redeploying an older image does **not** take the phones back. To undo a bad release, revert the change in git and deploy a new build: it gets a new stamp and the phones pick it up on their next resume. (A bundle that fails to render is rolled back on the phone by itself.)

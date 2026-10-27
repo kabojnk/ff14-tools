@@ -50,15 +50,16 @@ export const VERIFY_PIN_TIMEOUT_MS = 15_000
 
 const DISGUISE_TITLE = 'FF14 Random Content Picker'
 
+const isPhone = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+
 /**
  * Launch state, computed when the module loads, before React renders. A phone (coarse pointer) that
  * has had a PIN opens on the FF14 screen with the PIN lock armed on every launch and reload, so the
- * chat is never painted first. The desktop keeps today's behaviour.
+ * chat is never painted first. The PIN pad itself waits for the Unlock dot. The desktop keeps today's behaviour.
  */
 function launchState(): { eepMode: boolean; pinLocked: boolean } {
-  const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
   const hasPin = readStorage(local, HAS_PIN_KEY) === '1'
-  const armed = coarse && hasPin
+  const armed = isPhone() && hasPin
   const eepMode = readStorage(session, 'eepMode') === 'true' || armed
   if (eepMode) document.title = DISGUISE_TITLE
   return { eepMode, pinLocked: armed }
@@ -68,11 +69,26 @@ interface UiState {
   eepMode: boolean
   eepPassphrase: string | null
   pinLength: number | null
+  /**
+   * While locked, the passphrase only opens the PIN pad and the pad is the way in. It's armed on a phone's launch
+   * and whenever a phone leaves the app (`disguiseOnLeave`), and cleared by the right PIN.
+   */
   pinLocked: boolean
+  /** The PIN pad over the disguise. It opens only when asked (the Unlock dot, or the passphrase while locked). */
+  pinPadOpen: boolean
   theme: ThemePreset
 
+  /** Shows or hides the disguise. Either way the PIN pad closes. */
   setEepMode: (active: boolean) => void
   lockApp: () => void
+  /**
+   * The disguise the app puts up by itself when the person leaves it (hidden, pagehide, a phone's window blur,
+   * the iOS app's pause). The PIN pad closes, so coming back shows the plain FF14 screen; on a phone with a PIN
+   * the lock is armed too, so the way back is always the PIN.
+   */
+  disguiseOnLeave: () => void
+  openPinPad: () => void
+  closePinPad: () => void
   unlockPin: () => void
   loadEepPassphrase: () => Promise<void>
   loadPin: (userId: string) => Promise<void>
@@ -83,25 +99,37 @@ interface UiState {
   setTheme: (theme: ThemePreset) => void
 }
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   ...launchState(),
+  pinPadOpen: false,
   eepPassphrase: null,
   pinLength: null,
   theme: initialTheme(),
 
   setEepMode: (active) => {
     writeStorage(session, 'eepMode', String(active))
-    set({ eepMode: active })
+    set({ eepMode: active, pinPadOpen: false })
     document.title = active ? DISGUISE_TITLE : 'XIV Tools'
   },
 
   lockApp: () => {
     writeStorage(session, 'eepMode', 'true')
-    set({ eepMode: true, pinLocked: true })
+    set({ eepMode: true, pinLocked: true, pinPadOpen: false })
     document.title = DISGUISE_TITLE
   },
 
-  unlockPin: () => set({ pinLocked: false }),
+  disguiseOnLeave: () => {
+    // Only a PIN the server confirmed arms the lock: an armed lock with no PIN would leave no way back in.
+    const arm = isPhone() && get().pinLength !== null
+    writeStorage(session, 'eepMode', 'true')
+    set((s) => ({ eepMode: true, pinPadOpen: false, pinLocked: s.pinLocked || arm }))
+    document.title = DISGUISE_TITLE
+  },
+
+  openPinPad: () => set({ pinPadOpen: true }),
+  closePinPad: () => set({ pinPadOpen: false }),
+
+  unlockPin: () => set({ pinLocked: false, pinPadOpen: false }),
 
   loadEepPassphrase: async () => {
     const { data } = await supabase
@@ -171,7 +199,7 @@ export const useUiStore = create<UiState>((set) => ({
     }
   },
 
-  clearPin: () => set({ pinLength: null, pinLocked: false }),
+  clearPin: () => set({ pinLength: null, pinLocked: false, pinPadOpen: false }),
 
   setTheme: (theme) => {
     writeStorage(local, 'theme', theme)

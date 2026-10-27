@@ -15,6 +15,8 @@ vi.mock('@/lib/supabase', () => {
     },
   }
 })
+const { mockSave, mockPrefetch } = vi.hoisted(() => ({ mockSave: vi.fn(), mockPrefetch: vi.fn() }))
+vi.mock('@/lib/saveMedia', () => ({ saveMedia: mockSave, prefetchMedia: mockPrefetch }))
 vi.mock('@/lib/emoji/data', async (orig) => ({
   ...(await orig<typeof import('@/lib/emoji/data')>()),
   loadEmoji: () => Promise.resolve([{ emoji: '🥰', label: 'smiling face with hearts', tags: [], tab: 'smileys' }]),
@@ -59,6 +61,7 @@ const handlers = () => ({
   pin: vi.fn(),
   unpin: vi.fn(),
   spoiler: vi.fn(),
+  save: vi.fn(),
   remove: vi.fn(),
 })
 
@@ -106,6 +109,36 @@ describe('buildActions', () => {
     expect(labels(one).filter((l) => /spoiler/.test(l))).toEqual(['Mark as spoiler'])
     const two = buildActions({ message: msg({ attachments: [image('a'), image('b', true)] }), mine: false, pinned: false, mediaIndex: null, on: handlers() })
     expect(labels(two).filter((l) => /spoiler/.test(l))).toEqual(['Mark item 1 as spoiler', 'Remove spoiler from item 2'])
+  })
+
+  it('a pressed attachment gets a Save item named for its kind', () => {
+    const on = handlers()
+    const file: Attachment = { url: 'x.zip', type: 'file', filename: 'x.zip', size: 1, spoiler: false }
+    const voice: Attachment = { url: 'v.m4a', type: 'audio', filename: 'v.m4a', size: 1, spoiler: false }
+    const video: Attachment = { url: 'c.mov', type: 'video', filename: 'c.mov', size: 1, spoiler: false }
+    const message = msg({ attachments: [image('a'), video, file, voice] })
+    const saveLabels = (mediaIndex: number) => labels(buildActions({ message, mine: false, pinned: false, mediaIndex, on })).filter((l) => /^Save/.test(l))
+    expect(saveLabels(0)).toEqual(['Save photo'])
+    expect(saveLabels(1)).toEqual(['Save video'])
+    expect(saveLabels(2)).toEqual(['Save file'])
+    expect(saveLabels(3)).toEqual(['Save voice memo'])
+    buildActions({ message, mine: false, pinned: false, mediaIndex: 2, on }).find((i) => i.label === 'Save file')!.run()
+    expect(on.save).toHaveBeenCalledWith(2)
+  })
+
+  it('Save comes after Pin and before the spoiler items', () => {
+    const items = buildActions({ message: msg({ attachments: [image('a')] }), mine: true, pinned: false, mediaIndex: 0, on: handlers() })
+    expect(labels(items)).toEqual(['Reply', 'Copy text', 'Edit', 'Pin', 'Save photo', 'Mark as spoiler', 'Delete'])
+  })
+
+  it('no press point: one numbered Save item per attachment when there are several', () => {
+    const file: Attachment = { url: 'x.zip', type: 'file', filename: 'x.zip', size: 1, spoiler: false }
+    const on = handlers()
+    const items = buildActions({ message: msg({ attachments: [image('a'), file] }), mine: false, pinned: false, mediaIndex: null, on })
+    expect(labels(items).filter((l) => /^Save/.test(l))).toEqual(['Save item 1', 'Save item 2'])
+    items.find((i) => i.label === 'Save item 2')!.run()
+    expect(on.save).toHaveBeenCalledWith(1)
+    expect(labels(buildActions({ message: msg(), mine: false, pinned: false, mediaIndex: null, on })).some((l) => /^Save/.test(l))).toBe(false)
   })
 
   it('files never get a spoiler item', () => {
@@ -239,8 +272,42 @@ describe('MessageActions', () => {
     useComposerStore.setState({ editing: null })
     useAuthStore.setState({ user: { id: 'me' } as never })
     mockRpc.mockReset()
+    mockSave.mockReset().mockResolvedValue('saved')
+    mockPrefetch.mockReset()
   })
   afterEach(() => vi.useRealTimers())
+
+  it('phones: a long-press on a photo fetches it ahead, and Save saves it', async () => {
+    vi.useFakeTimers()
+    const message = msg({ attachments: [image('a'), image('b')] })
+    const p = props({ message, mine: false })
+    render(<MessageActions {...p}>{bubble}</MessageActions>)
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Open b.png' }), { pointerType: 'touch', clientX: 5, clientY: 5 })
+    act(() => vi.advanceTimersByTime(LONG_PRESS_MS))
+    expect(mockPrefetch).toHaveBeenCalledTimes(1)
+    expect(mockPrefetch).toHaveBeenCalledWith(message.attachments[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Save photo' }))
+    expect(mockSave).toHaveBeenCalledWith(message.attachments[1])
+    await act(async () => {})
+    expect(p.onNotice).not.toHaveBeenCalled()
+  })
+
+  it('phones: a save that needs a fresher tap, or fails, says so', async () => {
+    const message = msg({ attachments: [image('a')] })
+    const p = props({ message, mine: false })
+    render(<MessageActions {...p}>{bubble}</MessageActions>)
+    for (const [result, notice] of [
+      ['again', 'Ready: tap Save again'],
+      ['failed', "Couldn't save"],
+    ]) {
+      mockSave.mockResolvedValueOnce(result)
+      fireEvent.click(screen.getByRole('button', { name: 'More actions' }))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save photo' }))
+      })
+      expect(p.onNotice).toHaveBeenLastCalledWith(notice)
+    }
+  })
 
   const bubble = (
     <div data-bubble>
@@ -295,7 +362,7 @@ describe('MessageActions', () => {
     expect(document.querySelector('[data-lifted]')).not.toBeNull()
     expect(screen.getByRole('toolbar', { name: 'Quick reactions' })).toBeInTheDocument()
     const sheet = screen.getByRole('dialog', { name: 'Message actions' })
-    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Reply', 'Copy text', 'Pin', 'Mark as spoiler'])
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Reply', 'Copy text', 'Pin', 'Save photo', 'Mark as spoiler'])
     fireEvent.click(within(sheet).getByRole('button', { name: 'Mark as spoiler' }))
     expect(mockRpc).toHaveBeenCalledWith('set_attachment_spoiler', { p_message: 'm1', p_index: 1, p_spoiler: true })
     expect(useMessageStore.getState().messages[KEY][0].attachments[1].spoiler).toBe(true)

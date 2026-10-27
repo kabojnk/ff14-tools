@@ -93,7 +93,7 @@ export function MediaBlock({ messageId, attachments, overlay }: MediaBlockProps)
       )}
 
       {files.map(({ a, index }) => (
-        <FileRow key={index} attachment={a} />
+        <FileRow key={index} index={index} attachment={a} />
       ))}
       {overlay && shown.length === 0 && <div className="self-end">{overlay}</div>}
 
@@ -218,11 +218,13 @@ function MediaCell({ index, attachment: a, hidden, single, wide, more, onReveal,
   )
 }
 
-function FileRow({ attachment: a }: { attachment: Attachment }) {
+/** `index` is its place in the message's attachments: what a long-press's Save applies to. */
+function FileRow({ index, attachment: a }: { index: number; attachment: Attachment }) {
   const dot = a.filename.lastIndexOf('.')
   const ext = dot > 0 ? a.filename.slice(dot + 1).toUpperCase().slice(0, 4) : ''
   return (
     <a
+      data-media-index={index}
       href={a.url}
       target="_blank"
       rel="noopener noreferrer"

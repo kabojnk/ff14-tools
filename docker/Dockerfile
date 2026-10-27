@@ -25,7 +25,16 @@ RUN node_modules/.bin/vite build
 # Production stage
 FROM nginx:alpine
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# nginx.conf is a template: the image fills in ${NGINX_LOCAL_RESOLVERS} as it starts (its other $names are
+# nginx's own and stay). The CDN's host for /cdn-proxy/ goes in now, from the same build value the app uses.
+ARG VITE_BUNNY_CDN_URL
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
+COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
+RUN host=$(printf '%s' "$VITE_BUNNY_CDN_URL" | sed -E 's#^[a-zA-Z]+://##; s#[/?].*$##') \
+    && printf '%s' "$host" | grep -Eq '^[A-Za-z0-9.-]+(:[0-9]+)?$' \
+    || { echo "VITE_BUNNY_CDN_URL is missing or not a host: '$VITE_BUNNY_CDN_URL'" >&2; exit 1; } \
+    && sed -i "s#__BUNNY_CDN_HOST__#$host#g" /etc/nginx/templates/default.conf.template \
+    && rm -f /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

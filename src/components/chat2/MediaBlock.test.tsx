@@ -124,4 +124,10 @@ describe('MediaBlock', () => {
     render(<MediaBlock messageId="m1" attachments={[img(1)]} overlay={<span>10:42</span>} />)
     expect(screen.getByText('10:42').closest('[data-media-time]')).not.toBeNull()
   })
+
+  it("marks a file row with its attachment index, so a long-press's Save targets it", () => {
+    const file: Attachment = { url: 'https://cdn/notes.zip', type: 'file', filename: 'notes.zip', size: 10, spoiler: false }
+    render(<MediaBlock messageId="m1" attachments={[img(1), file]} />)
+    expect(screen.getByText('notes.zip').closest('[data-media-index]')).toHaveAttribute('data-media-index', '1')
+  })
 })
