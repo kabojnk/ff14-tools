@@ -1,4 +1,5 @@
 import { setAudioSession } from '@/lib/voice/audioSession'
+import { clearExternalUi, expectExternalUi } from '@/lib/externalUi'
 
 /** The longest memo: at 10:00 the composer stops and shows the preview. */
 export const MAX_RECORDING_MS = 10 * 60_000
@@ -95,7 +96,11 @@ export interface RecorderEnv {
 function browserEnv(): RecorderEnv {
   const w = window as Window & { webkitAudioContext?: typeof AudioContext }
   return {
-    getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
+    // The first time, iOS asks for the microphone over the page: that mustn't put the disguise up.
+    getUserMedia: (c) => {
+      expectExternalUi()
+      return navigator.mediaDevices.getUserMedia(c).finally(clearExternalUi)
+    },
     MediaRecorder,
     AudioContext: window.AudioContext ?? w.webkitAudioContext,
     now: () => performance.now(),

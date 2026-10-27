@@ -48,3 +48,22 @@ test('the disguise covers an open sheet, which comes back as it was', async ({ a
   await expect(alice.profileEditor).toBeVisible()
   await expect(nickname).toHaveValue('Half typed')
 })
+
+test('a phone puts the disguise up as soon as it loses focus, but not for its own photo picker', async ({ alice }, testInfo) => {
+  test.skip(testInfo.project.name !== 'webkit-iphone', 'phones only: a desktop keeps the chat when the window loses focus')
+  await alice.openChat()
+
+  // Opening the attach picker takes the focus too; that leaves the chat up.
+  await alice.page.locator('[data-composer] input[type="file"]').evaluate((input) => {
+    input.addEventListener('click', (e) => e.preventDefault(), { once: true })
+    ;(input as HTMLInputElement).click()
+    window.dispatchEvent(new FocusEvent('blur'))
+  })
+  await expect(alice.composer).toBeVisible()
+  await alice.page.evaluate(() => window.dispatchEvent(new FocusEvent('focus')))
+
+  // Leaving the app: the window loses focus before (or without) the page being hidden.
+  await alice.page.evaluate(() => window.dispatchEvent(new FocusEvent('blur')))
+  await expect(alice.eepHeading).toBeVisible()
+  await expect(alice.composer).toBeHidden()
+})
