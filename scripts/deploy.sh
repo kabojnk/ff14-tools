@@ -63,13 +63,23 @@ ssh "$DEPLOY_HOST" "docker load < '$DIR/$ARCHIVE'"
 
 echo "==> Running on the droplet now:"
 ssh "$DEPLOY_HOST" "docker ps --format '  {{.Names}}  {{.Image}}  {{.Ports}}'"
+# Whatever holds the port goes, whatever its name (a compose-started site is called e.g. chat-system-app-1),
+# plus any old container with our name (running or not).
+old=$(ssh "$DEPLOY_HOST" "{ docker ps -a --filter 'publish=$DEPLOY_PORT' --format '{{.Names}}'; docker ps -a --filter 'name=^/$CONTAINER\$' --format '{{.Names}}'; } | sort -u" | tr '\n' ' ')
 echo
-read -r -p "Replace container '$CONTAINER' with the new image on port $DEPLOY_PORT? [y/N] " answer
+if [[ -n "${old// /}" ]]; then
+  echo "To replace (on port $DEPLOY_PORT or named $CONTAINER): $old"
+  compose=$(ssh "$DEPLOY_HOST" "docker inspect --format '{{index .Config.Labels \"com.docker.compose.project\"}}' $old 2>/dev/null | grep -v '^\$' | sort -u" || true)
+  [[ -n "$compose" ]] && echo "  Note: started by docker compose (project: $compose). Don't run 'docker compose up' there afterwards, or it takes the port back."
+fi
+read -r -p "Replace it with the new image as '$CONTAINER' on port $DEPLOY_PORT? [y/N] " answer
 [[ "$answer" == "y" || "$answer" == "Y" ]] || { echo "Stopped. The new image is loaded on the droplet; nothing was swapped."; exit 0; }
 
 echo "==> Swapping the container"
-ssh "$DEPLOY_HOST" "docker rm -f '$CONTAINER' >/dev/null 2>&1 || true
-docker run -d --name '$CONTAINER' -p '$DEPLOY_PORT:80' --restart unless-stopped '$IMAGE'"
+ssh "$DEPLOY_HOST" "set -e
+for c in $old; do docker rm -f \"\$c\" >/dev/null; echo \"  removed \$c\"; done
+docker run -d --name '$CONTAINER' -p '$DEPLOY_PORT:80' --restart unless-stopped '$IMAGE' >/dev/null
+echo '  started $CONTAINER'"
 
 echo "==> Checking the site answers on the droplet"
 sleep 2
