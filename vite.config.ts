@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
@@ -13,6 +13,19 @@ const APP_VERSION = (JSON.parse(readFileSync('./package.json', 'utf8')) as { ver
 // The live-update version of a native bundle (scripts/native-bundle.mjs sets it). Website builds and
 // `vite` dev get a stamp-less placeholder, which every published bundle counts as newer than.
 const BUNDLE_VERSION = process.env.BUNDLE_VERSION ?? `${APP_VERSION}-dev`
+
+/**
+ * /cdn-proxy/<path> → the CDN's <path>: saving a file the CDN serves without CORS headers (.mov, .m4a, .pdf;
+ * see src/lib/saveMedia.ts). docker/nginx.conf does the same in production.
+ */
+function cdnProxy(mode: string) {
+  const raw = loadEnv(mode, process.cwd(), 'VITE_').VITE_BUNNY_CDN_URL
+  if (!raw) return undefined
+  const target = new URL(raw.includes('://') ? raw : `https://${raw}`).origin
+  return {
+    '/cdn-proxy/': { target, changeOrigin: true, rewrite: (p: string) => p.replace(/^\/cdn-proxy/, '') },
+  }
+}
 
 export default defineConfig(({ mode }) => ({
   // Vitest applies these too, so components that read them work in unit tests.
@@ -114,6 +127,7 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ],
+  server: { proxy: cdnProxy(mode) },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
