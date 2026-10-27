@@ -10,6 +10,8 @@ ios/DerivedData/
 .env
 .env.local
 .env.*.local
+.env.deploy
+chat-system.tar.gz
 
 # Editor
 .vscode/
