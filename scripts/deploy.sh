@@ -2,6 +2,7 @@
 # Builds the site's Docker image on this Mac and swaps it in on the droplet (DEPLOY.md, Option B).
 #
 #   npm run deploy               build, upload, then ask before swapping the container
+#   npm run deploy -- --y        the same, swapping without asking (also -y, --yes)
 #   npm run deploy -- --build    build and save chat-system.tar.gz only
 #
 # Build values come from .env (the production Supabase and Bunny values). The droplet comes from
@@ -16,7 +17,14 @@ cd "$(dirname "$0")/.."
 IMAGE=chat-system:latest
 ARCHIVE=chat-system.tar.gz
 build_only=false
-[[ "${1:-}" == "--build" ]] && build_only=true
+assume_yes=false
+for arg in "$@"; do
+  case "$arg" in
+    --build) build_only=true ;;
+    -y | --y | --yes) assume_yes=true ;;
+    *) echo "Unknown option: $arg (use --build or --y)" >&2; exit 1 ;;
+  esac
+done
 
 [[ -f .env ]] || { echo "No .env: it holds the production build values (see .env.example)." >&2; exit 1; }
 set -a
@@ -72,8 +80,12 @@ if [[ -n "${old// /}" ]]; then
   compose=$(ssh "$DEPLOY_HOST" "docker inspect --format '{{index .Config.Labels \"com.docker.compose.project\"}}' $old 2>/dev/null | grep -v '^\$' | sort -u" || true)
   [[ -n "$compose" ]] && echo "  Note: started by docker compose (project: $compose). Don't run 'docker compose up' there afterwards, or it takes the port back."
 fi
-read -r -p "Replace it with the new image as '$CONTAINER' on port $DEPLOY_PORT? [y/N] " answer
-[[ "$answer" == "y" || "$answer" == "Y" ]] || { echo "Stopped. The new image is loaded on the droplet; nothing was swapped."; exit 0; }
+if $assume_yes; then
+  echo "Replacing it with the new image as '$CONTAINER' on port $DEPLOY_PORT (--y)."
+else
+  read -r -p "Replace it with the new image as '$CONTAINER' on port $DEPLOY_PORT? [y/N] " answer
+  [[ "$answer" == "y" || "$answer" == "Y" ]] || { echo "Stopped. The new image is loaded on the droplet; nothing was swapped."; exit 0; }
+fi
 
 echo "==> Swapping the container"
 ssh "$DEPLOY_HOST" "set -e
