@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStored } from '@/components/eep/desk/storage'
 import { CRAFTERS, CRAFTER_NAME, RECIPES, type Crafter } from '@/components/eep/desk/data'
 
@@ -9,6 +9,12 @@ export function CraftingView() {
   const [job, setJob] = useState<Crafter | 'all'>('all')
   const recipes = RECIPES.filter((r) => job === 'all' || r.job === job)
   const [selectedId, setSelectedId] = useState(RECIPES[0].id)
+  const detailRef = useRef<HTMLElement>(null)
+  // Phones stack the details under the list: show them.
+  const select = (id: string) => {
+    setSelectedId(id)
+    if (window.matchMedia?.('(max-width: 860px)').matches) detailRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
   const recipe = recipes.find((r) => r.id === selectedId) ?? recipes[0]
   const [have, setHave] = useStored<string[]>('materials', ['Claro Walnut Lumber', 'Wind Cluster'])
   const [list, setList] = useStored<string[]>('craft-list', RECIPES.slice(0, 3).map((r) => r.id))
@@ -38,7 +44,7 @@ export function CraftingView() {
           </h3>
           <div className="xd-list" role="listbox" aria-labelledby="xd-recipes">
             {recipes.map((r) => (
-              <button key={r.id} type="button" role="option" className="xd-row" aria-selected={r.id === recipe.id} onClick={() => setSelectedId(r.id)}>
+              <button key={r.id} type="button" role="option" className="xd-row" aria-selected={r.id === recipe.id} onClick={() => select(r.id)}>
                 <span className="xd-ico">{r.job}</span>
                 <span className="t">
                   <b>{r.name}</b>
@@ -51,7 +57,7 @@ export function CraftingView() {
           </div>
         </section>
 
-        <section className="xd-card glass c7" aria-labelledby="xd-recipe">
+        <section ref={detailRef} className="xd-card glass c7" aria-labelledby="xd-recipe" style={{ scrollMarginTop: 12 }}>
           <span className="xd-eyebrow">
             {CRAFTER_NAME[recipe.job]} · Lv {recipe.level} {stars(recipe.stars)}
           </span>

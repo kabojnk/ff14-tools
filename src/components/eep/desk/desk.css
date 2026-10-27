@@ -82,7 +82,7 @@
 .xd-sky i:nth-child(1) { width: 380px; height: 380px; left: -80px; top: 12%; background: #2f7cff }
 .xd-sky i:nth-child(2) { width: 320px; height: 320px; right: -60px; top: 45%; background: #8a5cff }
 .xd-sky i:nth-child(3) { width: 260px; height: 260px; left: 40%; bottom: -80px; background: #19c3d6 }
-.xd-crystal { position: absolute; right: 8%; top: 8%; width: 140px; opacity: 0.22 }
+.xd-crystal { position: absolute; right: 6%; bottom: 10%; width: 120px; opacity: 0.14 }
 
 .xd .glass {
   background: var(--glass);
@@ -326,7 +326,9 @@ button.xd-row:hover { border-color: var(--glass-line) }
   .xd-top { padding: 8px 8px 8px 14px; flex-wrap: wrap }
   .xd-top h2 { font-size: 20px }
   .xd-search { order: 3; width: 100% }
-  .xd-grid > * { grid-column: span 12 }
+  .xd .xd-grid > * { grid-column: span 12 }
+  .xd-crystal { display: none }
+  .xd-top-title { flex: 1 }
   .xd-scroll { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)) }
   .xd-specs { grid-template-columns: repeat(2, minmax(0, 1fr)) }
   .xd-timer b { font-size: 16px }
@@ -340,6 +342,7 @@ button.xd-row:hover { border-color: var(--glass-line) }
     padding: 6px;
     justify-content: space-around;
     border-radius: 30px;
+    background: rgba(18, 30, 66, 0.84);
   }
   .xd-tab { border: 0; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 600; color: var(--ink-3); padding: 6px 10px; border-radius: 22px; flex: 1 }
   .xd-tab svg { width: 22px; height: 22px }
