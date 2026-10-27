@@ -44,11 +44,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     set({ initialized: true })
 
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Listen for auth changes. supabase-js runs this inside its session lock and waits for it, so it must
+    // not wait on a query itself: the query needs the same lock and both would wait forever. That froze
+    // every request (the PIN check too) whenever a phone came back from the background, because the
+    // client re-announces the session then. The profile is fetched just after, outside the lock.
+    supabase.auth.onAuthStateChange((_event, session) => {
       set({ user: session?.user ?? null, session })
       if (session?.user) {
-        await get().fetchProfile()
+        setTimeout(() => void get().fetchProfile(), 0)
       } else {
         set({ profile: null })
       }
