@@ -3,7 +3,8 @@ import { ChatUser, afterDevicesClose, expect, test } from './fixtures'
 import { restore, serviceClient } from './supabase'
 import { EEP_PASSPHRASE, IDS } from './users'
 
-// Phones (coarse pointer) with a PIN open on the FF14 screen, locked, on every launch and reload.
+// Phones (coarse pointer) with a PIN open on the FF14 screen, locked, on every launch and reload. The PIN pad
+// waits for the Unlock dot.
 // The desktop keeps today's behaviour. Bea has PIN 567890.
 
 afterDevicesClose(async () => {
@@ -44,10 +45,13 @@ test.describe('Launch with a PIN', () => {
 
     if (isPhone(testInfo.project.name)) {
       await expect(bea.eepHeading).toBeVisible()
-      await expect(bea.pinDots).toBeVisible()
-      await expect(bea.pinDots.locator('span')).toHaveCount(6)
+      // The pad waits for the Unlock dot.
+      await expect(bea.unlockDot).toBeVisible()
+      await expect(bea.pinDots).toHaveCount(0)
       expect(await chatWasPainted(bea.page)).toBe(false)
 
+      await bea.openPinPad()
+      await expect(bea.pinDots.locator('span')).toHaveCount(6)
       await bea.tapPin(bea.user.pin)
       await expect(bea.composer).toBeVisible()
       await expect(bea.eepHeading).toBeHidden()
@@ -85,8 +89,10 @@ test.describe('Launch with a PIN', () => {
     const again = await coldLaunch(bea)
     if (isPhone(testInfo.project.name)) {
       await expect(again.eepHeading).toBeVisible()
-      await expect(again.pinDots).toBeVisible()
+      await expect(again.unlockDot).toBeVisible()
+      await expect(again.pinDots).toHaveCount(0)
       expect(await chatWasPainted(again.page)).toBe(false)
+      await again.openPinPad()
       await again.tapPin(again.user.pin)
       await expect(again.composer).toBeVisible()
     } else {

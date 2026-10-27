@@ -10,11 +10,10 @@ interface EepModeProps {
 }
 
 export function EepMode({ onLoginClick }: EepModeProps) {
-  const { setEepMode, eepPassphrase, pinLength, pinLocked, unlockPin, verifyPin } = useUiStore()
+  const { setEepMode, eepPassphrase, pinLength, pinLocked, pinPadOpen, openPinPad, closePinPad, unlockPin, verifyPin } = useUiStore()
   const user = useAuthStore((s) => s.user)
   const [duties, setDuties] = useState<FF14Duty[]>([])
   const [customRaid, setCustomRaid] = useState('')
-  const [showPinPad, setShowPinPad] = useState(false)
 
   // Signs out, clears the PIN and resets eepMode so the next login opens straight to chat.
   const handleLogout = () => {
@@ -32,7 +31,7 @@ export function EepMode({ onLoginClick }: EepModeProps) {
       // While the PIN lock is on (including before the PIN length has loaded), the passphrase only
       // opens the PIN pad; the chat needs the PIN.
       if (pinLocked) {
-        setShowPinPad(true)
+        openPinPad()
         setCustomRaid('')
         return
       }
@@ -44,12 +43,9 @@ export function EepMode({ onLoginClick }: EepModeProps) {
 
 
   const handlePinSuccess = () => {
-    if (pinLocked) unlockPin()
-    setShowPinPad(false)
+    unlockPin()
     setEepMode(false)
   }
-
-  const overlayVisible = pinLocked || showPinPad
 
   return (
     <div className="flex h-full flex-col" style={{ background: '#1a1a2e', color: '#e0e0e0' }}>
@@ -155,7 +151,7 @@ export function EepMode({ onLoginClick }: EepModeProps) {
           {/* PIN unlock button — only shown if a PIN is configured */}
           {pinLength !== null && (
             <button
-              onClick={() => setShowPinPad(true)}
+              onClick={openPinPad}
               className="mb-0.5 h-9 w-9 flex-shrink-0 rounded-full"
               style={{ background: '#60a5fa' }}
               aria-label="Unlock"
@@ -192,15 +188,16 @@ export function EepMode({ onLoginClick }: EepModeProps) {
         </div>
       </footer>}
 
-      {/* PIN overlay: PinPad renders its own full-screen blurred backdrop.
+      {/* PIN overlay: PinPad renders its own full-screen blurred backdrop. It shows only when asked for (the
+          Unlock dot), never by itself, and Cancel always closes it (a locked app stays locked).
           pinLength is the stored PIN's actual length, so any stored PIN (including legacy ones) can be entered. */}
-      {overlayVisible && pinLength !== null && (
+      {user && pinPadOpen && pinLength !== null && (
         <PinPad
           mode="unlock"
           length={pinLength}
           verify={verifyPin}
           onSuccess={handlePinSuccess}
-          onCancel={pinLocked ? undefined : () => setShowPinPad(false)}
+          onCancel={closePinPad}
         />
       )}
     </div>

@@ -253,14 +253,14 @@ export class ChatUser {
     await this.page.getByRole('button', { name: 'Add' }).click()
   }
 
-  /**
-   * Opens the PIN pad from the disguise. A locked launch shows it by itself once the PIN length loads,
-   * in the same render as the Unlock button, so wait for either before deciding.
-   */
+  /** The disguise's Unlock dot (shown once the PIN length has loaded). */
+  get unlockDot() {
+    return this.page.getByRole('button', { name: 'Unlock' })
+  }
+
+  /** Opens the PIN pad from the disguise. It never opens by itself: only the Unlock dot opens it. */
   async openPinPad() {
-    const unlock = this.page.getByRole('button', { name: 'Unlock' })
-    await expect(this.pinDots.or(unlock).first()).toBeVisible()
-    if (!(await this.pinDots.isVisible())) await unlock.click()
+    await this.unlockDot.click()
     await expect(this.pinDots).toBeVisible()
   }
 

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { appIsActive, onAppStateChange } from '@/lib/appLifecycle'
 import { clearExternalUi, externalUiExpected, watchFilePickers } from '@/lib/externalUi'
 import { isNativeApp } from '@/lib/platform'
@@ -9,6 +10,14 @@ import { useUiStore } from '@/stores/uiStore'
 
 /** While visible, profiles.last_seen_at is refreshed this often. */
 export const LAST_SEEN_HEARTBEAT_MS = 60_000
+
+/**
+ * Puts the disguise up the moment the person leaves, committed to the DOM before the handler returns: iOS takes
+ * the app-switcher snapshot and freezes the page right after, without waiting for React's next render.
+ */
+export function disguiseNow(): void {
+  flushSync(() => useUiStore.getState().disguiseOnLeave())
+}
 
 export function usePresence(): void {
   const { user, profile } = useAuthStore()
@@ -36,7 +45,7 @@ export function usePresence(): void {
     // privacy screen via direct DOM mutation (no React re-render needed).
     const handlePageHide = () => {
       showPrivacyScreen()
-      useUiStore.getState().setEepMode(true)
+      disguiseNow()
       void usePresenceStore.getState().touchLastSeen()
     }
     // Only this device goes online/offline; the user's other devices are unaffected.
@@ -54,10 +63,10 @@ export function usePresence(): void {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         showPrivacyScreen()
+        disguiseNow()
         const live = usePresenceStore.getState()
         void live.setDevicePresence('offline')
         void live.touchLastSeen()
-        useUiStore.getState().setEepMode(true)
       } else {
         hidePrivacyScreen()
         restorePresence()
@@ -79,7 +88,7 @@ export function usePresence(): void {
         if (active) return
         showPrivacyScreen()
         void usePresenceStore.getState().setDevicePresence('offline')
-        useUiStore.getState().setEepMode(true)
+        disguiseNow()
       })
       const stop = onAppStateChange((active) => {
         if (active) {
@@ -93,7 +102,7 @@ export function usePresence(): void {
           const live = usePresenceStore.getState()
           void live.setDevicePresence('offline')
           void live.touchLastSeen()
-          useUiStore.getState().setEepMode(true)
+          disguiseNow()
         }
       })
       return () => {
@@ -110,7 +119,7 @@ export function usePresence(): void {
     const handleBlur = () => {
       if (!isPhone || externalUiExpected()) return
       showPrivacyScreen()
-      useUiStore.getState().setEepMode(true)
+      disguiseNow()
     }
     const handleFocus = () => {
       clearExternalUi()
