@@ -3,6 +3,7 @@ import { Check, Paperclip, Pencil, Reply, SendHorizontal, Smile, X, type LucideI
 import { Icon } from '@/components/ui/Icon'
 import { EmojiPicker } from '@/components/emoji/EmojiPicker'
 import { GifPicker } from '@/components/chat/GifPicker'
+import { EmojiSuggestions } from '@/components/chat2/EmojiSuggestions'
 import { PendingAttachments } from '@/components/chat2/PendingAttachments'
 import { MicButton, VoiceHint, VoiceKeysHint, VoicePanel } from '@/components/chat2/VoiceComposer'
 import { useVoiceSession } from '@/components/chat2/useVoiceSession'
@@ -13,8 +14,21 @@ import { sendMessageEvent } from '@/lib/conversationRealtime'
 import { discardUpload, retryUpload, startUpload } from '@/lib/chat/uploads'
 import { SPACE_LABEL, spaceKey } from '@/lib/spaces'
 import { canRecordVoice } from '@/lib/voice/recorder'
+import {
+  EMOJI_SUGGESTIONS_ID,
+  emojiForCode,
+  finishedShortcodeAt,
+  loadShortcodes,
+  shortcodeQueryAt,
+  suggestEmoji,
+  suggestionId,
+  suggestionText,
+  type EmojiSuggestion,
+  type ShortcodeEmoji,
+} from '@/lib/emoji/shortcodes'
 import { useAuthStore } from '@/stores/authStore'
 import { useComposerStore } from '@/stores/composerStore'
+import { useEmojiStore } from '@/stores/emojiStore'
 import { useConversationStore } from '@/stores/conversationStore'
 import { toAttachment, useDraftStore, type PendingAttachment } from '@/stores/draftStore'
 import { useMessageStore } from '@/stores/messageStore'
@@ -100,6 +114,34 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   const rafRef = useRef(0)
 
   const value = editing ? editText : content
+
+  // `:shortcode` autocomplete (Discord style). The caret is tracked as state so the list follows it.
+  const [caret, setCaret] = useState<number | null>(null)
+  const [fieldFocused, setFieldFocused] = useState(false)
+  const [shortcodes, setShortcodes] = useState<ShortcodeEmoji[] | null>(null)
+  /** Escape closes the list for the `:query` that starts here, until it's typed somewhere else. */
+  const [dismissedAt, setDismissedAt] = useState<number | null>(null)
+  const [activeSuggestion, setActiveSuggestion] = useState(0)
+  const customEmoji = useEmojiStore((s) => s.byName)
+  const typedQuery = fieldFocused && caret !== null ? shortcodeQueryAt(value, caret) : null
+  const emojiQuery = typedQuery && typedQuery.start !== dismissedAt ? typedQuery : null
+  const suggestions = emojiQuery && shortcodes ? suggestEmoji(shortcodes, customEmoji, emojiQuery.query) : []
+  const suggesting = suggestions.length > 0
+  const [suggestionsFor, setSuggestionsFor] = useState<string | null>(null)
+  if ((emojiQuery?.query ?? null) !== suggestionsFor) {
+    setSuggestionsFor(emojiQuery?.query ?? null)
+    setActiveSuggestion(0)
+  }
+  const wantShortcodes = typedQuery !== null || value.includes(':')
+  useEffect(() => {
+    if (!wantShortcodes || shortcodes) return
+    void useEmojiStore.getState().load()
+    loadShortcodes()
+      .then(setShortcodes)
+      .catch(() => {
+        // Offline: no suggestions this time; the next `:` tries again.
+      })
+  }, [wantShortcodes, shortcodes])
   const uploading = attachments.some((a) => a.status === 'uploading')
   const ready = attachments.map(toAttachment).filter((a): a is Attachment => a !== null)
   const canSubmit = editing ? true : !uploading && (content.trim() !== '' || ready.length > 0)
@@ -138,7 +180,9 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
 
   const rememberCaret = () => {
     const el = textareaRef.current
-    if (el) caretRef.current = { start: el.selectionStart, end: el.selectionEnd }
+    if (!el) return
+    caretRef.current = { start: el.selectionStart, end: el.selectionEnd }
+    setCaret(el.selectionStart === el.selectionEnd ? el.selectionEnd : null)
   }
 
   // Starting an edit puts the caret at the end of the message.
@@ -209,8 +253,21 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   }
 
   const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const next = e.target.value
-    caretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd }
+    let next = e.target.value
+    let at = e.target.selectionEnd
+    // Typing the closing colon of a known `:name:` turns it into the emoji, as Discord does.
+    if (shortcodes && e.target.selectionStart === at && next.length === value.length + 1 && next[at - 1] === ':') {
+      const done = finishedShortcodeAt(next, at)
+      const emoji = done && !customEmoji[done.code] ? emojiForCode(shortcodes, done.code) : null
+      if (done && emoji) {
+        next = next.slice(0, done.start) + emoji + next.slice(at)
+        at = done.start + emoji.length
+        pendingCaretRef.current = at
+      }
+    }
+    caretRef.current = { start: at, end: at }
+    setCaret(e.target.selectionStart === e.target.selectionEnd ? at : null)
+    if (dismissedAt !== null && shortcodeQueryAt(next, at)?.start !== dismissedAt) setDismissedAt(null)
     if (editing) {
       setEditText(next)
       return
@@ -222,6 +279,24 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
   }
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (suggesting && !e.nativeEvent.isComposing && !composingRef.current) {
+      const n = suggestions.length
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveSuggestion((i) => (i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n)
+        return
+      }
+      if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        e.preventDefault()
+        pickSuggestion(suggestions[Math.min(activeSuggestion, n - 1)])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setDismissedAt(emojiQuery?.start ?? null)
+        return
+      }
+    }
     if (e.key === 'Escape') {
       // The emoji picker took this one (it closes first).
       if (e.defaultPrevented) return
@@ -295,6 +370,23 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
     }
   }
 
+  /** Replaces the `:query` with the emoji (or a custom one's `:name:`) and a space. */
+  const pickSuggestion = (s: EmojiSuggestion) => {
+    const q = emojiQuery
+    if (!q || caret === null) return
+    const text = suggestionText(s) + ' '
+    const next = value.slice(0, q.start) + text + value.slice(caret)
+    const at = q.start + text.length
+    caretRef.current = { start: at, end: at }
+    setCaret(at)
+    pendingCaretRef.current = at
+    if (editing) setEditText(next)
+    else {
+      setContent(next)
+      sendTyping()
+    }
+  }
+
   const toggleEmoji = () => {
     setShowGif(false)
     if (showEmoji) {
@@ -359,6 +451,16 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
           />
         )}
 
+        {suggesting && !recording && emojiQuery && (
+          <EmojiSuggestions
+            query={emojiQuery.query}
+            items={suggestions}
+            active={Math.min(activeSuggestion, suggestions.length - 1)}
+            onHover={setActiveSuggestion}
+            onPick={pickSuggestion}
+          />
+        )}
+
         <div className="flex items-end gap-2">
           {recording ? (
             <VoicePanel session={voice} isDesktop={isDesktop} />
@@ -378,11 +480,18 @@ export function Composer({ conversationId, space, isDesktop, replyTo = null, onC
                 onPaste={onPaste}
                 onSelect={rememberCaret}
                 onKeyUp={rememberCaret}
-                onBlur={rememberCaret}
+                onBlur={() => {
+                  rememberCaret()
+                  setFieldFocused(false)
+                }}
                 onFocus={() => {
+                  setFieldFocused(true)
                   // Tapping into the field on a phone swaps the picker for the keyboard.
                   if (phonePicker) setShowEmoji(false)
                 }}
+                aria-autocomplete="list"
+                aria-controls={suggesting ? EMOJI_SUGGESTIONS_ID : undefined}
+                aria-activedescendant={suggesting ? suggestionId(activeSuggestion) : undefined}
                 placeholder={`Message #${SPACE_LABEL[space]}`}
                 aria-label={editing ? 'Edit message' : undefined}
                 rows={1}

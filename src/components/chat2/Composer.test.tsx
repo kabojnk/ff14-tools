@@ -24,6 +24,18 @@ vi.mock('@/lib/emoji/data', async (orig) => ({
   ...(await orig<typeof import('@/lib/emoji/data')>()),
   loadEmoji: () => Promise.resolve([{ emoji: '😀', label: 'grinning face', tags: [], tab: 'smileys' }]),
 }))
+vi.mock('@/lib/emoji/shortcodes', async (orig) => {
+  const real = await orig<typeof import('@/lib/emoji/shortcodes')>()
+  const index = real.buildIndex(
+    [
+      { hexcode: '1F602', unicode: '😂' },
+      { hexcode: '1F44D', unicode: '👍' },
+      { hexcode: '1F604', unicode: '😄' },
+    ],
+    { '1F602': 'joy', '1F44D': ['+1', 'thumbsup'], '1F604': 'smile' },
+  )
+  return { ...real, loadShortcodes: () => Promise.resolve(index) }
+})
 vi.mock('@/lib/chat/outbox', async (orig) => ({ ...(await orig<typeof import('@/lib/chat/outbox')>()), sendOutgoing }))
 vi.mock('@/lib/conversationRealtime', async (orig) => ({
   ...(await orig<typeof import('@/lib/conversationRealtime')>()),
@@ -443,5 +455,62 @@ describe('voice memos in the composer', () => {
     useComposerStore.setState({ editing: msg({ author_id: 'alice' }) })
     setup()
     expect(screen.queryByRole('button', { name: 'Record a voice message' })).toBeNull()
+  })
+})
+
+describe('Composer: :emoji: autocomplete', () => {
+  const list = () => screen.queryByRole('listbox', { name: 'Emoji suggestions' })
+  async function typed(box: HTMLTextAreaElement, value: string) {
+    fireEvent.focus(box)
+    await act(async () => type(box, value))
+  }
+
+  it('lists matches after a colon and two letters; Enter picks the active one', async () => {
+    const { box } = setup()
+    await typed(box, 'lol :j')
+    expect(list()).toBeNull()
+    await typed(box, 'lol :jo')
+    expect(within(list()!).getByRole('option', { name: /:joy:/ })).toHaveAttribute('aria-selected', 'true')
+    enter(box)
+    expect(box.value).toBe('lol 😂 ')
+    expect(list()).toBeNull()
+    expect(sendOutgoing).not.toHaveBeenCalled()
+  })
+
+  it('arrows move through the list and Tab picks; a click picks too', async () => {
+    const { box } = setup()
+    await typed(box, ':s')
+    expect(list()).toBeNull()
+    await typed(box, ':su')
+    // Only thumbsup contains "su"; ArrowDown wraps around a single item.
+    fireEvent.keyDown(box, { key: 'ArrowDown' })
+    fireEvent.keyDown(box, { key: 'Tab' })
+    expect(box.value).toBe('👍 ')
+
+    await typed(box, '👍 :smi')
+    fireEvent.click(within(list()!).getByRole('option', { name: /:smile:/ }))
+    expect(box.value).toBe('👍 😄 ')
+  })
+
+  it('Escape closes the list without clearing anything, until the next query', async () => {
+    const { box } = setup()
+    await typed(box, ':jo')
+    fireEvent.keyDown(box, { key: 'Escape' })
+    expect(list()).toBeNull()
+    expect(box.value).toBe(':jo')
+    await typed(box, ':jo :sm')
+    expect(list()).not.toBeNull()
+  })
+
+  it('typing the closing colon of a known name converts it; unknown names and times stay text', async () => {
+    const { box } = setup()
+    await typed(box, 'yes :thumbsup')
+    await typed(box, 'yes :thumbsup:')
+    expect(box.value).toBe('yes 👍')
+    await typed(box, 'yes 👍 :nope')
+    await typed(box, 'yes 👍 :nope:')
+    expect(box.value).toBe('yes 👍 :nope:')
+    await typed(box, 'at 10:30')
+    expect(list()).toBeNull()
   })
 })
